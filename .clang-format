@@ -1,0 +1,87 @@
+AlignAfterOpenBracket: Align
+#13 AlignArrayOfStructures: Left
+AlignConsecutiveAssignments: AcrossComments
+AlignConsecutiveBitFields: AcrossComments
+AlignConsecutiveDeclarations: AcrossComments
+AlignConsecutiveMacros: AcrossComments
+AlignEscapedNewlines: Right
+AlignOperands: AlignAfterOperator
+AlignTrailingComments: true
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: TopLevelDefinitions
+AlwaysBreakBeforeMultilineStrings: true
+
+BinPackArguments: false
+BinPackParameters: false
+BitFieldColonSpacing: Both
+BreakBeforeBinaryOperators: All
+BreakBeforeBraces: Custom
+BraceWrapping:
+    AfterCaseLabel: false
+    AfterClass: false
+    AfterControlStatement: Never
+    AfterEnum: false
+    AfterFunction: true
+    AfterNamespace: false
+    AfterStruct: false
+    AfterUnion: false
+    AfterExternBlock: false
+    BeforeCatch: true
+    BeforeElse: true
+    BeforeLambdaBody: false
+    BeforeWhile: false
+    IndentBraces: false
+    SplitEmptyFunction: true
+BreakBeforeTernaryOperators: true
+BreakStringLiterals: true
+
+ColumnLimit: 80
+ContinuationIndentWidth: 4
+
+IncludeBlocks: Preserve
+IndentCaseBlocks: false
+IndentCaseLabels: false
+IndentExternBlock: NoIndent
+IndentGotoLabels: false
+IndentPPDirectives: None
+IndentWidth: 4
+IndentWrappedFunctionNames: false
+
+KeepEmptyLinesAtTheStartOfBlocks: false
+
+Language: Cpp
+
+MaxEmptyLinesToKeep: 1
+
+PointerAlignment: Right
+
+ReflowComments: true
+
+SortIncludes: false
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeParens: ControlStatements
+SpaceBeforeSquareBrackets: false
+SpaceInEmptyBlock: false
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInCStyleCastParentheses: false
+SpacesInConditionalStatement: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+TabWidth: 8
+
+UseCRLF: false
+UseTab: Never
