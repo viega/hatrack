@@ -115,10 +115,10 @@ lowhat2_delete(lowhat_t *self)
     lowhat_record_t  *rec;
 
     while (p < end) {
-	if(atomic_load(&p->fwd)) {
-	    p++;
-	    continue;
-	}
+        if (atomic_load(&p->fwd)) {
+            p++;
+            continue;
+        }
         rec = lowhat_pflag_clear(atomic_load(&p->head),
                                  LOWHAT_F_MOVED | LOWHAT_F_MOVING);
         if (rec) {
@@ -234,14 +234,14 @@ not_found:
         if (!bucket) {
             goto not_found;
         }
-	// If there's a forward record, follow it.
-	while (true) {
-	    fwd = atomic_load(&bucket->fwd);
-	    if (!fwd) {
-		break;
-	    }
-	    bucket = fwd;
-	}
+        // If there's a forward record, follow it.
+        while (true) {
+            fwd = atomic_load(&bucket->fwd);
+            if (!fwd) {
+                break;
+            }
+            bucket = fwd;
+        }
         goto found_history_bucket;
     }
     goto not_found;
@@ -319,13 +319,13 @@ lowhat2_store_put(lowhat_store_t *self,
         hv2.w2 = 0;
         CAS(&bucket->hv, &hv2, *hv1);
 
-	while (true) {
-	    fwd = atomic_load(&bucket->fwd);
-	    if (!fwd) {
-		break;
-	    }
-	    bucket = fwd;
-	}
+        while (true) {
+            fwd = atomic_load(&bucket->fwd);
+            if (!fwd) {
+                break;
+            }
+            bucket = fwd;
+        }
         goto found_history_bucket;
     }
     return lowhat2_store_put(lowhat2_store_migrate(self, top),
@@ -348,24 +348,24 @@ found_history_bucket:
     // If there's a record at the top, but the USED bit isn't
     // set, then it's a deletion record, and we need to forward.
     if (head && !lowhat_pflag_test(head->next, LOWHAT_F_USED)) {
-	new_bucket = atomic_fetch_add(&self->hist_next, 1);
-	if (new_bucket >= self->hist_end) {
-	    return lowhat2_store_put(lowhat2_store_migrate(self, top),
-				     top,
-				     hv1,
-				     item,
-				     found);
-	}
-	fwd = NULL;
-	mmm_help_commit(head);
-	if (CAS(&bucket->fwd, &fwd, new_bucket)) {
-	    mmm_retire(head);
-	}
-	// Could just goto above. For now, let's just make sure it
-	// works.
-	return lowhat2_store_put(self, top, hv1, item, found);
+        new_bucket = atomic_fetch_add(&self->hist_next, 1);
+        if (new_bucket >= self->hist_end) {
+            return lowhat2_store_put(lowhat2_store_migrate(self, top),
+                                     top,
+                                     hv1,
+                                     item,
+                                     found);
+        }
+        fwd = NULL;
+        mmm_help_commit(head);
+        if (CAS(&bucket->fwd, &fwd, new_bucket)) {
+            mmm_retire(head);
+        }
+        // Could just goto above. For now, let's just make sure it
+        // works.
+        return lowhat2_store_put(self, top, hv1, item, found);
     }
-    
+
     candidate       = mmm_alloc(sizeof(lowhat_record_t));
     candidate->next = lowhat_pflag_set(head, LOWHAT_F_USED);
     candidate->item = item;
@@ -452,7 +452,7 @@ lowhat2_store_put_if_empty(lowhat_store_t *self,
     uint64_t           i;
     lowhat_hash_t      hv2;
     lowhat_history_t  *bucket;
-    lowhat_history_t  *fwd;    
+    lowhat_history_t  *fwd;
     lowhat_history_t  *new_bucket;
     lowhat_record_t   *head;
     lowhat_record_t   *candidate;
@@ -497,14 +497,14 @@ lowhat2_store_put_if_empty(lowhat_store_t *self,
         hv2.w1 = 0;
         hv2.w2 = 0;
         CAS(&bucket->hv, &hv2, *hv1);
-    
-	while (true) {
-	    fwd = atomic_load(&bucket->fwd);
-	    if (!fwd) {
-		break;
-	    }
-	    bucket = fwd;
-	}
+
+        while (true) {
+            fwd = atomic_load(&bucket->fwd);
+            if (!fwd) {
+                break;
+            }
+            bucket = fwd;
+        }
         goto found_history_bucket;
     }
     return lowhat2_store_put_if_empty(lowhat2_store_migrate(self, top),
@@ -523,27 +523,29 @@ found_history_bucket:
     }
 
     if (head) {
-	// If there's already something in this bucket, and the
-	// request was to put only if the bucket is empty.
-	if (lowhat_pflag_test(head->next, LOWHAT_F_USED)) {
-	    return false;
-	}
-	// There's a delete record here. Grab a new bucket, try to
-	// install it, retire the delete bucket, then try again
-	// (either via resize or not).
-	new_bucket = atomic_fetch_add(&self->hist_next, 1);
-	if (new_bucket >= self->hist_end) {
-	    return lowhat2_store_put_if_empty(lowhat2_store_migrate(self, top),
-					      top, hv1, item);
-	}
-	fwd = NULL;
-	mmm_help_commit(head);
-	if (CAS(&bucket->fwd, &fwd, new_bucket)) {
-	    mmm_retire(head);
-	}
-	// Could just goto above. For now, let's just make sure it
-	// works.
-	return lowhat2_store_put_if_empty(self, top, hv1, item);
+        // If there's already something in this bucket, and the
+        // request was to put only if the bucket is empty.
+        if (lowhat_pflag_test(head->next, LOWHAT_F_USED)) {
+            return false;
+        }
+        // There's a delete record here. Grab a new bucket, try to
+        // install it, retire the delete bucket, then try again
+        // (either via resize or not).
+        new_bucket = atomic_fetch_add(&self->hist_next, 1);
+        if (new_bucket >= self->hist_end) {
+            return lowhat2_store_put_if_empty(lowhat2_store_migrate(self, top),
+                                              top,
+                                              hv1,
+                                              item);
+        }
+        fwd = NULL;
+        mmm_help_commit(head);
+        if (CAS(&bucket->fwd, &fwd, new_bucket)) {
+            mmm_retire(head);
+        }
+        // Could just goto above. For now, let's just make sure it
+        // works.
+        return lowhat2_store_put_if_empty(self, top, hv1, item);
     }
 
     // Right now there's nothing in the bucket, but there might be
@@ -597,7 +599,7 @@ lowhat2_store_remove(lowhat_store_t *self,
     uint64_t           i;
     lowhat_hash_t      hv2;
     lowhat_history_t  *bucket;
-    lowhat_history_t  *fwd;    
+    lowhat_history_t  *fwd;
     lowhat_record_t   *head;
     lowhat_record_t   *candidate;
     lowhat_indirect_t *ptrbucket;
@@ -624,13 +626,13 @@ lowhat2_store_remove(lowhat_store_t *self,
         hv2.w2 = 0;
         CAS(&bucket->hv, &hv2, *hv1);
 
-	while (true) {
-	    fwd = atomic_load(&bucket->fwd);
-	    if (!fwd) {
-		break;
-	    }
-	    bucket = fwd;
-	}
+        while (true) {
+            fwd = atomic_load(&bucket->fwd);
+            if (!fwd) {
+                break;
+            }
+            bucket = fwd;
+        }
         goto found_history_bucket;
     }
     // If run off the loop, or break out of it, the item was not present.
@@ -787,10 +789,10 @@ lowhat2_do_migration(lowhat_store_t *old, lowhat_store_t *new)
     cur = old->hist_buckets;
 
     while (cur < store_end) {
-	if (atomic_load(&cur->fwd)) {
-	    cur++;
-	    continue;
-	}
+        if (atomic_load(&cur->fwd)) {
+            cur++;
+            continue;
+        }
         old_head = atomic_load(&cur->head);
         old_record
             = lowhat_pflag_clear(old_head, LOWHAT_F_MOVING | LOWHAT_F_MOVED);

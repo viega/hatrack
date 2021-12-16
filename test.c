@@ -289,19 +289,17 @@ run_one_time_test(char               *name,
     lowhat_t *dict = NULL;
     uint32_t  ticks;
 #ifdef LOWHAT_MMMALLOC_CTRS
-    uint64_t start_allocs = atomic_load(&mmm_alloc_ctr);
-    uint64_t start_frees  = atomic_load(&mmm_free_ctr);
-    uint64_t diff_allocs;
-    uint64_t diff_frees;
+    int64_t start_allocs = atomic_load(&mmm_alloc_ctr);
+    int64_t start_frees  = atomic_load(&mmm_free_ctr);
+    int64_t diff_allocs;
+    int64_t diff_frees;
 #endif
 
-    if (strcmp(name, "rand()")) {
-        dict = lowhat_new(type);
-    }
+    dict = lowhat_new(type);
 
     if (extra) {
         fprintf(stderr,
-                "[%10s:%10s: t=%4d, r=%5d x=%4d]\t",
+                "[%10s:%10s: t=%4d, r=%5d x=%04x]\t",
                 name,
                 dict_names[type],
                 thread_count,
@@ -318,18 +316,19 @@ run_one_time_test(char               *name,
     }
     fflush(stderr);
     ticks = time_test(func, iters, thread_count, dict, range, extra);
-    fprintf(stderr, "%d clocks, %d c/i\n", ticks, ticks / iters);
+    fprintf(stderr,
+            "%d clocks,\t %0.4f c/i\n",
+            ticks,
+            (double)(((double)ticks) / (double)iters));
 
-    if (strcmp(name, "rand()")) {
-        lowhat_delete(dict);
-    }
+    lowhat_delete(dict);
 
 #ifdef LOWHAT_MMMALLOC_CTRS
     diff_allocs = atomic_load(&mmm_alloc_ctr) - start_allocs;
     diff_frees  = atomic_load(&mmm_free_ctr) - start_frees;
 
-    if (diff_allocs != diff_frees) {
-        printf("%llu leaks, %02llu%% of %llu allocs\n",
+    if (diff_allocs > diff_frees) {
+        printf("%lld leaks, %02lld%% of %lld allocs\n",
                diff_allocs - diff_frees,
                ((diff_allocs - diff_frees) * 100) / diff_allocs,
                diff_allocs);
@@ -349,6 +348,12 @@ run_one_func_test(char               *name,
 {
     lowhat_t *dict = lowhat_new(type);
     bool      ret;
+#ifdef LOWHAT_MMMALLOC_CTRS
+    int64_t start_allocs = atomic_load(&mmm_alloc_ctr);
+    int64_t start_frees  = atomic_load(&mmm_free_ctr);
+    int64_t diff_allocs;
+    int64_t diff_frees;
+#endif
 
     if (extra) {
         fprintf(stderr,
@@ -377,6 +382,19 @@ run_one_func_test(char               *name,
     }
 
     lowhat_delete(dict);
+
+#ifdef LOWHAT_MMMALLOC_CTRS
+    diff_allocs = atomic_load(&mmm_alloc_ctr) - start_allocs;
+    diff_frees  = atomic_load(&mmm_free_ctr) - start_frees;
+
+    if (diff_allocs > diff_frees) {
+        printf("%lld leaks, %02lld%% of %lld allocs\n",
+               diff_allocs - diff_frees,
+               ((diff_allocs - diff_frees) * 100) / diff_allocs,
+               diff_allocs);
+    }
+
+#endif
 }
 
 static void
@@ -394,10 +412,10 @@ run_time_test(char                *name,
     uint32_t extra_ix;
 
     while (types[dict_ix] != LOWHAT_NONE) {
-        range_ix = 0;
-        while (ranges[range_ix]) {
-            tcount_ix = 0;
-            while (tcounts[tcount_ix]) {
+        tcount_ix = 0;
+        while (tcounts[tcount_ix]) {
+            range_ix = 0;
+            while (ranges[range_ix]) {
                 if (extra) {
                     extra_ix = 0;
                     while (extra[extra_ix]) {
@@ -421,9 +439,9 @@ run_time_test(char                *name,
                                       tcounts[tcount_ix],
                                       0);
                 }
-                tcount_ix++;
+                range_ix++;
             }
-            range_ix++;
+            tcount_ix++;
         }
         dict_ix++;
     }
@@ -444,10 +462,10 @@ run_func_test(char                *name,
     uint32_t extra_ix;
 
     while (types[dict_ix] != LOWHAT_NONE) {
-        range_ix = 0;
-        while (ranges[range_ix]) {
-            tcount_ix = 0;
-            while (tcounts[tcount_ix]) {
+        tcount_ix = 0;
+        while (tcounts[tcount_ix]) {
+            range_ix = 0;
+            while (ranges[range_ix]) {
                 if (extra) {
                     extra_ix = 0;
                     while (extra[extra_ix]) {
@@ -471,9 +489,9 @@ run_func_test(char                *name,
                                       tcounts[tcount_ix],
                                       0);
                 }
-                tcount_ix++;
+                range_ix++;
             }
-            range_ix++;
+            tcount_ix++;
         }
         dict_ix++;
     }
@@ -633,13 +651,84 @@ test_write_speed(test_info_t *info)
     return true;
 }
 
+bool
+test_rw_speed(test_info_t *info)
+{
+    uint32_t i;
+    uint32_t key;
+    uint32_t action;
+    uint32_t delete_odds  = info->extra & 0xff;
+    uint32_t write_odds   = info->extra >> 4;
+    uint32_t nonread_odds = delete_odds + write_odds;
+
+    for (i = 0; i < info->iters; i++) {
+        key    = test_rand() % info->range;
+        action = test_rand() % 100;
+        if (action <= nonread_odds) {
+            action = test_rand() % 100;
+            if (action <= delete_odds) {
+                test_remove(info->dict, key);
+            }
+            else {
+                test_put(info->dict, key, key);
+            }
+        }
+        else {
+            key = test_get(info->dict, key);
+        }
+    }
+    return true;
+}
+
+bool
+test_sort_speed(test_info_t *info)
+{
+    uint32_t       i;
+    uint32_t       key;
+    uint32_t       action;
+    uint32_t       delete_odds  = info->extra & 0xff;
+    uint32_t       write_odds   = info->extra >> 4;
+    uint32_t       nonread_odds = delete_odds + write_odds;
+    uint64_t       n;
+    lowhat_view_t *v;
+
+    for (i = 0; i < info->iters; i++) {
+        key    = test_rand() % info->range;
+        action = test_rand() % 100;
+        if (action <= nonread_odds) {
+            action = test_rand() % 100;
+            if (action <= delete_odds) {
+                test_remove(info->dict, key);
+            }
+            else {
+                test_put(info->dict, key, key);
+            }
+        }
+        else {
+            key = test_get(info->dict, key);
+        }
+    }
+
+    for (i = 0; i < info->iters / 100; i++) {
+        v = lowhat_view(info->dict, &n);
+        free(v);
+    }
+    return true;
+}
+
+// clang-format off
 uint32_t            basic_sizes[]   = {10, 100, 1000, 10000, 0};
+uint32_t            sort_sizes[]    = {10, 128, 256, 512, 1024, 2048, 4096,
+                                       8192, 0};
 uint32_t            large_sizes[]   = {100000, 1000000, 0};
 uint32_t            shrug_sizes[]   = {1, 0};
 uint32_t            one_thread[]    = {1, 0};
 uint32_t            basic_threads[] = {1, 4, 10, 20, 0};
 uint32_t            del_rate[]      = {100, 10, 3, 0};
-lowhat_table_type_t all_dicts[]     = {LOWHAT_1, LOWHAT_2, LOWHAT_NONE};
+uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
+lowhat_table_type_t all_dicts[]     = {LOWHAT_0, LOWHAT_NONE};
+//lowhat_table_type_t all_dicts[]     = {LOWHAT_1, LOWHAT_2, LOWHAT_NONE};
+//  clang-format on
 
 int
 main(int argc, char *argv[])
@@ -681,6 +770,13 @@ main(int argc, char *argv[])
                   basic_sizes,
                   basic_threads,
                   0);
+    run_time_test("rw speed",
+                  test_rw_speed,
+                  1000000,
+                  all_dicts,
+                  basic_sizes,
+                  basic_threads,
+                  write_rates);
     run_time_test("writes",
                   test_write_speed,
                   1000000,
@@ -688,6 +784,13 @@ main(int argc, char *argv[])
                   basic_sizes,
                   basic_threads,
                   del_rate);
+    run_time_test("sorts",
+                  test_sort_speed,
+                  100000,
+                  all_dicts,
+                  sort_sizes,
+                  basic_threads,
+                  write_rates);
     run_func_test("||-large",
                   test_parallel,
                   1,

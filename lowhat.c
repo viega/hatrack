@@ -39,8 +39,11 @@ lowhat_new(lowhat_table_type_t type)
         ret->vtable = lowhat1_vtable;
         break;
     case LOWHAT_2:
-	ret->vtable = lowhat2_vtable;
-	break;
+        ret->vtable = lowhat2_vtable;
+        break;
+    case LOWHAT_0:
+        ret->vtable = lowhat0_vtable;
+        break;
     default:
         abort();
     }
