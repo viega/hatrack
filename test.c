@@ -205,12 +205,15 @@ start_one_thread(void *info)
 }
 
 static uint32_t
-time_test(test_func_t func,
-          uint32_t    iters,
-          uint32_t    num_threads,
-          lowhat_t   *dict,
-          uint32_t    range,
-          uint32_t    extra)
+time_test(test_func_t      func,
+          uint32_t         iters,
+          uint32_t         num_threads,
+          lowhat_t        *dict,
+          uint32_t         range,
+          uint32_t         extra,
+	  struct timespec *sspec,
+	  struct timespec *espec
+	  )
 {
     clock_t     start;
     pthread_t   threads[num_threads];
@@ -230,12 +233,13 @@ time_test(test_func_t func,
     }
 
     start = clock();
+    clock_gettime(CLOCK_MONOTONIC, sspec);
     atomic_store(&test_func, func); // Start the threads.
 
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
-
+    clock_gettime(CLOCK_MONOTONIC, espec);
     return clock() - start;
 }
 
@@ -293,8 +297,12 @@ run_one_time_test(char               *name,
                   uint32_t            thread_count,
                   uint32_t            extra)
 {
-    lowhat_t *dict = NULL;
-    uint32_t  ticks;
+    lowhat_t       *dict = NULL;
+    uint32_t        ticks;
+    double          walltime;
+    struct timespec sspec;
+    struct timespec espec;
+    
 #ifdef LOWHAT_MMMALLOC_CTRS
     int64_t start_allocs = atomic_load(&mmm_alloc_ctr);
     int64_t start_frees  = atomic_load(&mmm_free_ctr);
@@ -322,9 +330,13 @@ run_one_time_test(char               *name,
                 range);
     }
     fflush(stderr);
-    ticks = time_test(func, iters, thread_count, dict, range, extra);
+    ticks = time_test(func, iters, thread_count, dict, range, extra,
+		      &sspec, &espec);
+    walltime = (espec.tv_sec - sspec.tv_sec) +
+	((espec.tv_nsec - sspec.tv_nsec) / 1000000000.0);
     fprintf(stderr,
-            "%d clocks,\t %0.4f c/i\n",
+            "%.4f sec, %d clocks,\t %0.4f c/i\n",
+	    walltime,
             ticks,
             (double)(((double)ticks) / (double)iters));
 
