@@ -457,8 +457,8 @@ struct lowhat_store_st {
 };
 
 struct lowhat_st {
-    _Atomic(lowhat_store_t *) store_current;
     lowhat_vtable_t           vtable;
+    _Atomic(lowhat_store_t *) store_current;
 };
 
 static inline uint64_t

@@ -275,7 +275,14 @@ functionality_test(test_func_t func,
     return true;
 }
 
-char *dict_names[] = {"none", "lowhat1", "lowhat2", "lowhat0", NULL};
+char *dict_names[] = {"none",
+                      "lowhat1",
+                      "lowhat2",
+                      "lowhat0",
+                      "hihat0",
+                      "refhat0",
+                      "refhat1",
+                      NULL};
 
 static void
 run_one_time_test(char               *name,
@@ -519,11 +526,13 @@ test_basic(test_info_t *info)
     }
     for (i = 0; i < (info->range / 2); i++) {
         if (test_get(info->dict, i + 1)) {
+            fprintf(stderr, "didn't delete.\n");
             return false;
         }
     }
     for (; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
+            fprintf(stderr, "%u != %llu\n", test_get(info->dict, i + 1), i + 1);
             return false;
         }
     }
@@ -719,15 +728,24 @@ test_sort_speed(test_info_t *info)
 // clang-format off
 uint32_t            basic_sizes[]   = {10, 100, 1000, 10000, 0};
 uint32_t            sort_sizes[]    = {10, 128, 256, 512, 1024, 2048, 4096,
-                                       8192, 0};
+                                       8192, 100000, 0};
 uint32_t            large_sizes[]   = {100000, 1000000, 0};
 uint32_t            shrug_sizes[]   = {1, 0};
+uint32_t            small_size[]    = {10, 0};
 uint32_t            one_thread[]    = {1, 0};
-uint32_t            basic_threads[] = {1, 4, 10, 20, 0};
+uint32_t            basic_threads[] = {2, 4, 10, 20, 0};
 uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
-lowhat_table_type_t all_dicts[]     = {LOWHAT_0, LOWHAT_NONE};
-//lowhat_table_type_t all_dicts[]     = {LOWHAT_1, LOWHAT_2, LOWHAT_NONE};
+
+lowhat_table_type_t threadsafe_dicts[] = {
+    LOWHAT_0, LOWHAT_1, LOWHAT_2, LOWHAT_NONE
+};
+lowhat_table_type_t all_dicts[]     = {
+    LOWHAT_0, LOWHAT_1, LOWHAT_2, REFHAT_0, LOWHAT_NONE
+};
+lowhat_table_type_t st_dicts[]      = {
+    REFHAT_0, LOWHAT_NONE
+};
 //  clang-format on
 
 int
@@ -752,7 +770,7 @@ main(int argc, char *argv[])
     run_func_test("parallel",
                   test_parallel,
                   10,
-                  all_dicts,
+                  threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
                   0);
@@ -761,6 +779,13 @@ main(int argc, char *argv[])
                   100000,
                   all_dicts,
                   shrug_sizes,
+                  one_thread,
+                  0);
+    run_time_test("rand()",
+                  test_rand_speed,
+                  100000,
+                  threadsafe_dicts,
+                  shrug_sizes,
                   basic_threads,
                   0);
     run_time_test("insert",
@@ -768,36 +793,66 @@ main(int argc, char *argv[])
                   1000000,
                   all_dicts,
                   basic_sizes,
-                  basic_threads,
+                  one_thread,
                   0);
-    run_time_test("rw speed",
-                  test_rw_speed,
+    run_time_test("insert",
+                  test_insert_speed,
                   1000000,
-                  all_dicts,
+                  threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
-                  write_rates);
+                  0);
     run_time_test("writes",
                   test_write_speed,
                   1000000,
                   all_dicts,
                   basic_sizes,
+                  one_thread,
+                  del_rate);
+    run_time_test("writes",
+                  test_write_speed,
+                  1000000,
+                  threadsafe_dicts,
+                  basic_sizes,
                   basic_threads,
                   del_rate);
+    run_time_test("rw speed",
+                  test_rw_speed,
+                  1000000,
+                  all_dicts,
+                  basic_sizes,
+                  one_thread,
+                  write_rates);
+    run_time_test("rw speed",
+                  test_rw_speed,
+                  1000000,
+		  threadsafe_dicts,
+                  basic_sizes,
+                  basic_threads,
+                  write_rates);
     run_time_test("sorts",
                   test_sort_speed,
                   100000,
                   all_dicts,
                   sort_sizes,
+                  one_thread,
+                  write_rates);
+    run_time_test("sorts",
+                  test_sort_speed,
+                  100000,
+                  threadsafe_dicts,
+                  sort_sizes,
                   basic_threads,
                   write_rates);
+#ifdef LOWHAT_RUN_LARGE_TESTS    
     run_func_test("||-large",
                   test_parallel,
                   1,
-                  all_dicts,
+                  threadsafe_dicts,
                   large_sizes,
                   basic_threads,
                   0);
+#endif    
 
 #ifdef LOWHAT_MMMALLOC_CTRS
     printf("allocs: %llu\n", atomic_load(&mmm_alloc_ctr));

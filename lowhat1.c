@@ -644,7 +644,7 @@ lowhat1_store_migrate(lowhat_store_t *self, lowhat_t *top)
 
         // If the current table seems to be more than 50% full for
         // real, then double the table size.
-        if (approx_len > self->last_slot / 2) {
+        if (approx_len > new_size / 2) {
             new_size <<= 1;
         }
 
