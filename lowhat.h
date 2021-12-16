@@ -15,6 +15,7 @@
 // Pull in the various implementations.
 
 #include "lowhat1.h"
+#include "lowhat2.h"
 
 typedef enum : uint64_t
 {

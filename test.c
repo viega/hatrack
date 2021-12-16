@@ -639,7 +639,7 @@ uint32_t            shrug_sizes[]   = {1, 0};
 uint32_t            one_thread[]    = {1, 0};
 uint32_t            basic_threads[] = {1, 4, 10, 20, 0};
 uint32_t            del_rate[]      = {100, 10, 3, 0};
-lowhat_table_type_t all_dicts[]     = {LOWHAT_1, LOWHAT_NONE};
+lowhat_table_type_t all_dicts[]     = {LOWHAT_1, LOWHAT_2, LOWHAT_NONE};
 
 int
 main(int argc, char *argv[])
