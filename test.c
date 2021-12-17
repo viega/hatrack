@@ -304,13 +304,6 @@ run_one_time_test(char               *name,
     struct timespec sspec;
     struct timespec espec;
 
-#ifdef LOWHAT_MMMALLOC_CTRS
-    int64_t start_allocs = atomic_load(&mmm_alloc_ctr);
-    int64_t start_frees  = atomic_load(&mmm_free_ctr);
-    int64_t diff_allocs;
-    int64_t diff_frees;
-#endif
-
     dict = lowhat_new(type);
 
     if (extra) {
@@ -348,19 +341,6 @@ run_one_time_test(char               *name,
             (double)(((double)ticks) / (double)iters));
 
     lowhat_delete(dict);
-
-#ifdef LOWHAT_MMMALLOC_CTRS
-    diff_allocs = atomic_load(&mmm_alloc_ctr) - start_allocs;
-    diff_frees  = atomic_load(&mmm_free_ctr) - start_frees;
-
-    if (diff_allocs > diff_frees) {
-        printf("%lld leaks, %02lld%% of %lld allocs\n",
-               diff_allocs - diff_frees,
-               ((diff_allocs - diff_frees) * 100) / diff_allocs,
-               diff_allocs);
-    }
-
-#endif
 }
 
 static void
@@ -374,12 +354,6 @@ run_one_func_test(char               *name,
 {
     hashtable_t dict = lowhat_new(type);
     bool        ret;
-#ifdef LOWHAT_MMMALLOC_CTRS
-    int64_t start_allocs = atomic_load(&mmm_alloc_ctr);
-    int64_t start_frees  = atomic_load(&mmm_free_ctr);
-    int64_t diff_allocs;
-    int64_t diff_frees;
-#endif
 
     if (extra) {
         fprintf(stderr,
@@ -408,19 +382,6 @@ run_one_func_test(char               *name,
     }
 
     lowhat_delete(dict);
-
-#ifdef LOWHAT_MMMALLOC_CTRS
-    diff_allocs = atomic_load(&mmm_alloc_ctr) - start_allocs;
-    diff_frees  = atomic_load(&mmm_free_ctr) - start_frees;
-
-    if (diff_allocs > diff_frees) {
-        printf("%lld leaks, %02lld%% of %lld allocs\n",
-               diff_allocs - diff_frees,
-               ((diff_allocs - diff_frees) * 100) / diff_allocs,
-               diff_allocs);
-    }
-
-#endif
 }
 
 static void
@@ -767,6 +728,9 @@ lowhat_table_type_t st_dicts[]      = {
 };
 //  clang-format on
 
+#ifndef DEFAULT_ITERS
+#define DEFAULT_ITERS 100000
+#endif
 int
 main(int argc, char *argv[])
 {
@@ -779,6 +743,7 @@ main(int argc, char *argv[])
                   basic_sizes,
                   one_thread,
                   0);
+    counters_output_delta();        
     run_func_test("ordering",
                   test_basic,
                   1,
@@ -786,6 +751,7 @@ main(int argc, char *argv[])
                   basic_sizes,
                   one_thread,
                   0);
+    counters_output_delta();        
     run_func_test("parallel",
                   test_parallel,
                   10,
@@ -793,76 +759,87 @@ main(int argc, char *argv[])
                   basic_sizes,
                   basic_threads,
                   0);
+    counters_output_delta();        
     run_time_test("rand()-1t",
                   test_rand_speed,
-                  100000,
+                  DEFAULT_ITERS,
                   all_dicts,
                   shrug_sizes,
                   one_thread,
                   0);
+    counters_output_delta();        
     run_time_test("rand()-nt",
                   test_rand_speed,
-                  100000,
+                  DEFAULT_ITERS,
                   threadsafe_dicts,
                   shrug_sizes,
                   basic_threads,
                   0);
+    counters_output_delta();        
     run_time_test("insert-1t",
                   test_insert_speed,
-                  1000000,
+                  DEFAULT_ITERS,
                   all_dicts,
                   basic_sizes,
                   one_thread,
                   0);
+    counters_output_delta();        
     run_time_test("insert-nt",
                   test_insert_speed,
-                  1000000,
+                  DEFAULT_ITERS,
                   threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
                   0);
+    counters_output_delta();        
     run_time_test("writes-1t",
                   test_write_speed,
-                  1000000,
+                  DEFAULT_ITERS,
                   all_dicts,
                   basic_sizes,
                   one_thread,
                   del_rate);
+    counters_output_delta();        
     run_time_test("writes-nt",
                   test_write_speed,
-                  1000000,
+                  DEFAULT_ITERS,
                   threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
                   del_rate);
+    counters_output_delta();        
     run_time_test("rw speed-1t",
                   test_rw_speed,
-                  1000000,
+                  DEFAULT_ITERS,
                   all_dicts,
                   basic_sizes,
                   one_thread,
                   write_rates);
+    counters_output_delta();        
     run_time_test("rw speed-nt",
                   test_rw_speed,
-                  1000000,
+                  DEFAULT_ITERS,
 		  threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
                   write_rates);
+    counters_output_delta();
     run_time_test("sorts-1t",
                   test_sort_speed,
-                  100000,
+                  DEFAULT_ITERS/10,
                   all_dicts,
                   sort_sizes,
                   one_thread,
                   write_rates);
+    counters_output_delta();    
     run_time_test("sorts-nt",
                   test_sort_speed,
-                  100000,
+                  DEFAULT_ITERS/10,
                   threadsafe_dicts,
                   sort_sizes,
                   basic_threads,
                   write_rates);
+    counters_output_delta();    
 #ifdef LOWHAT_RUN_LARGE_TESTS    
     run_func_test("||-large",
                   test_parallel,
@@ -873,11 +850,8 @@ main(int argc, char *argv[])
                   0);
 #endif    
 
-#ifdef LOWHAT_MMMALLOC_CTRS
-    printf("allocs: %llu\n", atomic_load(&mmm_alloc_ctr));
-    printf("frees:  %llu\n", atomic_load(&mmm_free_ctr));
-#endif
-
-    printf("Press any key to exit.\n");
+    counters_output_alltime();
+    
+    printf("Press <enter> to exit.\n");
     getc(stdin);
 }

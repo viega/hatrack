@@ -108,11 +108,6 @@ mmm_clean_up_before_exit(void)
     }
 }
 
-#ifdef LOWHAT_MMMALLOC_CTRS
-_Atomic uint64_t mmm_alloc_ctr = ATOMIC_VAR_INIT(0);
-_Atomic uint64_t mmm_free_ctr  = ATOMIC_VAR_INIT(0);
-#endif
-
 // The basic gist of this algorithm is that we're going to look at
 // every reservation we can find, identifying the oldest reservation
 // in the list.
@@ -195,9 +190,7 @@ mmm_empty(void)
     while (cell) {
 	tmp  = cell;
 	cell = cell->next;
-#ifdef LOWHAT_MMMALLOC_CTRS
-	atomic_fetch_add(&mmm_free_ctr, 1);
-#endif
+	LOWHAT_FREE_CTR();
 	free(tmp);
     }
 }

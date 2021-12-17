@@ -235,7 +235,7 @@ lowhat0_store_put(lowhat0_store_t *self,
         bucket = &self->hist_buckets[bix];
         hv2.w1 = 0;
         hv2.w2 = 0;
-        if (!CAS(&bucket->hv, &hv2, *hv1)) {
+        if (!LCAS(&bucket->hv, &hv2, *hv1, LOWHAT0_CTR_BUCKET_ACQUIRE)) {
             if (!lowhat_hashes_eq(hv1, &hv2)) {
                 bix = (bix + 1) & self->last_slot;
                 continue;
@@ -288,7 +288,7 @@ found_history_bucket:
         }
     }
 
-    if (!CAS(&bucket->head, &head, candidate)) {
+    if (!LCAS(&bucket->head, &head, candidate, LOWHAT0_CTR_REC_INSTALL)) {
         // CAS failed. This is either because a flag got updated
         // (because of a table migration), or because a new record got
         // added first.  In the later case, we act like our write
@@ -362,7 +362,7 @@ lowhat0_store_put_if_empty(lowhat0_store_t *self,
         bucket = &self->hist_buckets[bix];
         hv2.w1 = 0;
         hv2.w2 = 0;
-        if (!CAS(&bucket->hv, &hv2, *hv1)) {
+        if (!LCAS(&bucket->hv, &hv2, *hv1, LOWHAT0_CTR_BUCKET_ACQUIRE)) {
             if (!lowhat_hashes_eq(hv1, &hv2)) {
                 bix = (bix + 1) & self->last_slot;
                 continue;
@@ -410,7 +410,7 @@ found_history_bucket:
     candidate       = mmm_alloc(sizeof(lowhat_record_t));
     candidate->next = lowhat_pflag_set(head, LOWHAT_F_USED);
     candidate->item = item;
-    if (!CAS(&bucket->head, &head, candidate)) {
+    if (!LCAS(&bucket->head, &head, candidate, LOWHAT0_CTR_REC_INSTALL)) {
         mmm_retire_unused(candidate);
 
         if (lowhat_pflag_test(head, LOWHAT_F_MOVING)) {
@@ -508,7 +508,7 @@ found_history_bucket:
     candidate       = mmm_alloc(sizeof(lowhat_record_t));
     candidate->next = NULL;
     candidate->item = NULL;
-    if (!CAS(&bucket->head, &head, candidate)) {
+    if (!LCAS(&bucket->head, &head, candidate, LOWHAT0_CTR_DEL)) {
         mmm_retire_unused(candidate);
 
         // Moving flag got set before our CAS.
@@ -572,7 +572,10 @@ lowhat0_store_migrate(lowhat0_store_t *self, lowhat0_t *top)
         // us swap in the wrong length.
         atomic_store(&candidate->used_count, ~0);
         mmm_commit_write(candidate);
-        if (!CAS(&self->store_next, &new_store, candidate)) {
+        if (!LCAS(&self->store_next,
+                  &new_store,
+                  candidate,
+                  LOWHAT0_CTR_NEW_STORE)) {
             lowhat0_delete_store(candidate);
         }
         else {
@@ -582,7 +585,10 @@ lowhat0_store_migrate(lowhat0_store_t *self, lowhat0_t *top)
 
     lowhat0_do_migration(self, new_store);
 
-    if (CAS(&top->store_current, &self, new_store)) {
+    if (LCAS(&top->store_current,
+             &self,
+             new_store,
+             LOWHAT0_CTR_STORE_INSTALL)) {
         lowhat0_retire_store(self);
     }
 
@@ -617,8 +623,10 @@ lowhat0_do_migration(lowhat0_store_t *old, lowhat0_store_t *new)
             if (lowhat_pflag_test(head, LOWHAT_F_MOVING)) {
                 break;
             }
-        } while (
-            !CAS(&cur->head, &head, lowhat_pflag_set(head, LOWHAT_F_MOVING)));
+        } while (!LCAS(&cur->head,
+                       &head,
+                       lowhat_pflag_set(head, LOWHAT_F_MOVING),
+                       LOWHAT0_CTR_F_MOVING));
     }
 
     // At this point, we're sure that any late writers will help us
@@ -633,9 +641,10 @@ lowhat0_do_migration(lowhat0_store_t *old, lowhat0_store_t *new)
 
         if (!old_record) {
             if (!(lowhat_pflag_test(old_head, LOWHAT_F_MOVED))) {
-                CAS(&cur->head,
-                    &old_head,
-                    lowhat_pflag_set(old_head, LOWHAT_F_MOVED));
+                LCAS(&cur->head,
+                     &old_head,
+                     lowhat_pflag_set(old_head, LOWHAT_F_MOVED),
+                     LOWHAT0_CTR_F_MOVED1);
             }
             continue;
         }
@@ -648,9 +657,10 @@ lowhat0_do_migration(lowhat0_store_t *old, lowhat0_store_t *new)
         }
 
         if (!lowhat_pflag_test(old_record->next, LOWHAT_F_USED)) {
-            if (CAS(&cur->head,
-                    &old_head,
-                    lowhat_pflag_set(old_head, LOWHAT_F_MOVED))) {
+            if (LCAS(&cur->head,
+                     &old_head,
+                     lowhat_pflag_set(old_head, LOWHAT_F_MOVED),
+                     LOWHAT0_CTR_F_MOVED2)) {
                 mmm_retire(old_record);
             }
             continue;
@@ -664,7 +674,7 @@ lowhat0_do_migration(lowhat0_store_t *old, lowhat0_store_t *new)
             bucket         = &new->hist_buckets[bix];
             expected_hv.w1 = 0;
             expected_hv.w2 = 0;
-            if (!CAS(&bucket->hv, &expected_hv, hv)) {
+            if (!LCAS(&bucket->hv, &expected_hv, hv, LOWHAT0_CTR_MIGRATE_HV)) {
                 if (!lowhat_hashes_eq(&expected_hv, &hv)) {
                     bix = (bix + 1) & new->last_slot;
                     continue;
@@ -674,11 +684,14 @@ lowhat0_do_migration(lowhat0_store_t *old, lowhat0_store_t *new)
         }
 
         expected_head = NULL;
-        CAS(&bucket->head, &expected_head, old_record);
-        CAS(&cur->head, &old_head, lowhat_pflag_set(old_head, LOWHAT_F_MOVED));
+        LCAS(&bucket->head, &expected_head, old_record, LOWHAT0_CTR_MIG_REC);
+        LCAS(&cur->head,
+             &old_head,
+             lowhat_pflag_set(old_head, LOWHAT_F_MOVED),
+             LOWHAT0_CTR_F_MOVED3);
     }
 
-    CAS(&new->used_count, &expected_used, new_used);
+    LCAS(&new->used_count, &expected_used, new_used, LOWHAT0_CTR_LEN_INSTALL);
 
     // Now, we can swap out the top store, which is done in the caller.
 }

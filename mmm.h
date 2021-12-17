@@ -27,17 +27,21 @@
 #ifndef __MMM_H__
 #define __MMM_H__
 
+#include "counters.h"
+
+#ifdef LOWHAT_MMMALLOC_CTRS
+#define LOWHAT_MALLOC_CTR()        LOWHAT_CTR(MMM_CTR_MALLOCS)
+#define LOWHAT_FREE_CTR()          LOWHAT_CTR(MMM_CTR_FREES)
+#define LOWHAT_RETIRE_UNUSED_CTR() LOWHAT_CTR(MMM_CTR_RETIRE_UNUSED)
+#else
+#define LOWHAT_MALLOC_CTR()
+#define LOWHAT_FREE_CTR()
+#define LOWHAT_RETIRE_UNUSED_CTR() LOWHAT_CTR(MMM_CTR_RETIRE_UNUSED)
+#endif
+
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdbool.h>
-#include <stdatomic.h>
 #include <pthread.h>
-
-// Anyone who has a hope of understanding this code will well know
-// what a CAS is, so let's minimize the extraneous text.
-
-#define CAS(target, expecting, newval)                                         \
-    atomic_compare_exchange_weak(target, expecting, newval)
 
 // This algorithm keeps an array of thread reader epochs that's shared
 // across threads. The basic idea is that each reader writes the
@@ -374,7 +378,8 @@ mmm_start_linearized_op(void)
     do {
         mmm_reservations[mmm_mytid] = read_epoch;
         read_epoch                  = atomic_load(&mmm_epoch);
-    } while (read_epoch != mmm_reservations[mmm_mytid]);
+    } while (LOWHAT_YN_CTR(read_epoch != mmm_reservations[mmm_mytid],
+                           LOWHAT_CTR_LINEARIZE_RETRIES));
 
     return read_epoch;
 }
@@ -409,7 +414,7 @@ mmm_commit_write(void *ptr)
     //
     // Either way, we're safe to ignore the return value.
 
-    CAS(&item->write_epoch, &expected_value, cur_epoch);
+    LCAS(&item->write_epoch, &expected_value, cur_epoch, LOWHAT_CTR_COMMIT);
 }
 
 static inline void
@@ -428,23 +433,19 @@ mmm_help_commit(void *ptr)
 
     if (!found_epoch) {
         cur_epoch = atomic_fetch_add(&mmm_epoch, 1) + 1;
-        CAS(&item->write_epoch, &found_epoch, cur_epoch);
+        LCAS(&item->write_epoch,
+             &found_epoch,
+             cur_epoch,
+             LOWHAT_CTR_COMMIT_HELPS);
     }
 }
-
-#ifdef LOWHAT_MMMALLOC_CTRS
-extern _Atomic uint64_t mmm_alloc_ctr;
-extern _Atomic uint64_t mmm_free_ctr;
-#endif
 
 static inline void *
 mmm_alloc(uint64_t size)
 {
     mmm_header_t *item = (mmm_header_t *)calloc(1, sizeof(mmm_header_t) + size);
 
-#ifdef LOWHAT_MMMALLOC_CTRS
-    atomic_fetch_add(&mmm_alloc_ctr, 1);
-#endif
+    LOWHAT_MALLOC_CTR();
 
     return (void *)item->data;
 }
@@ -456,9 +457,7 @@ static inline void
 mmm_retire_unused(void *ptr)
 {
     free(mmm_get_header(ptr));
-#ifdef LOWHAT_MMMALLOC_CTRS
-    atomic_fetch_add(&mmm_free_ctr, 1);
-#endif
+    LOWHAT_RETIRE_UNUSED_CTR();
 }
 
 static inline uint64_t
