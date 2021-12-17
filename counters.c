@@ -115,9 +115,6 @@ counters_output_delta(void)
         lowhat_last_yn_counters[i][0] = y_cur;
         lowhat_last_yn_counters[i][1] = n_cur;
 
-        if (i == 58) {
-            printf("Break here!\n");
-        }
         if (!total) {
             continue;
         }

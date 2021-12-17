@@ -306,23 +306,7 @@ run_one_time_test(char               *name,
 
     dict = lowhat_new(type);
 
-    if (extra) {
-        fprintf(stderr,
-                "[%10s:%10s: t=%4d, r=%5d x=%04x] \t",
-                name,
-                dict_names[type],
-                thread_count,
-                range,
-                extra);
-    }
-    else {
-        fprintf(stderr,
-                "[%10s:%10s: t=%4d, r=%5d] \t",
-                name,
-                dict_names[type],
-                thread_count,
-                range);
-    }
+    fprintf(stderr, "%10s:\t", dict_names[type]);
     fflush(stderr);
     ticks    = time_test(func,
                       iters,
@@ -355,23 +339,7 @@ run_one_func_test(char               *name,
     hashtable_t dict = lowhat_new(type);
     bool        ret;
 
-    if (extra) {
-        fprintf(stderr,
-                "[%10s:%10s: t=%4d, r=%5d x=%4d]\t",
-                name,
-                dict_names[type],
-                thread_count,
-                range,
-                extra);
-    }
-    else {
-        fprintf(stderr,
-                "[%10s:%10s: t=%4d, r=%5d]\t",
-                name,
-                dict_names[type],
-                thread_count,
-                range);
-    }
+    fprintf(stderr, "%10s:\t", dict_names[type]);
     fflush(stderr);
     ret = functionality_test(func, iters, thread_count, dict, range, extra);
     if (ret) {
@@ -393,19 +361,30 @@ run_time_test(char                *name,
               uint32_t            *tcounts,
               uint32_t            *extra)
 {
-    uint32_t dict_ix = 0;
+    uint32_t dict_ix;
     uint32_t range_ix;
     uint32_t tcount_ix;
     uint32_t extra_ix;
 
-    while (types[dict_ix] != LOWHAT_NONE) {
+    fprintf(stderr, "[[ Test: %s ]]\n", name);
+
+    extra_ix = 0;
+    do {
         tcount_ix = 0;
         while (tcounts[tcount_ix]) {
             range_ix = 0;
             while (ranges[range_ix]) {
                 if (extra) {
-                    extra_ix = 0;
-                    while (extra[extra_ix]) {
+                    fprintf(stderr,
+                            "[%10s] -- Parameters: threads=%4d, "
+                            "iters=%7d, range=%6d, other=%4x\n",
+                            name,
+                            tcounts[tcount_ix],
+                            iters,
+                            ranges[range_ix],
+                            extra[extra_ix]);
+                    dict_ix = 0;
+                    while (types[dict_ix] != LOWHAT_NONE) {
                         run_one_time_test(name,
                                           func,
                                           iters,
@@ -414,10 +393,17 @@ run_time_test(char                *name,
                                           tcounts[tcount_ix],
                                           extra[extra_ix]);
 
-                        extra_ix++;
+                        dict_ix++;
                     }
                 }
                 else {
+                    fprintf(stderr,
+                            "[%10s] -- Parameters: threads=%4d, "
+                            "iters=%7d, range=%6d\n",
+                            name,
+                            tcounts[tcount_ix],
+                            iters,
+                            ranges[range_ix]);
                     run_one_time_test(name,
                                       func,
                                       iters,
@@ -430,8 +416,7 @@ run_time_test(char                *name,
             }
             tcount_ix++;
         }
-        dict_ix++;
-    }
+    } while (extra && extra[extra_ix++]);
 }
 
 static void
@@ -443,19 +428,29 @@ run_func_test(char                *name,
               uint32_t            *tcounts,
               uint32_t            *extra)
 {
-    uint32_t dict_ix = 0;
+    uint32_t dict_ix;
     uint32_t range_ix;
     uint32_t tcount_ix;
     uint32_t extra_ix;
 
-    while (types[dict_ix] != LOWHAT_NONE) {
+    fprintf(stderr, "[[ Test: %s ]]\n", name);
+    extra_ix = 0;
+    do {
         tcount_ix = 0;
         while (tcounts[tcount_ix]) {
             range_ix = 0;
             while (ranges[range_ix]) {
                 if (extra) {
-                    extra_ix = 0;
-                    while (extra[extra_ix]) {
+                    fprintf(stderr,
+                            "[%10s] -- Parameters: threads=%4d, "
+                            "iters=%7d, range=%6d, other=%4x\n",
+                            name,
+                            tcounts[tcount_ix],
+                            iters,
+                            ranges[range_ix],
+                            extra[extra_ix]);
+                    dict_ix = 0;
+                    while (types[dict_ix] != LOWHAT_NONE) {
                         run_one_func_test(name,
                                           func,
                                           iters,
@@ -464,10 +459,17 @@ run_func_test(char                *name,
                                           tcounts[tcount_ix],
                                           extra[extra_ix]);
 
-                        extra_ix++;
+                        dict_ix++;
                     }
                 }
                 else {
+                    fprintf(stderr,
+                            "[%10s] -- Parameters: threads=%4d, "
+                            "iters=%7d, range=%6d\n",
+                            name,
+                            tcounts[tcount_ix],
+                            iters,
+                            ranges[range_ix]);
                     run_one_func_test(name,
                                       func,
                                       iters,
@@ -480,8 +482,7 @@ run_func_test(char                *name,
             }
             tcount_ix++;
         }
-        dict_ix++;
-    }
+    } while (extra && extra[extra_ix++]);
 }
 
 // Actual tests below here.
