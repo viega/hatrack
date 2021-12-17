@@ -1,38 +1,41 @@
 #include "lowhat0.h"
-#include <assert.h>
+#include <stdio.h>
 
 // clang-format off
-static lowhat_store_t *lowhat0_store_new(uint64_t);
-static void            lowhat0_delete_store(lowhat_store_t *);
-static void           *lowhat0_store_get(lowhat_store_t *, lowhat_t *,
-					 lowhat_hash_t *, bool *);
-static void           *lowhat0_store_put(lowhat_store_t *, lowhat_t *,
-					 lowhat_hash_t *, void *, bool *);
-static bool            lowhat0_store_put_if_empty(lowhat_store_t *, lowhat_t *,
-						  lowhat_hash_t *, void *);
-static void           *lowhat0_store_remove(lowhat_store_t *, lowhat_t *,
-					    lowhat_hash_t *, bool *);
-static lowhat_store_t *lowhat0_store_migrate(lowhat_store_t *, lowhat_t *);
-static lowhat_view_t  *lowhat0_store_view(lowhat_store_t *, lowhat_t *,
-					  uint64_t, uint64_t *);
-static inline void     lowhat0_do_migration(lowhat_store_t *, lowhat_store_t *);
-static int             lowhat0_quicksort_cmp(const void *, const void *);
+static lowhat0_store_t *lowhat0_store_new(uint64_t);
+static void             lowhat0_delete_store(lowhat0_store_t *);
+static void            *lowhat0_store_get(lowhat0_store_t *, lowhat0_t *,
+					  lowhat_hash_t *, bool *);
+static void            *lowhat0_store_put(lowhat0_store_t *, lowhat0_t *,
+					  lowhat_hash_t *, void *, bool *);
+static bool             lowhat0_store_put_if_empty(lowhat0_store_t *,
+						   lowhat0_t *,
+						   lowhat_hash_t *,
+						   void *);
+static void            *lowhat0_store_remove(lowhat0_store_t *, lowhat0_t *,
+					     lowhat_hash_t *, bool *);
+static lowhat0_store_t *lowhat0_store_migrate(lowhat0_store_t *, lowhat0_t *);
+static lowhat_view_t   *lowhat0_store_view(lowhat0_store_t *, lowhat0_t *,
+					   uint64_t, uint64_t *);
+static inline void      lowhat0_do_migration(lowhat0_store_t *,
+					     lowhat0_store_t *);
+static int              lowhat0_quicksort_cmp(const void *, const void *);
 
 const lowhat_vtable_t lowhat0_vtable = {
-    .init   = lowhat0_init,
-    .get    = lowhat0_get,
-    .put    = lowhat0_put,
-    .remove = lowhat0_remove,
-    .delete = lowhat0_delete,
-    .len    = lowhat0_len,
-    .view   = lowhat0_view
+    .init   = (lowhat_init_func)lowhat0_init,
+    .get    = (lowhat_get_func)lowhat0_get,
+    .put    = (lowhat_put_func)lowhat0_put,
+    .remove = (lowhat_remove_func)lowhat0_remove,
+    .delete = (lowhat_delete_func)lowhat0_delete,
+    .len    = (lowhat_len_func)lowhat0_len,
+    .view   = (lowhat_view_func)lowhat0_view
 };
 // clang-format on
 
 void
-lowhat0_init(lowhat_t *self)
+lowhat0_init(lowhat0_t *self)
 {
-    lowhat_store_t *store = lowhat0_store_new(1 << LOWHAT_MIN_SIZE_LOG);
+    lowhat0_store_t *store = lowhat0_store_new(1 << LOWHAT_MIN_SIZE_LOG);
 
     mmm_commit_write(store);
     atomic_store(&self->store_current, store);
@@ -49,7 +52,7 @@ lowhat0_init(lowhat_t *self)
 // found or not.  Set it to NULL if you're not interested.
 
 void *
-lowhat0_get(lowhat_t *self, lowhat_hash_t *hv, bool *found)
+lowhat0_get(lowhat0_t *self, lowhat_hash_t *hv, bool *found)
 {
     void *ret;
 
@@ -61,7 +64,7 @@ lowhat0_get(lowhat_t *self, lowhat_hash_t *hv, bool *found)
 }
 
 void *
-lowhat0_put(lowhat_t      *self,
+lowhat0_put(lowhat0_t     *self,
             lowhat_hash_t *hv,
             void          *item,
             bool           ifempty,
@@ -86,7 +89,7 @@ lowhat0_put(lowhat_t      *self,
 }
 
 void *
-lowhat0_remove(lowhat_t *self, lowhat_hash_t *hv, bool *found)
+lowhat0_remove(lowhat0_t *self, lowhat_hash_t *hv, bool *found)
 {
     void *ret;
 
@@ -98,13 +101,13 @@ lowhat0_remove(lowhat_t *self, lowhat_hash_t *hv, bool *found)
 }
 
 void
-lowhat0_delete(lowhat_t *self)
+lowhat0_delete(lowhat0_t *self)
 {
-    lowhat_store_t   *store   = atomic_load(&self->store_current);
-    lowhat_history_t *buckets = store->hist_buckets;
-    lowhat_history_t *p       = buckets;
-    lowhat_history_t *end     = store->hist_end;
-    lowhat_record_t  *rec;
+    lowhat0_store_t   *store   = atomic_load(&self->store_current);
+    lowhat0_history_t *buckets = store->hist_buckets;
+    lowhat0_history_t *p       = buckets;
+    lowhat0_history_t *end     = buckets + (store->last_slot + 1);
+    lowhat_record_t   *rec;
 
     while (p < end) {
         rec = lowhat_pflag_clear(atomic_load(&p->head),
@@ -120,23 +123,13 @@ lowhat0_delete(lowhat_t *self)
 }
 
 uint64_t
-lowhat0_len(lowhat_t *self)
+lowhat0_len(lowhat0_t *self)
 {
-    uint64_t diff;
-
-    // Remember that pointer subtraction implicity divides
-    // the result by the number of objects, so this
-    // gives us the number of buckets in the history store
-    // that have been claimed.
-    diff = atomic_load(&self->store_current->hist_next)
-         - self->store_current->hist_buckets;
-
-    // Subtract out buckets known to be empty.
-    return diff - atomic_load(&self->store_current->del_count);
+    return self->store_current->used_count - self->store_current->del_count;
 }
 
 lowhat_view_t *
-lowhat0_view(lowhat_t *self, uint64_t *num_items)
+lowhat0_view(lowhat0_t *self, uint64_t *num_items)
 {
     lowhat_view_t *ret;
     uint64_t       epoch;
@@ -148,17 +141,18 @@ lowhat0_view(lowhat_t *self, uint64_t *num_items)
     return ret;
 }
 
-static lowhat_store_t *
+static lowhat0_store_t *
 lowhat0_store_new(uint64_t size)
 {
-    lowhat_store_t *store = (lowhat_store_t *)mmm_alloc(sizeof(lowhat_store_t));
+    lowhat0_store_t *store
+        = (lowhat0_store_t *)mmm_alloc(sizeof(lowhat0_store_t));
 
     store->last_slot  = size - 1;
     store->threshold  = lowhat_compute_table_threshold(size);
     store->used_count = ATOMIC_VAR_INIT(0);
     store->del_count  = ATOMIC_VAR_INIT(0);
     store->hist_buckets
-        = (lowhat_history_t *)mmm_alloc(sizeof(lowhat_history_t) * size);
+        = (lowhat0_history_t *)mmm_alloc(sizeof(lowhat0_history_t) * size);
 
     mmm_commit_write(store->hist_buckets);
 
@@ -166,41 +160,30 @@ lowhat0_store_new(uint64_t size)
 }
 
 static void
-lowhat0_delete_store(lowhat_store_t *self)
+lowhat0_delete_store(lowhat0_store_t *self)
 {
-    uint64_t         i;
-    lowhat_record_t *record;
-
-    for (i = 0; i <= self->last_slot; i++) {
-        record = atomic_load(&self->hist_buckets[i].head);
-        record = lowhat_pflag_clear(record, LOWHAT_F_MOVED | LOWHAT_F_MOVING);
-        if (record) {
-            mmm_retire(record);
-        }
-    }
-
     mmm_retire_unused(self->hist_buckets);
     mmm_retire_unused(self);
 }
 
 static void
-lowhat0_retire_store(lowhat_store_t *self)
+lowhat0_retire_store(lowhat0_store_t *self)
 {
     mmm_retire(self->hist_buckets);
     mmm_retire(self);
 }
 
 static void *
-lowhat0_store_get(lowhat_store_t *self,
-                  lowhat_t       *top,
-                  lowhat_hash_t  *hv1,
-                  bool           *found)
+lowhat0_store_get(lowhat0_store_t *self,
+                  lowhat0_t       *top,
+                  lowhat_hash_t   *hv1,
+                  bool            *found)
 {
-    uint64_t          bix = lowhat_bucket_index(hv1, self->last_slot);
-    uint64_t          i;
-    lowhat_hash_t     hv2;
-    lowhat_history_t *bucket;
-    lowhat_record_t  *head;
+    uint64_t           bix = lowhat_bucket_index(hv1, self->last_slot);
+    uint64_t           i;
+    lowhat_hash_t      hv2;
+    lowhat0_history_t *bucket;
+    lowhat_record_t   *head;
 
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
@@ -234,19 +217,19 @@ found_history_bucket:
 }
 
 static void *
-lowhat0_store_put(lowhat_store_t *self,
-                  lowhat_t       *top,
-                  lowhat_hash_t  *hv1,
-                  void           *item,
-                  bool           *found)
+lowhat0_store_put(lowhat0_store_t *self,
+                  lowhat0_t       *top,
+                  lowhat_hash_t   *hv1,
+                  void            *item,
+                  bool            *found)
 {
-    void             *ret;
-    uint64_t          bix = lowhat_bucket_index(hv1, self->last_slot);
-    uint64_t          i;
-    lowhat_hash_t     hv2;
-    lowhat_history_t *bucket;
-    lowhat_record_t  *head;
-    lowhat_record_t  *candidate;
+    void              *ret;
+    uint64_t           bix = lowhat_bucket_index(hv1, self->last_slot);
+    uint64_t           i;
+    lowhat_hash_t      hv2;
+    lowhat0_history_t *bucket;
+    lowhat_record_t   *head;
+    lowhat_record_t   *candidate;
 
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
@@ -294,6 +277,16 @@ found_history_bucket:
             mmm_set_create_epoch(candidate, mmm_get_create_epoch(head));
         }
     }
+    else {
+        if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
+            mmm_retire_unused(candidate);
+            return lowhat0_store_put(lowhat0_store_migrate(self, top),
+                                     top,
+                                     hv1,
+                                     item,
+                                     found);
+        }
+    }
 
     if (!CAS(&bucket->head, &head, candidate)) {
         // CAS failed. This is either because a flag got updated
@@ -321,7 +314,6 @@ found_history_bucket:
     mmm_commit_write(candidate);
 
     if (!head) {
-        atomic_fetch_add(&self->used_count, 1);
         if (found) {
             *found = false;
         }
@@ -354,17 +346,17 @@ found_history_bucket:
 }
 
 static bool
-lowhat0_store_put_if_empty(lowhat_store_t *self,
-                           lowhat_t       *top,
-                           lowhat_hash_t  *hv1,
-                           void           *item)
+lowhat0_store_put_if_empty(lowhat0_store_t *self,
+                           lowhat0_t       *top,
+                           lowhat_hash_t   *hv1,
+                           void            *item)
 {
-    uint64_t          bix = lowhat_bucket_index(hv1, self->last_slot);
-    uint64_t          i;
-    lowhat_hash_t     hv2;
-    lowhat_history_t *bucket;
-    lowhat_record_t  *head;
-    lowhat_record_t  *candidate;
+    uint64_t           bix = lowhat_bucket_index(hv1, self->last_slot);
+    uint64_t           i;
+    lowhat_hash_t      hv2;
+    lowhat0_history_t *bucket;
+    lowhat_record_t   *head;
+    lowhat_record_t   *candidate;
 
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
@@ -393,10 +385,20 @@ found_history_bucket:
                                           item);
     }
 
-    // There's already something in this bucket, and the request was
-    // to put only if the bucket is empty.
-    if (lowhat_pflag_test(head->next, LOWHAT_F_USED)) {
-        return false;
+    if (head) {
+        // There's already something in this bucket, and the request was
+        // to put only if the bucket is empty.
+        if (lowhat_pflag_test(head->next, LOWHAT_F_USED)) {
+            return false;
+        }
+    }
+    else {
+        if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
+            return lowhat0_store_put_if_empty(lowhat0_store_migrate(self, top),
+                                              top,
+                                              hv1,
+                                              item);
+        }
     }
 
     // Right now there's nothing in the bucket, but there might be
@@ -443,17 +445,17 @@ found_history_bucket:
 }
 
 static void *
-lowhat0_store_remove(lowhat_store_t *self,
-                     lowhat_t       *top,
-                     lowhat_hash_t  *hv1,
-                     bool           *found)
+lowhat0_store_remove(lowhat0_store_t *self,
+                     lowhat0_t       *top,
+                     lowhat_hash_t   *hv1,
+                     bool            *found)
 {
-    uint64_t          bix = lowhat_bucket_index(hv1, self->last_slot);
-    uint64_t          i;
-    lowhat_hash_t     hv2;
-    lowhat_history_t *bucket;
-    lowhat_record_t  *head;
-    lowhat_record_t  *candidate;
+    uint64_t           bix = lowhat_bucket_index(hv1, self->last_slot);
+    uint64_t           i;
+    lowhat_hash_t      hv2;
+    lowhat0_history_t *bucket;
+    lowhat_record_t   *head;
+    lowhat_record_t   *candidate;
 
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
@@ -542,18 +544,18 @@ found_history_bucket:
     return head->item;
 }
 
-static lowhat_store_t *
-lowhat0_store_migrate(lowhat_store_t *self, lowhat_t *top)
+static lowhat0_store_t *
+lowhat0_store_migrate(lowhat0_store_t *self, lowhat0_t *top)
 {
-    lowhat_store_t *new_store = atomic_load(&self->store_next);
-    lowhat_store_t *candidate;
-    uint64_t        approx_len;
-    uint64_t        new_size;
+    lowhat0_store_t *new_store = atomic_load(&self->store_next);
+    lowhat0_store_t *candidate;
+    uint64_t         approx_len;
+    uint64_t         new_size;
 
     // If we couldn't acquire a store, try to install one. If we fail, free it.
 
     if (!new_store) {
-        approx_len = atomic_load(&self->hist_next) - self->hist_buckets;
+        approx_len = self->used_count - self->del_count;
 
         // The new size start off the same as the old size.
         new_size = self->last_slot + 1;
@@ -565,6 +567,10 @@ lowhat0_store_migrate(lowhat_store_t *self, lowhat_t *top)
         }
 
         candidate = lowhat0_store_new(new_size);
+        // This helps address a potential race condition, where
+        // someone could drain the table after resize, having
+        // us swap in the wrong length.
+        atomic_store(&candidate->used_count, ~0);
         mmm_commit_write(candidate);
         if (!CAS(&self->store_next, &new_store, candidate)) {
             lowhat0_delete_store(candidate);
@@ -584,18 +590,20 @@ lowhat0_store_migrate(lowhat_store_t *self, lowhat_t *top)
 }
 
 static inline void
-lowhat0_do_migration(lowhat_store_t *old, lowhat_store_t *new)
+lowhat0_do_migration(lowhat0_store_t *old, lowhat0_store_t *new)
 {
-    lowhat_history_t *cur;
-    lowhat_history_t *bucket;
-    lowhat_record_t  *head;
-    lowhat_record_t  *old_head;
-    lowhat_record_t  *old_record;
-    lowhat_record_t  *expected_head;
-    lowhat_hash_t     hv;
-    lowhat_hash_t     expected_hv;
-    uint64_t          i;
-    uint64_t          bix;
+    lowhat0_history_t *cur;
+    lowhat0_history_t *bucket;
+    lowhat_record_t   *head;
+    lowhat_record_t   *old_head;
+    lowhat_record_t   *old_record;
+    lowhat_record_t   *expected_head;
+    lowhat_hash_t      hv;
+    lowhat_hash_t      expected_hv;
+    uint64_t           i, j;
+    uint64_t           bix;
+    uint64_t           new_used      = 0;
+    uint64_t           expected_used = ~0;
 
     // Quickly run through every history bucket, and mark any bucket
     // that doesn't already have F_MOVING set.  Note that the CAS
@@ -633,6 +641,9 @@ lowhat0_do_migration(lowhat_store_t *old, lowhat_store_t *new)
         }
 
         if (lowhat_pflag_test(old_head, LOWHAT_F_MOVED)) {
+            if (lowhat_pflag_test(old_record->next, LOWHAT_F_USED)) {
+                new_used++;
+            }
             continue;
         }
 
@@ -647,8 +658,9 @@ lowhat0_do_migration(lowhat_store_t *old, lowhat_store_t *new)
 
         hv  = atomic_load(&cur->hv);
         bix = lowhat_bucket_index(&hv, new->last_slot);
+        new_used++;
 
-        for (i = 0; i <= new->last_slot; i++) {
+        for (j = 0; j <= new->last_slot; j++) {
             bucket         = &new->hist_buckets[bix];
             expected_hv.w1 = 0;
             expected_hv.w2 = 0;
@@ -666,25 +678,27 @@ lowhat0_do_migration(lowhat_store_t *old, lowhat_store_t *new)
         CAS(&cur->head, &old_head, lowhat_pflag_set(old_head, LOWHAT_F_MOVED));
     }
 
+    CAS(&new->used_count, &expected_used, new_used);
+
     // Now, we can swap out the top store, which is done in the caller.
 }
 
 static lowhat_view_t *
-lowhat0_store_view(lowhat_store_t *self,
-                   lowhat_t       *top,
-                   uint64_t        epoch,
-                   uint64_t       *num)
+lowhat0_store_view(lowhat0_store_t *self,
+                   lowhat0_t       *top,
+                   uint64_t         epoch,
+                   uint64_t        *num)
 {
-    lowhat_history_t *cur = self->hist_buckets;
-    lowhat_history_t *end;
-    lowhat_view_t    *view;
-    lowhat_view_t    *p;
-    lowhat_hash_t     hv;
-    lowhat_record_t  *rec;
-    uint64_t          sort_epoch;
-    uint64_t          num_items;
+    lowhat0_history_t *cur = self->hist_buckets;
+    lowhat0_history_t *end;
+    lowhat_view_t     *view;
+    lowhat_view_t     *p;
+    lowhat_hash_t      hv;
+    lowhat_record_t   *rec;
+    uint64_t           sort_epoch;
+    uint64_t           num_items;
 
-    end  = atomic_load(&self->hist_next);
+    end  = self->hist_buckets + (self->last_slot + 1);
     view = (lowhat_view_t *)malloc(sizeof(lowhat_view_t) * (end - cur));
     p    = view;
 

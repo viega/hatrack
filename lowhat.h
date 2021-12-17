@@ -29,48 +29,56 @@ typedef enum : uint64_t
     REFHAT_0  // Unordered buckets, single-threaded only.
 } lowhat_table_type_t;
 
-lowhat_t *lowhat_new(lowhat_table_type_t);
+void *lowhat_new(lowhat_table_type_t);
 
 static inline void *
-lowhat_get(lowhat_t *self, lowhat_hash_t *hv, bool *found)
+lowhat_get(void *self, lowhat_hash_t *hv, bool *found)
 {
-    return (*self->vtable.get)(self, hv, found);
+    lowhat_vtable_t *table = (lowhat_vtable_t *)self;
+
+    return (*table->get)(self, hv, found);
 }
 
 static inline void *
-lowhat_put(lowhat_t      *self,
-           lowhat_hash_t *hv,
-           void          *item,
-           bool           ifempty,
-           bool          *found)
+lowhat_put(void *self, lowhat_hash_t *hv, void *item, bool ifempty, bool *found)
 {
-    return (*self->vtable.put)(self, hv, item, ifempty, found);
+    lowhat_vtable_t *table = (lowhat_vtable_t *)self;
+
+    return (*table->put)(self, hv, item, ifempty, found);
 }
 
 static inline void *
-lowhat_remove(lowhat_t *self, lowhat_hash_t *hv, bool *found)
+lowhat_remove(void *self, lowhat_hash_t *hv, bool *found)
 {
-    return (*self->vtable.remove)(self, hv, found);
+    lowhat_vtable_t *table = (lowhat_vtable_t *)self;
+
+    return (*table->remove)(self, hv, found);
 }
 
 static inline void
-lowhat_delete(lowhat_t *self)
+lowhat_delete(void *self)
 {
-    (*self->vtable.delete)(self);
+    lowhat_vtable_t *table = (lowhat_vtable_t *)self;
+
+    (*table->delete)(self);
 
     return;
 }
 
 static inline uint64_t
-lowhat_len(lowhat_t *self)
+lowhat_len(void *self)
 {
-    return (*self->vtable.len)(self);
+    lowhat_vtable_t *table = (lowhat_vtable_t *)self;
+
+    return (*table->len)(self);
 }
 
 static inline lowhat_view_t *
-lowhat_view(lowhat_t *self, uint64_t *num_items)
+lowhat_view(void *self, uint64_t *num_items)
 {
-    return (*self->vtable.view)(self, num_items);
+    lowhat_vtable_t *table = (lowhat_vtable_t *)self;
+
+    return (*table->view)(self, num_items);
 }
 
 #endif

@@ -1,9 +1,9 @@
 ENV      := /usr/bin/env
 CC       := cc
-#OPT      := -Ofast -flto
 OPT      :=  
+#OPT      := -Ofast -flto
 UNUSED   :=  -DLOWHAT_ALWAYS_USE_QSORT -DLOWHAT_MMMALLOC_CTRS
-EXTRAS   := -DLOWHAT_QSORT_THRESHOLD=256 
+EXTRAS   := -DLOWHAT_QSORT_THRESHOLD=256
 CFLAGS   :=  -g -Wall -Werror ${OPT} -I../include ${EXTRAS}
 PROGNAME := test
 

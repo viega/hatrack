@@ -27,35 +27,36 @@
  *
  */
 
+#include <string.h>
 #include "lowhat.h"
 
-lowhat_t *
+void *
 lowhat_new(lowhat_table_type_t type)
 {
-    lowhat_t *ret;
+    lowhat_vtable_t *ret;
 
     switch (type) {
     case LOWHAT_0:
-        ret         = (lowhat_t *)malloc(sizeof(lowhat_t));
-        ret->vtable = lowhat0_vtable;
+        ret = malloc(sizeof(lowhat0_t));
+        memcpy(ret, &lowhat0_vtable, sizeof(lowhat_vtable_t));
         break;
     case LOWHAT_1:
-        ret         = (lowhat_t *)malloc(sizeof(lowhat_t));
-        ret->vtable = lowhat1_vtable;
+        ret = malloc(sizeof(lowhat1_t));
+        memcpy(ret, &lowhat1_vtable, sizeof(lowhat_vtable_t));
         break;
     case LOWHAT_2:
-        ret         = (lowhat_t *)malloc(sizeof(lowhat_t));
-        ret->vtable = lowhat2_vtable;
+        ret = malloc(sizeof(lowhat2_t));
+        memcpy(ret, &lowhat2_vtable, sizeof(lowhat_vtable_t));
         break;
     case REFHAT_0:
-        ret         = (lowhat_t *)malloc(sizeof(refhat0_t));
-        ret->vtable = refhat0_vtable;
+        ret = malloc(sizeof(refhat0_t));
+        memcpy(ret, &refhat0_vtable, sizeof(lowhat_vtable_t));
         break;
     default:
         abort();
     }
 
-    (*ret->vtable.init)(ret);
+    (*ret->init)(ret);
 
-    return ret;
+    return (void *)ret;
 }

@@ -21,6 +21,8 @@
 
 static lowhat_hash_t precomputed_hashes[LOWHAT_TEST_MAX_KEYS];
 
+typedef void *hashtable_t;
+
 typedef union {
     struct {
         uint32_t key;
@@ -30,7 +32,7 @@ typedef union {
 } test_item;
 
 static inline void
-test_put(lowhat_t *self, uint32_t key, uint32_t value)
+test_put(hashtable_t self, uint32_t key, uint32_t value)
 {
     test_item item;
 
@@ -41,7 +43,7 @@ test_put(lowhat_t *self, uint32_t key, uint32_t value)
 }
 
 static inline uint32_t
-test_get(lowhat_t *self, uint32_t key)
+test_get(hashtable_t self, uint32_t key)
 {
     test_item item;
 
@@ -51,13 +53,13 @@ test_get(lowhat_t *self, uint32_t key)
 }
 
 static inline void
-test_remove(lowhat_t *self, uint32_t key)
+test_remove(hashtable_t self, uint32_t key)
 {
     lowhat_remove(self, &precomputed_hashes[key], NULL);
 }
 
 static inline lowhat_view_t *
-test_view(lowhat_t *self, uint64_t *n)
+test_view(hashtable_t *self, uint64_t *n)
 {
     return lowhat_view(self, n);
 }
@@ -176,11 +178,11 @@ test_init()
 }
 
 typedef struct {
-    uint32_t  tid;
-    lowhat_t *dict;
-    uint32_t  range; // Specifies range of keys and values, 0 - range-1
-    uint32_t  iters; // Number of times to run the test;
-    uint32_t  extra;
+    uint32_t    tid;
+    hashtable_t dict;
+    uint32_t    range; // Specifies range of keys and values, 0 - range-1
+    uint32_t    iters; // Number of times to run the test;
+    uint32_t    extra;
 } test_info_t;
 
 typedef bool (*test_func_t)(test_info_t *);
@@ -208,12 +210,11 @@ static uint32_t
 time_test(test_func_t      func,
           uint32_t         iters,
           uint32_t         num_threads,
-          lowhat_t        *dict,
+          hashtable_t      dict,
           uint32_t         range,
           uint32_t         extra,
-	  struct timespec *sspec,
-	  struct timespec *espec
-	  )
+          struct timespec *sspec,
+          struct timespec *espec)
 {
     clock_t     start;
     pthread_t   threads[num_threads];
@@ -247,7 +248,7 @@ static bool
 functionality_test(test_func_t func,
                    uint32_t    iters,
                    uint32_t    num_threads,
-                   lowhat_t   *dict,
+                   hashtable_t dict,
                    uint32_t    range,
                    uint32_t    extra)
 {
@@ -280,9 +281,9 @@ functionality_test(test_func_t func,
 }
 
 char *dict_names[] = {"none",
+                      "lowhat0",
                       "lowhat1",
                       "lowhat2",
-                      "lowhat0",
                       "hihat0",
                       "refhat0",
                       "refhat1",
@@ -297,12 +298,12 @@ run_one_time_test(char               *name,
                   uint32_t            thread_count,
                   uint32_t            extra)
 {
-    lowhat_t       *dict = NULL;
+    hashtable_t     dict = NULL;
     uint32_t        ticks;
     double          walltime;
     struct timespec sspec;
     struct timespec espec;
-    
+
 #ifdef LOWHAT_MMMALLOC_CTRS
     int64_t start_allocs = atomic_load(&mmm_alloc_ctr);
     int64_t start_frees  = atomic_load(&mmm_free_ctr);
@@ -314,7 +315,7 @@ run_one_time_test(char               *name,
 
     if (extra) {
         fprintf(stderr,
-                "[%10s:%10s: t=%4d, r=%5d x=%04x]\t",
+                "[%10s:%10s: t=%4d, r=%5d x=%04x] \t",
                 name,
                 dict_names[type],
                 thread_count,
@@ -323,20 +324,26 @@ run_one_time_test(char               *name,
     }
     else {
         fprintf(stderr,
-                "[%10s:%10s: t=%4d, r=%5d]\t",
+                "[%10s:%10s: t=%4d, r=%5d] \t",
                 name,
                 dict_names[type],
                 thread_count,
                 range);
     }
     fflush(stderr);
-    ticks = time_test(func, iters, thread_count, dict, range, extra,
-		      &sspec, &espec);
-    walltime = (espec.tv_sec - sspec.tv_sec) +
-	((espec.tv_nsec - sspec.tv_nsec) / 1000000000.0);
+    ticks    = time_test(func,
+                      iters,
+                      thread_count,
+                      dict,
+                      range,
+                      extra,
+                      &sspec,
+                      &espec);
+    walltime = (espec.tv_sec - sspec.tv_sec)
+             + ((espec.tv_nsec - sspec.tv_nsec) / 1000000000.0);
     fprintf(stderr,
-            "%.4f sec, %d clocks,\t %0.4f c/i\n",
-	    walltime,
+            "%.4f sec, %d clocks, \t%0.4f c/i\n",
+            walltime,
             ticks,
             (double)(((double)ticks) / (double)iters));
 
@@ -365,8 +372,8 @@ run_one_func_test(char               *name,
                   uint32_t            thread_count,
                   uint32_t            extra)
 {
-    lowhat_t *dict = lowhat_new(type);
-    bool      ret;
+    hashtable_t dict = lowhat_new(type);
+    bool        ret;
 #ifdef LOWHAT_MMMALLOC_CTRS
     int64_t start_allocs = atomic_load(&mmm_alloc_ctr);
     int64_t start_frees  = atomic_load(&mmm_free_ctr);
@@ -786,70 +793,70 @@ main(int argc, char *argv[])
                   basic_sizes,
                   basic_threads,
                   0);
-    run_time_test("rand()",
+    run_time_test("rand()-1t",
                   test_rand_speed,
                   100000,
                   all_dicts,
                   shrug_sizes,
                   one_thread,
                   0);
-    run_time_test("rand()",
+    run_time_test("rand()-nt",
                   test_rand_speed,
                   100000,
                   threadsafe_dicts,
                   shrug_sizes,
                   basic_threads,
                   0);
-    run_time_test("insert",
+    run_time_test("insert-1t",
                   test_insert_speed,
                   1000000,
                   all_dicts,
                   basic_sizes,
                   one_thread,
                   0);
-    run_time_test("insert",
+    run_time_test("insert-nt",
                   test_insert_speed,
                   1000000,
                   threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
                   0);
-    run_time_test("writes",
+    run_time_test("writes-1t",
                   test_write_speed,
                   1000000,
                   all_dicts,
                   basic_sizes,
                   one_thread,
                   del_rate);
-    run_time_test("writes",
+    run_time_test("writes-nt",
                   test_write_speed,
                   1000000,
                   threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
                   del_rate);
-    run_time_test("rw speed",
+    run_time_test("rw speed-1t",
                   test_rw_speed,
                   1000000,
                   all_dicts,
                   basic_sizes,
                   one_thread,
                   write_rates);
-    run_time_test("rw speed",
+    run_time_test("rw speed-nt",
                   test_rw_speed,
                   1000000,
 		  threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
                   write_rates);
-    run_time_test("sorts",
+    run_time_test("sorts-1t",
                   test_sort_speed,
                   100000,
                   all_dicts,
                   sort_sizes,
                   one_thread,
                   write_rates);
-    run_time_test("sorts",
+    run_time_test("sorts-nt",
                   test_sort_speed,
                   100000,
                   threadsafe_dicts,
@@ -870,4 +877,7 @@ main(int argc, char *argv[])
     printf("allocs: %llu\n", atomic_load(&mmm_alloc_ctr));
     printf("frees:  %llu\n", atomic_load(&mmm_free_ctr));
 #endif
+
+    printf("Press any key to exit.\n");
+    getc(stdin);
 }
