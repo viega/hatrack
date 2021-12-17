@@ -15,11 +15,11 @@
 #include <unistd.h> // For close and read
 #include <stdio.h>
 
-#ifndef LOWHAT_TEST_MAX_KEYS
-#define LOWHAT_TEST_MAX_KEYS 1000000
+#ifndef HATRACK_TEST_MAX_KEYS
+#define HATRACK_TEST_MAX_KEYS 1000000
 #endif
 
-static lowhat_hash_t precomputed_hashes[LOWHAT_TEST_MAX_KEYS];
+static hatrack_hash_t precomputed_hashes[HATRACK_TEST_MAX_KEYS];
 
 typedef void *hashtable_t;
 
@@ -58,7 +58,7 @@ test_remove(hashtable_t self, uint32_t key)
     testhat_remove(self, &precomputed_hashes[key], NULL);
 }
 
-static inline lowhat_view_t *
+static inline hatrack_view_t *
 test_view(hashtable_t *self, uint64_t *n)
 {
     return testhat_view(self, n);
@@ -69,7 +69,7 @@ test_precompute_hashes()
 {
     uint64_t i;
 
-    for (i = 0; i < LOWHAT_TEST_MAX_KEYS; i++) {
+    for (i = 0; i < HATRACK_TEST_MAX_KEYS; i++) {
         precomputed_hashes[i] = hash_int(i);
     }
 }
@@ -89,11 +89,11 @@ test_precompute_hashes()
 // byte of the thread's pthread id (just to get some variance in the
 // number streams).  We read the seed once from /dev/urandom.
 
-#ifndef LOWHAT_RAND_SEED_SIZE
-#define LOWHAT_RAND_SEED_SIZE 32
+#ifndef HATRACK_RAND_SEED_SIZE
+#define HATRACK_RAND_SEED_SIZE 32
 #endif
 
-uint8_t seed_buf[LOWHAT_RAND_SEED_SIZE];
+uint8_t seed_buf[HATRACK_RAND_SEED_SIZE];
 
 typedef struct {
     uint32_t S[256];
@@ -108,7 +108,7 @@ test_init_rand()
 {
     int rand_fd = open("/dev/urandom", O_RDONLY);
 
-    read(rand_fd, seed_buf, LOWHAT_RAND_SEED_SIZE);
+    read(rand_fd, seed_buf, HATRACK_RAND_SEED_SIZE);
     close(rand_fd);
 }
 
@@ -290,13 +290,13 @@ char *dict_names[] = {"none",
                       NULL};
 
 static void
-run_one_time_test(char               *name,
-                  test_func_t         func,
-                  uint32_t            iters,
-                  lowhat_table_type_t type,
-                  uint32_t            range,
-                  uint32_t            thread_count,
-                  uint32_t            extra)
+run_one_time_test(char                *name,
+                  test_func_t          func,
+                  uint32_t             iters,
+                  hatrack_table_type_t type,
+                  uint32_t             range,
+                  uint32_t             thread_count,
+                  uint32_t             extra)
 {
     hashtable_t     dict = NULL;
     uint32_t        ticks;
@@ -328,13 +328,13 @@ run_one_time_test(char               *name,
 }
 
 static void
-run_one_func_test(char               *name,
-                  test_func_t         func,
-                  uint32_t            iters,
-                  lowhat_table_type_t type,
-                  uint32_t            range,
-                  uint32_t            thread_count,
-                  uint32_t            extra)
+run_one_func_test(char                *name,
+                  test_func_t          func,
+                  uint32_t             iters,
+                  hatrack_table_type_t type,
+                  uint32_t             range,
+                  uint32_t             thread_count,
+                  uint32_t             extra)
 {
     hashtable_t dict = testhat_new(type);
     bool        ret;
@@ -353,13 +353,13 @@ run_one_func_test(char               *name,
 }
 
 static void
-run_time_test(char                *name,
-              test_func_t          func,
-              uint32_t             iters,
-              lowhat_table_type_t *types,
-              uint32_t            *ranges,
-              uint32_t            *tcounts,
-              uint32_t            *extra)
+run_time_test(char                 *name,
+              test_func_t           func,
+              uint32_t              iters,
+              hatrack_table_type_t *types,
+              uint32_t             *ranges,
+              uint32_t             *tcounts,
+              uint32_t             *extra)
 {
     uint32_t dict_ix;
     uint32_t range_ix;
@@ -384,7 +384,7 @@ run_time_test(char                *name,
                             ranges[range_ix],
                             extra[extra_ix]);
                     dict_ix = 0;
-                    while (types[dict_ix] != LOWHAT_NONE) {
+                    while (types[dict_ix] != HATRACK_NONE) {
                         run_one_time_test(name,
                                           func,
                                           iters,
@@ -420,13 +420,13 @@ run_time_test(char                *name,
 }
 
 static void
-run_func_test(char                *name,
-              test_func_t          func,
-              uint32_t             iters,
-              lowhat_table_type_t *types,
-              uint32_t            *ranges,
-              uint32_t            *tcounts,
-              uint32_t            *extra)
+run_func_test(char                 *name,
+              test_func_t           func,
+              uint32_t              iters,
+              hatrack_table_type_t *types,
+              uint32_t             *ranges,
+              uint32_t             *tcounts,
+              uint32_t             *extra)
 {
     uint32_t dict_ix;
     uint32_t range_ix;
@@ -450,7 +450,7 @@ run_func_test(char                *name,
                             ranges[range_ix],
                             extra[extra_ix]);
                     dict_ix = 0;
-                    while (types[dict_ix] != LOWHAT_NONE) {
+                    while (types[dict_ix] != HATRACK_NONE) {
                         run_one_func_test(name,
                                           func,
                                           iters,
@@ -530,11 +530,11 @@ test_basic(test_info_t *info)
 bool
 test_ordering(test_info_t *info)
 {
-    uint64_t       i;
-    uint64_t       n;
-    uint32_t       k;
-    uint32_t       v;
-    lowhat_view_t *view;
+    uint64_t        i;
+    uint64_t        n;
+    uint32_t        k;
+    uint32_t        v;
+    hatrack_view_t *view;
 
     for (i = 0; i < info->range; i++) {
         test_put(info->dict, i + 1, i + 1);
@@ -587,7 +587,7 @@ test_parallel(test_info_t *info)
         n = test_get(info->dict, i);
         if (n != i) {
             printf("%llu != %llu\n", n, i);
-            printf("Is LOWHAT_TEST_MAX_KEYS high enough?\n");
+            printf("Is HATRACK_TEST_MAX_KEYS high enough?\n");
             return false;
         }
     }
@@ -673,14 +673,14 @@ test_rw_speed(test_info_t *info)
 bool
 test_sort_speed(test_info_t *info)
 {
-    uint32_t       i;
-    uint32_t       key;
-    uint32_t       action;
-    uint32_t       delete_odds  = info->extra & 0xff;
-    uint32_t       write_odds   = info->extra >> 4;
-    uint32_t       nonread_odds = delete_odds + write_odds;
-    uint64_t       n;
-    lowhat_view_t *v;
+    uint32_t        i;
+    uint32_t        key;
+    uint32_t        action;
+    uint32_t        delete_odds  = info->extra & 0xff;
+    uint32_t        write_odds   = info->extra >> 4;
+    uint32_t        nonread_odds = delete_odds + write_odds;
+    uint64_t        n;
+    hatrack_view_t *v;
 
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
@@ -709,14 +709,14 @@ test_sort_speed(test_info_t *info)
 bool
 test_sort_contention(test_info_t *info)
 {
-    uint32_t       i;
-    uint32_t       key;
-    uint32_t       action;
-    uint32_t       delete_odds  = info->extra & 0xff;
-    uint32_t       write_odds   = info->extra >> 4;
-    uint32_t       nonread_odds = delete_odds + write_odds;
-    uint64_t       n;
-    lowhat_view_t *v;
+    uint32_t        i;
+    uint32_t        key;
+    uint32_t        action;
+    uint32_t        delete_odds  = info->extra & 0xff;
+    uint32_t        write_odds   = info->extra >> 4;
+    uint32_t        nonread_odds = delete_odds + write_odds;
+    uint64_t        n;
+    hatrack_view_t *v;
 
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
@@ -743,6 +743,7 @@ test_sort_contention(test_info_t *info)
 }
 
 // clang-format off
+
 uint32_t            basic_sizes[]   = {10, 100, 1000, 10000, 0};
 uint32_t            sort_sizes[]    = {10, 128, 256, 512, 1024, 2048, 4096,
                                        8192, 100000, 0};
@@ -754,15 +755,16 @@ uint32_t            basic_threads[] = {2, 4, 10, 20, 0};
 uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
-lowhat_table_type_t threadsafe_dicts[] = {
-    HIHAT_1, LOWHAT_0, LOWHAT_1, LOWHAT_2, LOWHAT_NONE
+hatrack_table_type_t threadsafe_dicts[] = {
+    HIHAT_1, LOWHAT_0, LOWHAT_1, LOWHAT_2, HATRACK_NONE
 };
-lowhat_table_type_t all_dicts[]     = {
-    REFHAT_0, HIHAT_1, LOWHAT_0, LOWHAT_1, LOWHAT_2, LOWHAT_NONE
+hatrack_table_type_t all_dicts[]     = {
+    REFHAT_0, HIHAT_1, LOWHAT_0, LOWHAT_1, LOWHAT_2, HATRACK_NONE
 };
-lowhat_table_type_t st_dicts[]      = {
-    REFHAT_0, LOWHAT_NONE
+hatrack_table_type_t st_dicts[]      = {
+    REFHAT_0, HATRACK_NONE
 };
+
 //  clang-format on
 
 #ifndef DEFAULT_ITERS
@@ -884,7 +886,7 @@ main(int argc, char *argv[])
                   basic_threads,
                   write_rates);
     counters_output_delta();    
-#ifdef LOWHAT_RUN_LARGE_TESTS    
+#ifdef HATRACK_RUN_LARGE_TESTS    
     run_func_test("||-large",
                   test_parallel,
                   1,

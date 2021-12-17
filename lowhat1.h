@@ -131,7 +131,7 @@
 // applying the actual hash function.
 
 typedef struct {
-    _Atomic lowhat_hash_t      hv;
+    _Atomic hatrack_hash_t     hv;
     _Atomic(lowhat_record_t *) head;
 } lowhat1_history_t;
 
@@ -144,7 +144,7 @@ typedef struct {
 // a particular location in the other array.
 
 typedef struct {
-    _Atomic lowhat_hash_t        hv;
+    _Atomic hatrack_hash_t       hv;
     _Atomic(lowhat1_history_t *) ptr;
 } lowhat1_indirect_t;
 
@@ -218,20 +218,23 @@ struct lowhat1_store_st {
 };
 
 typedef struct {
-    lowhat_vtable_t            vtable;
+    hatrack_vtable_t           vtable;
     _Atomic(lowhat1_store_t *) store_current;
 } lowhat1_t;
 
 // clang-format off
-void           lowhat1_init(lowhat1_t *);
-void          *lowhat1_get(lowhat1_t *, lowhat_hash_t *, bool *);
-void          *lowhat1_put(lowhat1_t *, lowhat_hash_t *, void *, bool, bool *);
-void          *lowhat1_remove(lowhat1_t *, lowhat_hash_t *, bool *);
-void           lowhat1_delete(lowhat1_t *);
-uint64_t       lowhat1_len(lowhat1_t *);
-lowhat_view_t *lowhat1_view(lowhat1_t *, uint64_t *);
+
+void            lowhat1_init(lowhat1_t *);
+void           *lowhat1_get(lowhat1_t *, hatrack_hash_t *, bool *);
+void           *lowhat1_put(lowhat1_t *, hatrack_hash_t *, void *, bool,
+			    bool *);
+void           *lowhat1_remove(lowhat1_t *, hatrack_hash_t *, bool *);
+void            lowhat1_delete(lowhat1_t *);
+uint64_t        lowhat1_len(lowhat1_t *);
+hatrack_view_t *lowhat1_view(lowhat1_t *, uint64_t *);
+
 // clang-format on
 
-extern const lowhat_vtable_t lowhat1_vtable;
+extern const hatrack_vtable_t lowhat1_vtable;
 
 #endif

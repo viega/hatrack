@@ -122,7 +122,7 @@
 // applying the actual hash function.
 
 typedef struct {
-    _Atomic lowhat_hash_t      hv;
+    _Atomic hatrack_hash_t     hv;
     _Atomic(lowhat_record_t *) head;
 } lowhat0_history_t;
 
@@ -202,7 +202,7 @@ struct lowhat0_store_st {
 };
 
 typedef struct lowhat0_st {
-    lowhat_vtable_t            vtable;
+    hatrack_vtable_t           vtable;
     _Atomic(lowhat0_store_t *) store_current;
 } lowhat0_t;
 
@@ -216,15 +216,16 @@ typedef struct lowhat0_st {
 // be consistent across runs, something fast and practical like XXH3.
 
 // clang-format off
-void           lowhat0_init(lowhat0_t *);
-void          *lowhat0_get(lowhat0_t *, lowhat_hash_t *, bool *);
-void          *lowhat0_put(lowhat0_t *, lowhat_hash_t *, void *, bool, bool *);
-void          *lowhat0_remove(lowhat0_t *, lowhat_hash_t *, bool *);
-void           lowhat0_delete(lowhat0_t *);
-uint64_t       lowhat0_len(lowhat0_t *);
-lowhat_view_t *lowhat0_view(lowhat0_t *, uint64_t *);
+void            lowhat0_init(lowhat0_t *);
+void           *lowhat0_get(lowhat0_t *, hatrack_hash_t *, bool *);
+void           *lowhat0_put(lowhat0_t *, hatrack_hash_t *, void *, bool,
+			    bool *);
+void           *lowhat0_remove(lowhat0_t *, hatrack_hash_t *, bool *);
+void            lowhat0_delete(lowhat0_t *);
+uint64_t        lowhat0_len(lowhat0_t *);
+hatrack_view_t *lowhat0_view(lowhat0_t *, uint64_t *);
 // clang-format on
 
-extern const lowhat_vtable_t lowhat0_vtable;
+extern const hatrack_vtable_t lowhat0_vtable;
 
 #endif

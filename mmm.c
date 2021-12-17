@@ -1,6 +1,7 @@
 #include "mmm.h"
 
 // clang-format off
+
 __thread pthread_once_t mmm_inited       = PTHREAD_ONCE_INIT;
 _Atomic  uint64_t       mmm_epoch        = ATOMIC_VAR_INIT(MMM_EPOCH_FIRST);
 _Atomic  uint64_t       mmm_nexttid      = ATOMIC_VAR_INIT(0);
@@ -8,6 +9,7 @@ __thread uint64_t       mmm_mytid        = -1;
 __thread uint64_t       mmm_retire_ctr   = 0;
 __thread mmm_header_t  *mmm_retire_list  = NULL;
          uint64_t       mmm_reservations[MMM_THREADS_MAX] = { 0, };
+
 //clang-format on
 
 static void mmm_empty(void);
@@ -190,7 +192,7 @@ mmm_empty(void)
     while (cell) {
 	tmp  = cell;
 	cell = cell->next;
-	LOWHAT_FREE_CTR();
+	HATRACK_FREE_CTR();
 	free(tmp);
     }
 }

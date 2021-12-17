@@ -12,7 +12,7 @@
 #ifndef __HIHAT1_H__
 #define __HIHAT1_H__
 
-#include "lowhat_common.h"
+#include "hatrack_common.h"
 
 // The info field consists of the following:
 //
@@ -31,7 +31,7 @@ typedef struct {
 } hihat1_record_t;
 
 typedef struct {
-    _Atomic lowhat_hash_t   hv;
+    _Atomic hatrack_hash_t  hv;
     _Atomic hihat1_record_t record;
 } hihat1_bucket_t;
 
@@ -56,21 +56,23 @@ struct hihat1_store_st {
 };
 
 typedef struct {
-    lowhat_vtable_t           vtable;
+    hatrack_vtable_t          vtable;
     uint64_t                  epoch;
     _Atomic(hihat1_store_t *) store_current;
 } hihat1_t;
 
 // clang-format off
-void           hihat1_init(hihat1_t *);
-void          *hihat1_get(hihat1_t *, lowhat_hash_t *, bool *);
-void          *hihat1_put(hihat1_t *, lowhat_hash_t *, void *, bool, bool *);
-void          *hihat1_remove(hihat1_t *, lowhat_hash_t *, bool *);
-void           hihat1_delete(hihat1_t *);
-uint64_t       hihat1_len(hihat1_t *);
-lowhat_view_t *hihat1_view(hihat1_t *, uint64_t *);
+
+void            hihat1_init(hihat1_t *);
+void           *hihat1_get(hihat1_t *, hatrack_hash_t *, bool *);
+void           *hihat1_put(hihat1_t *, hatrack_hash_t *, void *, bool, bool *);
+void           *hihat1_remove(hihat1_t *, hatrack_hash_t *, bool *);
+void            hihat1_delete(hihat1_t *);
+uint64_t        hihat1_len(hihat1_t *);
+hatrack_view_t *hihat1_view(hihat1_t *, uint64_t *);
+
 // clang-format on
 
-extern const lowhat_vtable_t hihat1_vtable;
+extern const hatrack_vtable_t hihat1_vtable;
 
 #endif

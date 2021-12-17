@@ -1,23 +1,24 @@
 #include "counters.h"
 
-#ifdef LOWHAT_COUNTERS
+#ifdef HATRACK_COUNTERS
 
 #include <stdio.h>
 
-_Atomic uint64_t lowhat_counters[LOWHAT_COUNTERS_NUM]      = {};
-uint64_t         lowhat_last_counters[LOWHAT_COUNTERS_NUM] = {};
+_Atomic uint64_t hatrack_counters[HATRACK_COUNTERS_NUM]      = {};
+uint64_t         hatrack_last_counters[HATRACK_COUNTERS_NUM] = {};
 
-_Atomic uint64_t lowhat_yn_counters[LOWHAT_YN_COUNTERS_NUM][2]      = {};
-uint64_t         lowhat_last_yn_counters[LOWHAT_YN_COUNTERS_NUM][2] = {};
+_Atomic uint64_t hatrack_yn_counters[HATRACK_YN_COUNTERS_NUM][2]      = {};
+uint64_t         hatrack_last_yn_counters[HATRACK_YN_COUNTERS_NUM][2] = {};
 
 // clang-format off
-char *lowhat_counter_names[LOWHAT_COUNTERS_NUM] = {
+
+char *hatrack_counter_names[HATRACK_COUNTERS_NUM] = {
     "mmm alloc calls",
     "mmm used retires",
     "mmm unused retires"
 };
 
-char *lowhat_yn_counter_names[LOWHAT_YN_COUNTERS_NUM] = {
+char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
     "mmm linearize retries",    // 0
     "mmm write commits",        // 1
     "mmm commit helps",         // 2
@@ -78,6 +79,7 @@ char *lowhat_yn_counter_names[LOWHAT_YN_COUNTERS_NUM] = {
     "hi0 len installed",        // 57
     "hi0 store installs"        // 58
 };
+
 // clang-format on
 
 void
@@ -90,30 +92,30 @@ counters_output_delta(void)
     double   percent;
 
     fprintf(stderr, "----------- Counter Deltas --------------\n");
-    for (i = 0; i < LOWHAT_COUNTERS_NUM; i++) {
-        if (!lowhat_counters[i]) {
+    for (i = 0; i < HATRACK_COUNTERS_NUM; i++) {
+        if (!hatrack_counters[i]) {
             continue;
         }
         fprintf(stderr,
                 "%s:\t %llu\n",
-                lowhat_counter_names[i],
-                lowhat_counters[i] - lowhat_last_counters[i]);
+                hatrack_counter_names[i],
+                hatrack_counters[i] - hatrack_last_counters[i]);
 
-        lowhat_last_counters[i] = lowhat_counters[i];
+        hatrack_last_counters[i] = hatrack_counters[i];
     }
 
-    for (i = 0; i < LOWHAT_YN_COUNTERS_NUM; i++) {
-        y_cur   = lowhat_yn_counters[i][0];
-        n_cur   = lowhat_yn_counters[i][1];
-        y_last  = lowhat_last_yn_counters[i][0];
-        n_last  = lowhat_last_yn_counters[i][1];
+    for (i = 0; i < HATRACK_YN_COUNTERS_NUM; i++) {
+        y_cur   = hatrack_yn_counters[i][0];
+        n_cur   = hatrack_yn_counters[i][1];
+        y_last  = hatrack_last_yn_counters[i][0];
+        n_last  = hatrack_last_yn_counters[i][1];
         ydelta  = y_cur - y_last;
         ndelta  = n_cur - n_last;
         total   = ydelta + ndelta;
         percent = (((double)ydelta) / (double)total) * 100.0;
 
-        lowhat_last_yn_counters[i][0] = y_cur;
-        lowhat_last_yn_counters[i][1] = n_cur;
+        hatrack_last_yn_counters[i][0] = y_cur;
+        hatrack_last_yn_counters[i][1] = n_cur;
 
         if (!total) {
             continue;
@@ -121,7 +123,7 @@ counters_output_delta(void)
 
         fprintf(stderr,
                 "%s:\t %llu y, %llu n of %llu (%.2f%% y)\n",
-                lowhat_yn_counter_names[i],
+                hatrack_yn_counter_names[i],
                 ydelta,
                 ndelta,
                 total,
@@ -137,18 +139,18 @@ counters_output_alltime(void)
 
     fprintf(stderr, "----------- Counter TOTALS --------------\n");
 
-    for (i = 0; i < LOWHAT_COUNTERS_NUM; i++) {
-        if (!lowhat_counters[i]) {
+    for (i = 0; i < HATRACK_COUNTERS_NUM; i++) {
+        if (!hatrack_counters[i]) {
             continue;
         }
         fprintf(stderr,
                 "%s:\t %llu\n",
-                lowhat_counter_names[i],
-                lowhat_counters[i]);
+                hatrack_counter_names[i],
+                hatrack_counters[i]);
     }
 
-    for (i = 0; i < LOWHAT_YN_COUNTERS_NUM; i++) {
-        total = lowhat_yn_counters[i][0] + lowhat_yn_counters[i][1];
+    for (i = 0; i < HATRACK_YN_COUNTERS_NUM; i++) {
+        total = hatrack_yn_counters[i][0] + hatrack_yn_counters[i][1];
 
         if (!total) {
             continue;
@@ -156,12 +158,12 @@ counters_output_alltime(void)
 
         fprintf(stderr,
                 "%s:\t %llu y, %llu n of %llu (%.2f%% y)\n",
-                lowhat_yn_counter_names[i],
-                lowhat_yn_counters[i][0],
-                lowhat_yn_counters[i][1],
+                hatrack_yn_counter_names[i],
+                hatrack_yn_counters[i][0],
+                hatrack_yn_counters[i][1],
                 total,
                 (double)100.0
-                    * (((double)lowhat_yn_counters[i][0]) / (double)total));
+                    * (((double)hatrack_yn_counters[i][0]) / (double)total));
     }
 }
 

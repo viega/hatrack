@@ -31,30 +31,30 @@
 #include "testhat.h"
 
 void *
-testhat_new(lowhat_table_type_t type)
+testhat_new(hatrack_table_type_t type)
 {
-    lowhat_vtable_t *ret;
+    hatrack_vtable_t *ret;
 
     switch (type) {
     case LOWHAT_0:
         ret = malloc(sizeof(lowhat0_t));
-        memcpy(ret, &lowhat0_vtable, sizeof(lowhat_vtable_t));
+        memcpy(ret, &lowhat0_vtable, sizeof(hatrack_vtable_t));
         break;
     case LOWHAT_1:
         ret = malloc(sizeof(lowhat1_t));
-        memcpy(ret, &lowhat1_vtable, sizeof(lowhat_vtable_t));
+        memcpy(ret, &lowhat1_vtable, sizeof(hatrack_vtable_t));
         break;
     case LOWHAT_2:
         ret = malloc(sizeof(lowhat2_t));
-        memcpy(ret, &lowhat2_vtable, sizeof(lowhat_vtable_t));
+        memcpy(ret, &lowhat2_vtable, sizeof(hatrack_vtable_t));
         break;
     case HIHAT_1:
         ret = malloc(sizeof(hihat1_t));
-        memcpy(ret, &hihat1_vtable, sizeof(lowhat_vtable_t));
+        memcpy(ret, &hihat1_vtable, sizeof(hatrack_vtable_t));
         break;
     case REFHAT_0:
         ret = malloc(sizeof(refhat0_t));
-        memcpy(ret, &refhat0_vtable, sizeof(lowhat_vtable_t));
+        memcpy(ret, &refhat0_vtable, sizeof(hatrack_vtable_t));
         break;
     default:
         abort();

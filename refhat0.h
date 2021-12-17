@@ -13,38 +13,38 @@
 #ifndef __REFHAT0_H__
 #define __REFHAT0_H__
 
-#include "lowhat_common.h"
+#include "hatrack_common.h"
 
 typedef struct {
-    lowhat_hash_t hv;
-    void         *item;
-    bool          deleted;
-#ifndef LOWHAT_DONT_SORT
+    hatrack_hash_t hv;
+    void          *item;
+    bool           deleted;
+#ifndef HATRACK_DONT_SORT
     uint64_t epoch;
 #endif
 } refhat0_bucket_t;
 
 typedef struct {
-    lowhat_vtable_t   vtable;
+    hatrack_vtable_t  vtable;
     uint64_t          last_slot;
     uint64_t          threshold;
     uint64_t          used_count;
     uint64_t          item_count;
     refhat0_bucket_t *buckets;
-#ifndef LOWHAT_DONT_SORT
+#ifndef HATRACK_DONT_SORT
     uint64_t next_epoch;
 #endif
 } refhat0_t;
 
-extern const lowhat_vtable_t refhat0_vtable;
+extern const hatrack_vtable_t refhat0_vtable;
 
-void           refhat0_init(refhat0_t *);
-void          *refhat0_get(refhat0_t *, lowhat_hash_t *, bool *);
-void          *refhat0_put(refhat0_t *, lowhat_hash_t *, void *, bool *);
-bool           refhat0_put_if_empty(refhat0_t *, lowhat_hash_t *, void *);
-void          *refhat0_remove(refhat0_t *, lowhat_hash_t *, bool *);
-void           refhat0_delete(refhat0_t *);
-uint64_t       refhat0_len(refhat0_t *);
-lowhat_view_t *refhat0_view(refhat0_t *, uint64_t *);
+void            refhat0_init(refhat0_t *);
+void           *refhat0_get(refhat0_t *, hatrack_hash_t *, bool *);
+void           *refhat0_put(refhat0_t *, hatrack_hash_t *, void *, bool *);
+bool            refhat0_put_if_empty(refhat0_t *, hatrack_hash_t *, void *);
+void           *refhat0_remove(refhat0_t *, hatrack_hash_t *, bool *);
+void            refhat0_delete(refhat0_t *);
+uint64_t        refhat0_len(refhat0_t *);
+hatrack_view_t *refhat0_view(refhat0_t *, uint64_t *);
 
 #endif

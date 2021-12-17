@@ -1,39 +1,40 @@
 #include "hihat1.h"
 
 // clang-format off
+
 static hihat1_store_t  *hihat1_store_new(uint64_t);
 static void            *hihat1_store_get(hihat1_store_t *, hihat1_t *,
-					  lowhat_hash_t *, bool *);
+					 hatrack_hash_t *, bool *);
 static void            *hihat1_store_put(hihat1_store_t *, hihat1_t *,
-					  lowhat_hash_t *, void *, bool *);
+					 hatrack_hash_t *, void *, bool *);
 static bool             hihat1_store_put_if_empty(hihat1_store_t *,
-						   hihat1_t *,
-						   lowhat_hash_t *,
-						   void *);
+						  hihat1_t *,
+						  hatrack_hash_t *,
+						  void *);
 static void            *hihat1_store_remove(hihat1_store_t *, hihat1_t *,
-					     lowhat_hash_t *, bool *);
+					    hatrack_hash_t *, bool *);
 static hihat1_store_t *hihat1_store_migrate(hihat1_store_t *, hihat1_t *);
-static lowhat_view_t   *hihat1_store_view(hihat1_store_t *, hihat1_t *,
+static hatrack_view_t   *hihat1_store_view(hihat1_store_t *, hihat1_t *,
 					   uint64_t *);
 static inline void      hihat1_do_migration(hihat1_store_t *,
-					     hihat1_store_t *);
+					    hihat1_store_t *);
 static int              hihat1_quicksort_cmp(const void *, const void *);
 
-const lowhat_vtable_t hihat1_vtable = {
-    .init   = (lowhat_init_func)hihat1_init,
-    .get    = (lowhat_get_func)hihat1_get,
-    .put    = (lowhat_put_func)hihat1_put,
-    .remove = (lowhat_remove_func)hihat1_remove,
-    .delete = (lowhat_delete_func)hihat1_delete,
-    .len    = (lowhat_len_func)hihat1_len,
-    .view   = (lowhat_view_func)hihat1_view
+const hatrack_vtable_t hihat1_vtable = {
+    .init   = (hatrack_init_func)hihat1_init,
+    .get    = (hatrack_get_func)hihat1_get,
+    .put    = (hatrack_put_func)hihat1_put,
+    .remove = (hatrack_remove_func)hihat1_remove,
+    .delete = (hatrack_delete_func)hihat1_delete,
+    .len    = (hatrack_len_func)hihat1_len,
+    .view   = (hatrack_view_func)hihat1_view
 };
 // clang-format on
 
 void
 hihat1_init(hihat1_t *self)
 {
-    hihat1_store_t *store = hihat1_store_new(1 << LOWHAT_MIN_SIZE_LOG);
+    hihat1_store_t *store = hihat1_store_new(1 << HATRACK_MIN_SIZE_LOG);
 
     mmm_commit_write(store);
     self->epoch = 0;
@@ -41,7 +42,7 @@ hihat1_init(hihat1_t *self)
 }
 
 void *
-hihat1_get(hihat1_t *self, lowhat_hash_t *hv, bool *found)
+hihat1_get(hihat1_t *self, hatrack_hash_t *hv, bool *found)
 {
     void *ret;
 
@@ -53,11 +54,11 @@ hihat1_get(hihat1_t *self, lowhat_hash_t *hv, bool *found)
 }
 
 void *
-hihat1_put(hihat1_t      *self,
-           lowhat_hash_t *hv,
-           void          *item,
-           bool           ifempty,
-           bool          *found)
+hihat1_put(hihat1_t       *self,
+           hatrack_hash_t *hv,
+           void           *item,
+           bool            ifempty,
+           bool           *found)
 {
     void *ret;
     bool  bool_ret;
@@ -78,7 +79,7 @@ hihat1_put(hihat1_t      *self,
 }
 
 void *
-hihat1_remove(hihat1_t *self, lowhat_hash_t *hv, bool *found)
+hihat1_remove(hihat1_t *self, hatrack_hash_t *hv, bool *found)
 {
     void *ret;
 
@@ -105,10 +106,10 @@ hihat1_len(hihat1_t *self)
 }
 
 // This version cannot be linearized.
-lowhat_view_t *
+hatrack_view_t *
 hihat1_view(hihat1_t *self, uint64_t *num_items)
 {
-    lowhat_view_t *ret;
+    hatrack_view_t *ret;
 
     mmm_start_basic_op();
     ret = hihat1_store_view(self->store_current, self, num_items);
@@ -127,7 +128,7 @@ hihat1_store_new(uint64_t size)
     store     = (hihat1_store_t *)mmm_alloc(alloc_len);
 
     store->last_slot  = size - 1;
-    store->threshold  = lowhat_compute_table_threshold(size);
+    store->threshold  = hatrack_compute_table_threshold(size);
     store->used_count = ATOMIC_VAR_INIT(0);
     store->del_count  = ATOMIC_VAR_INIT(0);
     store->store_next = ATOMIC_VAR_INIT(NULL);
@@ -138,22 +139,22 @@ hihat1_store_new(uint64_t size)
 static void *
 hihat1_store_get(hihat1_store_t *self,
                  hihat1_t       *top,
-                 lowhat_hash_t  *hv1,
+                 hatrack_hash_t *hv1,
                  bool           *found)
 {
-    uint64_t         bix = lowhat_bucket_index(hv1, self->last_slot);
+    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
     uint64_t         i;
-    lowhat_hash_t    hv2;
+    hatrack_hash_t   hv2;
     hihat1_bucket_t *bucket;
     hihat1_record_t  record;
 
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_load(&bucket->hv);
-        if (lowhat_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(&hv2)) {
             goto not_found;
         }
-        if (!lowhat_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, &hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -177,14 +178,14 @@ not_found:
 static void *
 hihat1_store_put(hihat1_store_t *self,
                  hihat1_t       *top,
-                 lowhat_hash_t  *hv1,
+                 hatrack_hash_t *hv1,
                  void           *item,
                  bool           *found)
 {
     void            *old_item;
-    uint64_t         bix = lowhat_bucket_index(hv1, self->last_slot);
+    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
     uint64_t         i;
-    lowhat_hash_t    hv2;
+    hatrack_hash_t   hv2;
     hihat1_bucket_t *bucket;
     hihat1_record_t  record;
     hihat1_record_t  candidate;
@@ -194,7 +195,7 @@ hihat1_store_put(hihat1_store_t *self,
         hv2.w1 = 0;
         hv2.w2 = 0;
         if (!LCAS(&bucket->hv, &hv2, *hv1, HIHAT1_CTR_BUCKET_ACQUIRE)) {
-            if (!lowhat_hashes_eq(hv1, &hv2)) {
+            if (!hatrack_hashes_eq(hv1, &hv2)) {
                 bix = (bix + 1) & self->last_slot;
                 continue;
             }
@@ -252,12 +253,12 @@ found_bucket:
 static bool
 hihat1_store_put_if_empty(hihat1_store_t *self,
                           hihat1_t       *top,
-                          lowhat_hash_t  *hv1,
+                          hatrack_hash_t *hv1,
                           void           *item)
 {
-    uint64_t         bix = lowhat_bucket_index(hv1, self->last_slot);
+    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
     uint64_t         i;
-    lowhat_hash_t    hv2;
+    hatrack_hash_t   hv2;
     hihat1_bucket_t *bucket;
     hihat1_record_t  record;
     hihat1_record_t  candidate;
@@ -267,7 +268,7 @@ hihat1_store_put_if_empty(hihat1_store_t *self,
         hv2.w1 = 0;
         hv2.w2 = 0;
         if (!LCAS(&bucket->hv, &hv2, *hv1, HIHAT1_CTR_BUCKET_ACQUIRE)) {
-            if (!lowhat_hashes_eq(hv1, &hv2)) {
+            if (!hatrack_hashes_eq(hv1, &hv2)) {
                 bix = (bix + 1) & self->last_slot;
                 continue;
             }
@@ -316,13 +317,13 @@ found_bucket:
 static void *
 hihat1_store_remove(hihat1_store_t *self,
                     hihat1_t       *top,
-                    lowhat_hash_t  *hv1,
+                    hatrack_hash_t *hv1,
                     bool           *found)
 {
     void            *old_item;
-    uint64_t         bix = lowhat_bucket_index(hv1, self->last_slot);
+    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
     uint64_t         i;
-    lowhat_hash_t    hv2;
+    hatrack_hash_t   hv2;
     hihat1_bucket_t *bucket;
     hihat1_record_t  record;
     hihat1_record_t  candidate;
@@ -330,10 +331,10 @@ hihat1_store_remove(hihat1_store_t *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_load(&bucket->hv);
-        if (lowhat_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(&hv2)) {
             break;
         }
-        if (!lowhat_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, &hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -438,8 +439,8 @@ hihat1_do_migration(hihat1_store_t *old, hihat1_store_t *new)
     hihat1_record_t  record;
     hihat1_record_t  candidate;
     hihat1_record_t  expected_rec;
-    lowhat_hash_t    expected_hv;
-    lowhat_hash_t    hv;
+    hatrack_hash_t   expected_hv;
+    hatrack_hash_t   hv;
     uint64_t         i, j;
     uint64_t         bix;
     uint64_t         new_used      = 0;
@@ -487,7 +488,7 @@ hihat1_do_migration(hihat1_store_t *old, hihat1_store_t *new)
         }
 
         hv  = atomic_load(&bucket->hv);
-        bix = lowhat_bucket_index(&hv, new->last_slot);
+        bix = hatrack_bucket_index(&hv, new->last_slot);
 
         for (j = 0; j <= new->last_slot; j++) {
             new_bucket     = &new->buckets[bix];
@@ -497,7 +498,7 @@ hihat1_do_migration(hihat1_store_t *old, hihat1_store_t *new)
                       &expected_hv,
                       hv,
                       HIHAT1_CTR_MIGRATE_HV)) {
-                if (!lowhat_hashes_eq(&expected_hv, &hv)) {
+                if (!hatrack_hashes_eq(&expected_hv, &hv)) {
                     bix = (bix + 1) & new->last_slot;
                     continue;
                 }
@@ -518,19 +519,19 @@ hihat1_do_migration(hihat1_store_t *old, hihat1_store_t *new)
     LCAS(&new->used_count, &expected_used, new_used, HIHAT1_CTR_LEN_INSTALL);
 }
 
-static lowhat_view_t *
+static hatrack_view_t *
 hihat1_store_view(hihat1_store_t *self, hihat1_t *top, uint64_t *num)
 {
-    lowhat_view_t   *view;
-    lowhat_view_t   *p;
-    lowhat_hash_t    hv;
+    hatrack_view_t  *view;
+    hatrack_view_t  *p;
+    hatrack_hash_t   hv;
     hihat1_bucket_t *cur;
     hihat1_bucket_t *end;
     hihat1_record_t  record;
     uint64_t         num_items;
 
-    view = (lowhat_view_t *)malloc(sizeof(lowhat_view_t)
-                                   * (self->last_slot + 1));
+    view = (hatrack_view_t *)malloc(sizeof(hatrack_view_t)
+                                    * (self->last_slot + 1));
     p    = view;
     cur  = self->buckets;
     end  = cur + (self->last_slot + 1);
@@ -549,11 +550,11 @@ hihat1_store_view(hihat1_store_t *self, hihat1_t *top, uint64_t *num)
 
     num_items = p - view;
     *num      = num_items;
-    view      = realloc(view, *num * sizeof(lowhat_view_t));
+    view      = realloc(view, *num * sizeof(hatrack_view_t));
 
     // Unordered buckets should be in random order, so quicksort is a
     // good option.
-    qsort(view, num_items, sizeof(lowhat_view_t), hihat1_quicksort_cmp);
+    qsort(view, num_items, sizeof(hatrack_view_t), hihat1_quicksort_cmp);
 
     return view;
 }
@@ -561,8 +562,8 @@ hihat1_store_view(hihat1_store_t *self, hihat1_t *top, uint64_t *num)
 static int
 hihat1_quicksort_cmp(const void *bucket1, const void *bucket2)
 {
-    lowhat_view_t *item1 = (lowhat_view_t *)bucket1;
-    lowhat_view_t *item2 = (lowhat_view_t *)bucket2;
+    hatrack_view_t *item1 = (hatrack_view_t *)bucket1;
+    hatrack_view_t *item2 = (hatrack_view_t *)bucket2;
 
     return item1->sort_epoch - item2->sort_epoch;
 }

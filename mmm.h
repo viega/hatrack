@@ -29,14 +29,14 @@
 
 #include "counters.h"
 
-#ifdef LOWHAT_MMMALLOC_CTRS
-#define LOWHAT_MALLOC_CTR()        LOWHAT_CTR(MMM_CTR_MALLOCS)
-#define LOWHAT_FREE_CTR()          LOWHAT_CTR(MMM_CTR_FREES)
-#define LOWHAT_RETIRE_UNUSED_CTR() LOWHAT_CTR(MMM_CTR_RETIRE_UNUSED)
+#ifdef HATRACK_MMMALLOC_CTRS
+#define HATRACK_MALLOC_CTR()        HATRACK_CTR(MMM_CTR_MALLOCS)
+#define HATRACK_FREE_CTR()          HATRACK_CTR(MMM_CTR_FREES)
+#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(MMM_CTR_RETIRE_UNUSED)
 #else
-#define LOWHAT_MALLOC_CTR()
-#define LOWHAT_FREE_CTR()
-#define LOWHAT_RETIRE_UNUSED_CTR() LOWHAT_CTR(MMM_CTR_RETIRE_UNUSED)
+#define HATRACK_MALLOC_CTR()
+#define HATRACK_FREE_CTR()
+#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(MMM_CTR_RETIRE_UNUSED)
 #endif
 
 #include <stdlib.h>
@@ -378,8 +378,8 @@ mmm_start_linearized_op(void)
     do {
         mmm_reservations[mmm_mytid] = read_epoch;
         read_epoch                  = atomic_load(&mmm_epoch);
-    } while (LOWHAT_YN_CTR(read_epoch != mmm_reservations[mmm_mytid],
-                           LOWHAT_CTR_LINEARIZE_RETRIES));
+    } while (HATRACK_YN_CTR(read_epoch != mmm_reservations[mmm_mytid],
+                            HATRACK_CTR_LINEARIZE_RETRIES));
 
     return read_epoch;
 }
@@ -414,7 +414,7 @@ mmm_commit_write(void *ptr)
     //
     // Either way, we're safe to ignore the return value.
 
-    LCAS(&item->write_epoch, &expected_value, cur_epoch, LOWHAT_CTR_COMMIT);
+    LCAS(&item->write_epoch, &expected_value, cur_epoch, HATRACK_CTR_COMMIT);
 }
 
 static inline void
@@ -436,7 +436,7 @@ mmm_help_commit(void *ptr)
         LCAS(&item->write_epoch,
              &found_epoch,
              cur_epoch,
-             LOWHAT_CTR_COMMIT_HELPS);
+             HATRACK_CTR_COMMIT_HELPS);
     }
 }
 
@@ -445,7 +445,7 @@ mmm_alloc(uint64_t size)
 {
     mmm_header_t *item = (mmm_header_t *)calloc(1, sizeof(mmm_header_t) + size);
 
-    LOWHAT_MALLOC_CTR();
+    HATRACK_MALLOC_CTR();
 
     return (void *)item->data;
 }
@@ -457,7 +457,7 @@ static inline void
 mmm_retire_unused(void *ptr)
 {
     free(mmm_get_header(ptr));
-    LOWHAT_RETIRE_UNUSED_CTR();
+    HATRACK_RETIRE_UNUSED_CTR();
 }
 
 static inline uint64_t
