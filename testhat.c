@@ -3,7 +3,7 @@
  *
  * See LICENSE.txt for licensing info.
  *
- *  Name:           lowhat.c
+ *  Name:           testhat.c
  *  Description:    A wrapper to provide a single interface to all
  *                  the implementations, for ease of testing.
  *
@@ -28,10 +28,10 @@
  */
 
 #include <string.h>
-#include "lowhat.h"
+#include "testhat.h"
 
 void *
-lowhat_new(lowhat_table_type_t type)
+testhat_new(lowhat_table_type_t type)
 {
     lowhat_vtable_t *ret;
 

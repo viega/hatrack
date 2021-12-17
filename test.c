@@ -10,7 +10,7 @@
  */
 
 #include "hash.h"
-#include "lowhat.h"
+#include "testhat.h"
 #include <fcntl.h>  // For open
 #include <unistd.h> // For close and read
 #include <stdio.h>
@@ -39,7 +39,7 @@ test_put(hashtable_t self, uint32_t key, uint32_t value)
     item.s.key   = key;
     item.s.value = value;
 
-    lowhat_put(self, &precomputed_hashes[key], (void *)item.i, false, NULL);
+    testhat_put(self, &precomputed_hashes[key], (void *)item.i, false, NULL);
 }
 
 static inline uint32_t
@@ -47,7 +47,7 @@ test_get(hashtable_t self, uint32_t key)
 {
     test_item item;
 
-    item.i = (uint64_t)lowhat_get(self, &precomputed_hashes[key], NULL);
+    item.i = (uint64_t)testhat_get(self, &precomputed_hashes[key], NULL);
 
     return item.s.value;
 }
@@ -55,13 +55,13 @@ test_get(hashtable_t self, uint32_t key)
 static inline void
 test_remove(hashtable_t self, uint32_t key)
 {
-    lowhat_remove(self, &precomputed_hashes[key], NULL);
+    testhat_remove(self, &precomputed_hashes[key], NULL);
 }
 
 static inline lowhat_view_t *
 test_view(hashtable_t *self, uint64_t *n)
 {
-    return lowhat_view(self, n);
+    return testhat_view(self, n);
 }
 
 static void
@@ -281,10 +281,10 @@ functionality_test(test_func_t func,
 }
 
 char *dict_names[] = {"none",
+                      "hihat1",
                       "lowhat0",
                       "lowhat1",
                       "lowhat2",
-                      "hihat1",
                       "refhat0",
                       "refhat1",
                       NULL};
@@ -304,7 +304,7 @@ run_one_time_test(char               *name,
     struct timespec sspec;
     struct timespec espec;
 
-    dict = lowhat_new(type);
+    dict = testhat_new(type);
 
     fprintf(stderr, "%10s:\t", dict_names[type]);
     fflush(stderr);
@@ -324,7 +324,7 @@ run_one_time_test(char               *name,
             ticks,
             (double)(((double)ticks) / (double)iters));
 
-    lowhat_delete(dict);
+    testhat_delete(dict);
 }
 
 static void
@@ -336,7 +336,7 @@ run_one_func_test(char               *name,
                   uint32_t            thread_count,
                   uint32_t            extra)
 {
-    hashtable_t dict = lowhat_new(type);
+    hashtable_t dict = testhat_new(type);
     bool        ret;
 
     fprintf(stderr, "%10s:\t", dict_names[type]);
@@ -349,7 +349,7 @@ run_one_func_test(char               *name,
         fprintf(stderr, "FAIL\n");
     }
 
-    lowhat_delete(dict);
+    testhat_delete(dict);
 }
 
 static void
@@ -699,7 +699,7 @@ test_sort_speed(test_info_t *info)
         }
     }
     for (i = 0; i < info->iters / 100; i++) {
-        v = lowhat_view(info->dict, &n);
+        v = testhat_view(info->dict, &n);
         free(v);
     }
 
@@ -735,7 +735,7 @@ test_sort_contention(test_info_t *info)
         }
 
         if (!(i % 100)) {
-            v = lowhat_view(info->dict, &n);
+            v = testhat_view(info->dict, &n);
             free(v);
         }
     }
@@ -755,10 +755,10 @@ uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
 lowhat_table_type_t threadsafe_dicts[] = {
-    LOWHAT_0, LOWHAT_1, LOWHAT_2, HIHAT_1, LOWHAT_NONE
+    HIHAT_1, LOWHAT_0, LOWHAT_1, LOWHAT_2, LOWHAT_NONE
 };
 lowhat_table_type_t all_dicts[]     = {
-    REFHAT_0, LOWHAT_0, LOWHAT_1, LOWHAT_2, HIHAT_1, LOWHAT_NONE
+    REFHAT_0, HIHAT_1, LOWHAT_0, LOWHAT_1, LOWHAT_2, LOWHAT_NONE
 };
 lowhat_table_type_t st_dicts[]      = {
     REFHAT_0, LOWHAT_NONE
