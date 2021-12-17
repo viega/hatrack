@@ -18,54 +18,65 @@ char *lowhat_counter_names[LOWHAT_COUNTERS_NUM] = {
 };
 
 char *lowhat_yn_counter_names[LOWHAT_YN_COUNTERS_NUM] = {
-    "mmm linearize retries",
-    "mmm write commits",
-    "mmm commit helps",
-    "lh0 bucket acquires",
-    "lh0 record installs",
-    "lh0 record delete",
-    "lh0 store creates",
-    "lh0 F_MOVING set",
-    "lh0 F_MOVED (empty)",
-    "lh0 F_MOVED (deleted)",
-    "lh0 migrate hash",
-    "lh0 migrate record",
-    "lh0 F_MOVED (migrate)",
-    "lh0 len installed",
-    "lh0 store installs",
-    "lh1 bucket acquires",
-    "lh1 ptr installs",
-    "lh1 hist hash installs",
-    "lh1 record installs",
-    "lh1 record delete",
-    "lh1 store creates",
-    "lh1 F_MOVING set",
-    "lh1 F_MOVED (empty)",
-    "lh1 F_MOVED (deleted)",
-    "lh1 migrate hash",
-    "lh1 migrate record",
-    "lh1 move other hash",
-    "lh1 install new ptr",
-    "lh1 F_MOVED (migrate)",
-    "lh1 hist ptr installed",
-    "lh1 store installs",
-    "lh2 bucket acquires",
-    "lh2 ptr installs",
-    "lh2 hist hash installs",
-    "lh2 forward installed",
-    "lh2 record installs",
-    "lh2 record delete",
-    "lh2 store creates",
-    "lh2 F_MOVING set",
-    "lh2 F_MOVED (empty)",
-    "lh2 F_MOVED (deleted)",
-    "lh2 migrate hash",
-    "lh2 migrate record",
-    "lh2 move other hash",
-    "lh2 install new ptr",
-    "lh2 F_MOVED (migrate)",
-    "lh2 hist ptr installed",
-    "lh2 store installs"
+    "mmm linearize retries",    // 0
+    "mmm write commits",        // 1
+    "mmm commit helps",         // 2
+    "lh0 bucket acquires",      // 3
+    "lh0 record installs",      // 4
+    "lh0 record delete",        // 5
+    "lh0 store creates",        // 6
+    "lh0 F_MOVING set",         // 7
+    "lh0 F_MOVED (empty)",      // 8
+    "lh0 F_MOVED (deleted)",    // 9
+    "lh0 migrate hash",         // 10
+    "lh0 migrate record",       // 11
+    "lh0 F_MOVED (migrate)",    // 12
+    "lh0 len installed",        // 13
+    "lh0 store installs",       // 14
+    "lh1 bucket acquires",      // 15
+    "lh1 ptr installs",         // 16
+    "lh1 hist hash installs",   // 17
+    "lh1 record installs",      // 18
+    "lh1 record delete",        // 19
+    "lh1 store creates",        // 20
+    "lh1 F_MOVING set",         // 21
+    "lh1 F_MOVED (empty)",      // 22
+    "lh1 F_MOVED (deleted)",    // 23
+    "lh1 migrate hash",         // 24
+    "lh1 migrate record",       // 25
+    "lh1 move other hash",      // 26
+    "lh1 install new ptr",      // 27
+    "lh1 F_MOVED (migrate)",    // 28
+    "lh1 hist ptr installed",   // 29
+    "lh1 store installs",       // 30
+    "lh2 bucket acquires",      // 31
+    "lh2 ptr installs",         // 32
+    "lh2 hist hash installs",   // 33
+    "lh2 forward installed",    // 34
+    "lh2 record installs",      // 35
+    "lh2 record delete",        // 36
+    "lh2 store creates",        // 37
+    "lh2 F_MOVING set",         // 38
+    "lh2 F_MOVED (empty)",      // 39
+    "lh2 F_MOVED (deleted)",    // 40
+    "lh2 migrate hash",         // 41
+    "lh2 migrate record",       // 42
+    "lh2 move other hash",      // 43
+    "lh2 install new ptr",      // 44
+    "lh2 F_MOVED (migrate)",    // 45
+    "lh2 hist ptr installed",   // 46
+    "lh2 store installs",       // 47
+    "hi0 bucket acquires",      // 48
+    "hi0 record installs",      // 49
+    "hi0 record delete",        // 50
+    "hi0 store creates",        // 51
+    "hi0 F_MOVING set",         // 52
+    "hi0 F_MOVED (empty)",      // 53
+    "hi0 migrate hash",         // 54
+    "hi0 migrate record",       // 55
+    "hi0 F_MOVED (migrate)",    // 56
+    "hi0 len installed",        // 57
+    "hi0 store installs"        // 58
 };
 // clang-format on
 
@@ -104,6 +115,9 @@ counters_output_delta(void)
         lowhat_last_yn_counters[i][0] = y_cur;
         lowhat_last_yn_counters[i][1] = n_cur;
 
+        if (i == 58) {
+            printf("Break here!\n");
+        }
         if (!total) {
             continue;
         }

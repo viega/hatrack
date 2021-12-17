@@ -284,7 +284,7 @@ char *dict_names[] = {"none",
                       "lowhat0",
                       "lowhat1",
                       "lowhat2",
-                      "hihat0",
+                      "hihat1",
                       "refhat0",
                       "refhat1",
                       NULL};
@@ -754,10 +754,10 @@ uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
 lowhat_table_type_t threadsafe_dicts[] = {
-    LOWHAT_0, LOWHAT_1, LOWHAT_2, LOWHAT_NONE
+    LOWHAT_0, LOWHAT_1, LOWHAT_2, HIHAT_1, LOWHAT_NONE
 };
 lowhat_table_type_t all_dicts[]     = {
-    LOWHAT_0, LOWHAT_1, LOWHAT_2, REFHAT_0, LOWHAT_NONE
+    REFHAT_0, LOWHAT_0, LOWHAT_1, LOWHAT_2, HIHAT_1, LOWHAT_NONE
 };
 lowhat_table_type_t st_dicts[]      = {
     REFHAT_0, LOWHAT_NONE

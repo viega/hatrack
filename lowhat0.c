@@ -1,5 +1,4 @@
 #include "lowhat0.h"
-#include <stdio.h>
 
 // clang-format off
 static lowhat0_store_t *lowhat0_store_new(uint64_t);
@@ -151,6 +150,7 @@ lowhat0_store_new(uint64_t size)
     store->threshold  = lowhat_compute_table_threshold(size);
     store->used_count = ATOMIC_VAR_INIT(0);
     store->del_count  = ATOMIC_VAR_INIT(0);
+    store->store_next = ATOMIC_VAR_INIT(NULL);
     store->hist_buckets
         = (lowhat0_history_t *)mmm_alloc(sizeof(lowhat0_history_t) * size);
 

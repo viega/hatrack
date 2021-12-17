@@ -14,10 +14,11 @@
 
 // Pull in the various implementations.
 
+#include "refhat0.h"
 #include "lowhat0.h"
 #include "lowhat1.h"
 #include "lowhat2.h"
-#include "refhat0.h"
+#include "hihat1.h"
 
 typedef enum : uint64_t
 {
@@ -25,7 +26,7 @@ typedef enum : uint64_t
     LOWHAT_0, // Keeps unordered buckets, slowest sorts.
     LOWHAT_1, // Keeps semi-ordered buckets and sorts quickly when needed.
     LOWHAT_2, // Keeps mostly-ordered buckets, sorting quickest when needed.
-    HIHAT_0,  // Not done yet.
+    HIHAT_1,  // Not linearizable.
     REFHAT_0  // Unordered buckets, single-threaded only.
 } lowhat_table_type_t;
 

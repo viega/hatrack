@@ -48,6 +48,10 @@ lowhat_new(lowhat_table_type_t type)
         ret = malloc(sizeof(lowhat2_t));
         memcpy(ret, &lowhat2_vtable, sizeof(lowhat_vtable_t));
         break;
+    case HIHAT_1:
+        ret = malloc(sizeof(hihat1_t));
+        memcpy(ret, &hihat1_vtable, sizeof(lowhat_vtable_t));
+        break;
     case REFHAT_0:
         ret = malloc(sizeof(refhat0_t));
         memcpy(ret, &refhat0_vtable, sizeof(lowhat_vtable_t));
