@@ -929,7 +929,12 @@ lowhat2_store_view(lowhat2_store_t *self,
     uint64_t           sort_epoch;
     uint64_t           num_items;
 
-    end  = atomic_load(&self->hist_next);
+    end = atomic_load(&self->hist_next);
+
+    if (self->hist_end < end) {
+        end = self->hist_end;
+    }
+
     view = (lowhat_view_t *)malloc(sizeof(lowhat_view_t) * (end - cur));
     p    = view;
 

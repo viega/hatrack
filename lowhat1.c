@@ -1,5 +1,6 @@
 #include "lowhat1.h"
 #include <assert.h>
+#include <stdio.h>
 
 // clang-format off
 static lowhat1_store_t *lowhat1_store_new(uint64_t);
@@ -845,7 +846,12 @@ lowhat1_store_view(lowhat1_store_t *self,
     uint64_t           sort_epoch;
     uint64_t           num_items;
 
-    end  = atomic_load(&self->hist_next);
+    end = atomic_load(&self->hist_next);
+
+    if (self->hist_end < end) {
+        end = self->hist_end;
+    }
+
     view = (lowhat_view_t *)malloc(sizeof(lowhat_view_t) * (end - cur));
     p    = view;
 
@@ -854,6 +860,9 @@ lowhat1_store_view(lowhat1_store_t *self,
         rec = lowhat_pflag_clear(atomic_load(&cur->head),
                                  LOWHAT_F_MOVING | LOWHAT_F_MOVED);
 
+        if (rec && !lowhat_pflag_test(rec, 0xffffffff00000000)) {
+            printf("Break here or crash!\n");
+        }
         // If there's a record, we need to ensure its epoch is updated
         // before we proceed.
         mmm_help_commit(rec);

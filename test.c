@@ -697,10 +697,46 @@ test_sort_speed(test_info_t *info)
             key = test_get(info->dict, key);
         }
     }
-
     for (i = 0; i < info->iters / 100; i++) {
         v = lowhat_view(info->dict, &n);
         free(v);
+    }
+
+    return true;
+}
+
+bool
+test_sort_contention(test_info_t *info)
+{
+    uint32_t       i;
+    uint32_t       key;
+    uint32_t       action;
+    uint32_t       delete_odds  = info->extra & 0xff;
+    uint32_t       write_odds   = info->extra >> 4;
+    uint32_t       nonread_odds = delete_odds + write_odds;
+    uint64_t       n;
+    lowhat_view_t *v;
+
+    for (i = 0; i < info->iters; i++) {
+        key    = test_rand() % info->range;
+        action = test_rand() % 100;
+        if (action <= nonread_odds) {
+            action = test_rand() % 100;
+            if (action <= delete_odds) {
+                test_remove(info->dict, key);
+            }
+            else {
+                test_put(info->dict, key, key);
+            }
+        }
+        else {
+            key = test_get(info->dict, key);
+        }
+
+        if (!(i % 100)) {
+            v = lowhat_view(info->dict, &n);
+            free(v);
+        }
     }
     return true;
 }
@@ -834,6 +870,13 @@ main(int argc, char *argv[])
     counters_output_delta();    
     run_time_test("sorts-nt",
                   test_sort_speed,
+                  DEFAULT_ITERS/10,
+                  threadsafe_dicts,
+                  sort_sizes,
+                  basic_threads,
+                  write_rates);
+    run_time_test("contend",
+                  test_sort_contention,
                   DEFAULT_ITERS/10,
                   threadsafe_dicts,
                   sort_sizes,
