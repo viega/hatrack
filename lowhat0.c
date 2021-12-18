@@ -21,16 +21,6 @@ static inline void       lowhat0_do_migration(lowhat0_store_t *,
 					      lowhat0_store_t *);
 static int               lowhat0_quicksort_cmp(const void *, const void *);
 
-const hatrack_vtable_t lowhat0_vtable = {
-    .init   = (hatrack_init_func)lowhat0_init,
-    .get    = (hatrack_get_func)lowhat0_get,
-    .put    = (hatrack_put_func)lowhat0_put,
-    .remove = (hatrack_remove_func)lowhat0_remove,
-    .delete = (hatrack_delete_func)lowhat0_delete,
-    .len    = (hatrack_len_func)lowhat0_len,
-    .view   = (hatrack_view_func)lowhat0_view
-};
-
 // clang-format on
 
 void

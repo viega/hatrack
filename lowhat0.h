@@ -216,6 +216,7 @@ typedef struct lowhat0_st {
 // be consistent across runs, something fast and practical like XXH3.
 
 // clang-format off
+
 void            lowhat0_init(lowhat0_t *);
 void           *lowhat0_get(lowhat0_t *, hatrack_hash_t *, bool *);
 void           *lowhat0_put(lowhat0_t *, hatrack_hash_t *, void *, bool,
@@ -224,8 +225,7 @@ void           *lowhat0_remove(lowhat0_t *, hatrack_hash_t *, bool *);
 void            lowhat0_delete(lowhat0_t *);
 uint64_t        lowhat0_len(lowhat0_t *);
 hatrack_view_t *lowhat0_view(lowhat0_t *, uint64_t *);
-// clang-format on
 
-extern const hatrack_vtable_t lowhat0_vtable;
+// clang-format on
 
 #endif

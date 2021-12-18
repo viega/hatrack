@@ -14,22 +14,10 @@
 // clang-format off
 
 static void  refhat0_migrate(refhat0_t *);
-static void *refhat0_base_put(refhat0_t *, hatrack_hash_t *, void *, bool,
-			      bool *);
 
 #ifndef HATRACK_DONT_SORT
 int refhat0_quicksort_cmp(const void *, const void *);
 #endif
-
-const hatrack_vtable_t refhat0_vtable = {
-    .init   = (hatrack_init_func)refhat0_init,
-    .get    = (hatrack_get_func)refhat0_get,
-    .put    = (hatrack_put_func)refhat0_base_put,
-    .remove = (hatrack_remove_func)refhat0_remove,
-    .delete = (hatrack_delete_func)refhat0_delete,
-    .len    = (hatrack_len_func)refhat0_len,
-    .view   = (hatrack_view_func)refhat0_view
-};
 
 // clang-format on
 
@@ -318,7 +306,7 @@ refhat0_migrate(refhat0_t *self)
     self->threshold  = hatrack_compute_table_threshold(new_size);
 }
 
-static void *
+void *
 refhat0_base_put(refhat0_t      *self,
                  hatrack_hash_t *hv,
                  void           *item,

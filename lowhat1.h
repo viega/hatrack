@@ -235,6 +235,4 @@ hatrack_view_t *lowhat1_view(lowhat1_t *, uint64_t *);
 
 // clang-format on
 
-extern const hatrack_vtable_t lowhat1_vtable;
-
 #endif

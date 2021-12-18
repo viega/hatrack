@@ -73,6 +73,4 @@ hatrack_view_t *hihat1_view(hihat1_t *, uint64_t *);
 
 // clang-format on
 
-extern const hatrack_vtable_t hihat1_vtable;
-
 #endif

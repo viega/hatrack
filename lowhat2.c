@@ -27,17 +27,6 @@ static int              lowhat2_quicksort_cmp(const void *, const void *);
 static void             lowhat2_insertion_sort(hatrack_view_t *, uint64_t);
 #endif
 
-
-const hatrack_vtable_t lowhat2_vtable = {
-    .init   = (hatrack_init_func)lowhat2_init,
-    .get    = (hatrack_get_func)lowhat2_get,
-    .put    = (hatrack_put_func)lowhat2_put,
-    .remove = (hatrack_remove_func)lowhat2_remove,
-    .delete = (hatrack_delete_func)lowhat2_delete,
-    .len    = (hatrack_len_func)lowhat2_len,
-    .view   = (hatrack_view_func)lowhat2_view
-};
-
 // clang-format on
 
 void

@@ -20,70 +20,54 @@
 #include "lowhat1.h"
 #include "lowhat2.h"
 
-typedef enum : uint64_t
-{
-    HATRACK_NONE = 0,
-    HIHAT_1,  // Not linearizable.
-    LOWHAT_0, // Keeps unordered buckets, slowest sorts.
-    LOWHAT_1, // Keeps semi-ordered buckets and sorts quickly when needed.
-    LOWHAT_2, // Keeps mostly-ordered buckets, sorting quickest when needed.
-    REFHAT_0  // Unordered buckets, single-threaded only.
-} hatrack_table_type_t;
+typedef struct {
+    hatrack_vtable_t vtable;
+    void            *htable;
+} testhat_t;
 
-void *testhat_new(hatrack_table_type_t);
+testhat_t *testhat_new(char *);
 
 static inline void *
-testhat_get(void *self, hatrack_hash_t *hv, bool *found)
+testhat_get(testhat_t *self, hatrack_hash_t *hv, bool *found)
 {
-    hatrack_vtable_t *table = (hatrack_vtable_t *)self;
-
-    return (*table->get)(self, hv, found);
+    return (*self->vtable.get)(self->htable, hv, found);
 }
 
 static inline void *
-testhat_put(void           *self,
+testhat_put(testhat_t      *self,
             hatrack_hash_t *hv,
             void           *item,
             bool            ifempty,
             bool           *found)
 {
-    hatrack_vtable_t *table = (hatrack_vtable_t *)self;
-
-    return (*table->put)(self, hv, item, ifempty, found);
+    return (*self->vtable.put)(self->htable, hv, item, ifempty, found);
 }
 
 static inline void *
-testhat_remove(void *self, hatrack_hash_t *hv, bool *found)
+testhat_remove(testhat_t *self, hatrack_hash_t *hv, bool *found)
 {
-    hatrack_vtable_t *table = (hatrack_vtable_t *)self;
-
-    return (*table->remove)(self, hv, found);
+    return (*self->vtable.remove)(self->htable, hv, found);
 }
 
 static inline void
-testhat_delete(void *self)
+testhat_delete(testhat_t *self)
 {
-    hatrack_vtable_t *table = (hatrack_vtable_t *)self;
-
-    (*table->delete)(self);
+    (*self->vtable.delete)(self->htable);
+    free(self);
 
     return;
 }
 
 static inline uint64_t
-testhat_len(void *self)
+testhat_len(testhat_t *self)
 {
-    hatrack_vtable_t *table = (hatrack_vtable_t *)self;
-
-    return (*table->len)(self);
+    return (*self->vtable.len)(self->htable);
 }
 
 static inline hatrack_view_t *
-testhat_view(void *self, uint64_t *num_items)
+testhat_view(testhat_t *self, uint64_t *num_items)
 {
-    hatrack_vtable_t *table = (hatrack_vtable_t *)self;
-
-    return (*table->view)(self, num_items);
+    return (*self->vtable.view)(self->htable, num_items);
 }
 
 #endif

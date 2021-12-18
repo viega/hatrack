@@ -19,10 +19,6 @@
 #define HATRACK_TEST_MAX_KEYS 1000000
 #endif
 
-static hatrack_hash_t precomputed_hashes[HATRACK_TEST_MAX_KEYS];
-
-typedef void *hashtable_t;
-
 typedef union {
     struct {
         uint32_t key;
@@ -31,8 +27,10 @@ typedef union {
     uint64_t i;
 } test_item;
 
+hatrack_hash_t precomputed_hashes[HATRACK_TEST_MAX_KEYS];
+
 static inline void
-test_put(hashtable_t self, uint32_t key, uint32_t value)
+test_put(testhat_t *self, uint32_t key, uint32_t value)
 {
     test_item item;
 
@@ -43,7 +41,7 @@ test_put(hashtable_t self, uint32_t key, uint32_t value)
 }
 
 static inline uint32_t
-test_get(hashtable_t self, uint32_t key)
+test_get(testhat_t *self, uint32_t key)
 {
     test_item item;
 
@@ -53,13 +51,13 @@ test_get(hashtable_t self, uint32_t key)
 }
 
 static inline void
-test_remove(hashtable_t self, uint32_t key)
+test_remove(testhat_t *self, uint32_t key)
 {
     testhat_remove(self, &precomputed_hashes[key], NULL);
 }
 
 static inline hatrack_view_t *
-test_view(hashtable_t *self, uint64_t *n)
+test_view(testhat_t *self, uint64_t *n)
 {
     return testhat_view(self, n);
 }
@@ -178,11 +176,11 @@ test_init()
 }
 
 typedef struct {
-    uint32_t    tid;
-    hashtable_t dict;
-    uint32_t    range; // Specifies range of keys and values, 0 - range-1
-    uint32_t    iters; // Number of times to run the test;
-    uint32_t    extra;
+    uint32_t   tid;
+    testhat_t *dict;
+    uint32_t   range; // Specifies range of keys and values, 0 - range-1
+    uint32_t   iters; // Number of times to run the test;
+    uint32_t   extra;
 } test_info_t;
 
 typedef bool (*test_func_t)(test_info_t *);
@@ -210,7 +208,7 @@ static uint32_t
 time_test(test_func_t      func,
           uint32_t         iters,
           uint32_t         num_threads,
-          hashtable_t      dict,
+          testhat_t       *dict,
           uint32_t         range,
           uint32_t         extra,
           struct timespec *sspec,
@@ -248,7 +246,7 @@ static bool
 functionality_test(test_func_t func,
                    uint32_t    iters,
                    uint32_t    num_threads,
-                   hashtable_t dict,
+                   testhat_t  *dict,
                    uint32_t    range,
                    uint32_t    extra)
 {
@@ -280,25 +278,16 @@ functionality_test(test_func_t func,
     return true;
 }
 
-char *dict_names[] = {"none",
-                      "hihat1",
-                      "lowhat0",
-                      "lowhat1",
-                      "lowhat2",
-                      "refhat0",
-                      "refhat1",
-                      NULL};
-
 static void
-run_one_time_test(char                *name,
-                  test_func_t          func,
-                  uint32_t             iters,
-                  hatrack_table_type_t type,
-                  uint32_t             range,
-                  uint32_t             thread_count,
-                  uint32_t             extra)
+run_one_time_test(char       *name,
+                  test_func_t func,
+                  uint32_t    iters,
+                  char       *type,
+                  uint32_t    range,
+                  uint32_t    thread_count,
+                  uint32_t    extra)
 {
-    hashtable_t     dict = NULL;
+    testhat_t      *dict = NULL;
     uint32_t        ticks;
     double          walltime;
     struct timespec sspec;
@@ -306,7 +295,7 @@ run_one_time_test(char                *name,
 
     dict = testhat_new(type);
 
-    fprintf(stderr, "%10s:\t", dict_names[type]);
+    fprintf(stderr, "%10s:\t", type);
     fflush(stderr);
     ticks    = time_test(func,
                       iters,
@@ -328,18 +317,18 @@ run_one_time_test(char                *name,
 }
 
 static void
-run_one_func_test(char                *name,
-                  test_func_t          func,
-                  uint32_t             iters,
-                  hatrack_table_type_t type,
-                  uint32_t             range,
-                  uint32_t             thread_count,
-                  uint32_t             extra)
+run_one_func_test(char       *name,
+                  test_func_t func,
+                  uint32_t    iters,
+                  char       *type,
+                  uint32_t    range,
+                  uint32_t    thread_count,
+                  uint32_t    extra)
 {
-    hashtable_t dict = testhat_new(type);
-    bool        ret;
+    testhat_t *dict = testhat_new(type);
+    bool       ret;
 
-    fprintf(stderr, "%10s:\t", dict_names[type]);
+    fprintf(stderr, "%10s:\t", type);
     fflush(stderr);
     ret = functionality_test(func, iters, thread_count, dict, range, extra);
     if (ret) {
@@ -353,13 +342,13 @@ run_one_func_test(char                *name,
 }
 
 static void
-run_time_test(char                 *name,
-              test_func_t           func,
-              uint32_t              iters,
-              hatrack_table_type_t *types,
-              uint32_t             *ranges,
-              uint32_t             *tcounts,
-              uint32_t             *extra)
+run_time_test(char       *name,
+              test_func_t func,
+              uint32_t    iters,
+              char       *types[],
+              uint32_t   *ranges,
+              uint32_t   *tcounts,
+              uint32_t   *extra)
 {
     uint32_t dict_ix;
     uint32_t range_ix;
@@ -384,7 +373,7 @@ run_time_test(char                 *name,
                             ranges[range_ix],
                             extra[extra_ix]);
                     dict_ix = 0;
-                    while (types[dict_ix] != HATRACK_NONE) {
+                    while (types[dict_ix]) {
                         run_one_time_test(name,
                                           func,
                                           iters,
@@ -420,13 +409,13 @@ run_time_test(char                 *name,
 }
 
 static void
-run_func_test(char                 *name,
-              test_func_t           func,
-              uint32_t              iters,
-              hatrack_table_type_t *types,
-              uint32_t             *ranges,
-              uint32_t             *tcounts,
-              uint32_t             *extra)
+run_func_test(char       *name,
+              test_func_t func,
+              uint32_t    iters,
+              char       *types[],
+              uint32_t   *ranges,
+              uint32_t   *tcounts,
+              uint32_t   *extra)
 {
     uint32_t dict_ix;
     uint32_t range_ix;
@@ -450,7 +439,7 @@ run_func_test(char                 *name,
                             ranges[range_ix],
                             extra[extra_ix]);
                     dict_ix = 0;
-                    while (types[dict_ix] != HATRACK_NONE) {
+                    while (types[dict_ix]) {
                         run_one_func_test(name,
                                           func,
                                           iters,
@@ -755,14 +744,14 @@ uint32_t            basic_threads[] = {2, 4, 10, 20, 0};
 uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
-hatrack_table_type_t threadsafe_dicts[] = {
-    HIHAT_1, LOWHAT_0, LOWHAT_1, LOWHAT_2, HATRACK_NONE
+char *threadsafe_dicts[] = {
+    "hihat1", "lowhat0", "lowhat1", "lowhat2", NULL
 };
-hatrack_table_type_t all_dicts[]     = {
-    REFHAT_0, HIHAT_1, LOWHAT_0, LOWHAT_1, LOWHAT_2, HATRACK_NONE
+char *all_dicts[]     = {
+    "refhat0", "hihat1", "lowhat0", "lowhat1", "lowhat2", NULL
 };
-hatrack_table_type_t st_dicts[]      = {
-    REFHAT_0, HATRACK_NONE
+char *st_dicts[]      = {
+    "refhat0", NULL
 };
 
 //  clang-format on

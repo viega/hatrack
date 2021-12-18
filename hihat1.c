@@ -20,15 +20,6 @@ static inline void      hihat1_do_migration(hihat1_store_t *,
 					    hihat1_store_t *);
 static int              hihat1_quicksort_cmp(const void *, const void *);
 
-const hatrack_vtable_t hihat1_vtable = {
-    .init   = (hatrack_init_func)hihat1_init,
-    .get    = (hatrack_get_func)hihat1_get,
-    .put    = (hatrack_put_func)hihat1_put,
-    .remove = (hatrack_remove_func)hihat1_remove,
-    .delete = (hatrack_delete_func)hihat1_delete,
-    .len    = (hatrack_len_func)hihat1_len,
-    .view   = (hatrack_view_func)hihat1_view
-};
 // clang-format on
 
 void
