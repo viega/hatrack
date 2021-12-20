@@ -122,7 +122,7 @@
 // applying the actual hash function.
 
 typedef struct {
-    _Atomic hatrack_hash_t     hv;
+    alignas(32) _Atomic hatrack_hash_t hv;
     _Atomic(lowhat_record_t *) head;
 } lowhat0_history_t;
 
@@ -193,7 +193,7 @@ typedef struct lowhat0_store_st lowhat0_store_t;
 //               migrating.
 
 struct lowhat0_store_st {
-    uint64_t                   last_slot;
+    alignas(32) uint64_t last_slot;
     uint64_t                   threshold;
     _Atomic uint64_t           used_count;
     _Atomic uint64_t           del_count;
@@ -202,7 +202,7 @@ struct lowhat0_store_st {
 };
 
 typedef struct lowhat0_st {
-    _Atomic(lowhat0_store_t *) store_current;
+    alignas(32) _Atomic(lowhat0_store_t *) store_current;
 } lowhat0_t;
 
 // This API requires that you deal with hashing the key external to

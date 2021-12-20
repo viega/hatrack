@@ -4,11 +4,12 @@
 
 #include <stdio.h>
 
-_Atomic uint64_t hatrack_counters[HATRACK_COUNTERS_NUM]      = {};
-uint64_t         hatrack_last_counters[HATRACK_COUNTERS_NUM] = {};
+_Atomic alignas(8) uint64_t hatrack_counters[HATRACK_COUNTERS_NUM] = {};
+uint64_t hatrack_last_counters[HATRACK_COUNTERS_NUM]               = {};
 
-_Atomic uint64_t hatrack_yn_counters[HATRACK_YN_COUNTERS_NUM][2]      = {};
-uint64_t         hatrack_last_yn_counters[HATRACK_YN_COUNTERS_NUM][2] = {};
+_Atomic alignas(8) uint64_t hatrack_yn_counters[HATRACK_YN_COUNTERS_NUM][2]
+    = {};
+uint64_t hatrack_last_yn_counters[HATRACK_YN_COUNTERS_NUM][2] = {};
 
 // clang-format off
 
@@ -67,17 +68,19 @@ char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
     "lh2 F_MOVED (migrate)",    // 45
     "lh2 hist ptr installed",   // 46
     "lh2 store installs",       // 47
-    "hi0 bucket acquires",      // 48
-    "hi0 record installs",      // 49
-    "hi0 record delete",        // 50
-    "hi0 store creates",        // 51
-    "hi0 F_MOVING set",         // 52
-    "hi0 F_MOVED (empty)",      // 53
-    "hi0 migrate hash",         // 54
-    "hi0 migrate record",       // 55
-    "hi0 F_MOVED (migrate)",    // 56
-    "hi0 len installed",        // 57
-    "hi0 store installs"        // 58
+    "hi1 bucket acquires",      // 48
+    "hi1 record installs",      // 49
+    "hi1 record delete",        // 50
+    "hi1 store creates",        // 51
+    "hi1 F_MOVING set",         // 52
+    "hi1 F_MOVED (empty)",      // 53
+    "hi1 migrate hash",         // 54
+    "hi1 migrate record",       // 55
+    "hi1 F_MOVED (migrate)",    // 56
+    "hi1 len installed",        // 57
+    "hi1 store installs",       // 58
+    "hi1 woke up to no job",    // 59
+
 };
 
 // clang-format on

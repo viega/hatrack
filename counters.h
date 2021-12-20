@@ -16,6 +16,7 @@
 
 #include <stdint.h>
 #include <stdatomic.h>
+#include <stdalign.h>
 
 #define CAS(target, expected, desired)                                         \
     atomic_compare_exchange_weak(target, expected, desired)
@@ -96,6 +97,7 @@ enum : uint64_t
     HIHAT1_CTR_F_MOVED2           = 56,
     HIHAT1_CTR_LEN_INSTALL        = 57,
     HIHAT1_CTR_STORE_INSTALL      = 58,
+    HIHAT1_CTR_SLEEP_NO_JOB       = 59,
     HATRACK_YN_COUNTERS_NUM
 };
 

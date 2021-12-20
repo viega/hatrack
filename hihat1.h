@@ -30,11 +30,6 @@ typedef struct {
     uint64_t info;
 } hihat1_record_t;
 
-typedef struct {
-    _Atomic hatrack_hash_t  hv;
-    _Atomic hihat1_record_t record;
-} hihat1_bucket_t;
-
 enum : uint64_t
 {
     HIHAT_F_USED   = 0x8000000000000000,
@@ -44,10 +39,20 @@ enum : uint64_t
     HIHAT_F_MASK   = 0x8fffffffffffffff
 };
 
+//
+// - The rest is currently an structure-specific epoch counter // to
+//   help with sorting (note there are no consistency guarantees the
+//   way there are with lowhat).
+
+typedef struct {
+    alignas(32) _Atomic hatrack_hash_t hv;
+    _Atomic hihat1_record_t record;
+} hihat1_bucket_t;
+
 typedef struct hihat1_store_st hihat1_store_t;
 
 struct hihat1_store_st {
-    uint64_t                  last_slot;
+    alignas(32) uint64_t last_slot;
     uint64_t                  threshold;
     _Atomic uint64_t          used_count;
     _Atomic uint64_t          del_count;
@@ -56,8 +61,8 @@ struct hihat1_store_st {
 };
 
 typedef struct {
-    uint64_t                  epoch;
-    _Atomic(hihat1_store_t *) store_current;
+    alignas(32) _Atomic(hihat1_store_t *) store_current;
+    uint64_t epoch;
 } hihat1_t;
 
 // clang-format off

@@ -13,6 +13,7 @@
 #include "testhat.h"
 #include <fcntl.h>  // For open
 #include <unistd.h> // For close and read
+#include <time.h>
 #include <stdio.h>
 
 #ifndef HATRACK_TEST_MAX_KEYS
@@ -176,11 +177,12 @@ test_init()
 }
 
 typedef struct {
-    uint32_t tid;
-    char    *type;
-    uint32_t range; // Specifies range of keys and values, 0 - range-1
-    uint32_t iters; // Number of times to run the test;
-    uint32_t extra;
+    uint32_t   tid;
+    char      *type;
+    testhat_t *dict;
+    uint32_t   range; // Specifies range of keys and values, 0 - range-1
+    uint32_t   iters; // Number of times to run the test;
+    uint32_t   extra;
 } test_info_t;
 
 typedef bool (*test_func_t)(test_info_t *);
@@ -218,13 +220,17 @@ time_test(test_func_t      func,
     pthread_t   threads[num_threads];
     test_info_t info[num_threads];
     uint32_t    i;
+    testhat_t  *dict;
 
     atomic_store(&test_func, NULL);
     atomic_store(&mmm_nexttid, 0); // Reset thread ids.
 
+    dict = testhat_new(type);
+
     for (i = 0; i < num_threads; i++) {
         info[i].tid   = i;
         info[i].range = range;
+        info[i].dict  = dict;
         info[i].type  = type;
         info[i].iters = iters / num_threads;
         info[i].extra = extra;
@@ -238,6 +244,8 @@ time_test(test_func_t      func,
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
+
+    testhat_delete(dict);
 
     atomic_store(&test_func, NULL);
     clock_gettime(CLOCK_MONOTONIC, espec);
@@ -256,14 +264,17 @@ functionality_test(test_func_t func,
     test_info_t info[num_threads];
     uint32_t    i;
     uint64_t    res;
+    testhat_t  *dict;
 
     atomic_store(&test_func, NULL);
     atomic_store(&mmm_nexttid, 0); // Reset thread ids.
 
+    dict = testhat_new(type);
     for (i = 0; i < num_threads; i++) {
         info[i].tid   = i;
         info[i].range = range;
         info[i].type  = type;
+        info[i].dict  = dict;
         info[i].iters = iters / num_threads;
         info[i].extra = extra;
         pthread_create(&threads[i], NULL, start_one_thread, &info[i]);
@@ -276,6 +287,7 @@ functionality_test(test_func_t func,
             return false;
         }
     }
+    testhat_delete(dict);
 
     return true;
 }
@@ -404,7 +416,7 @@ run_time_test(char       *name,
             }
             tcount_ix++;
         }
-    } while (extra && extra[extra_ix++]);
+    } while (extra && extra[++extra_ix]);
 }
 
 static void
@@ -474,7 +486,7 @@ run_func_test(char       *name,
             }
             tcount_ix++;
         }
-    } while (extra && extra[extra_ix++]);
+    } while (extra && extra[++extra_ix]);
 }
 
 // Actual tests below here.
@@ -489,30 +501,26 @@ run_func_test(char       *name,
 bool
 test_basic(test_info_t *info)
 {
-    uint64_t   i;
-    testhat_t *dict = testhat_new(info->type);
+    uint64_t i;
 
     for (i = 0; i < info->range; i++) {
-        test_put(dict, i + 1, i + 1);
+        test_put(info->dict, i + 1, i + 1);
     }
     for (i = 0; i < (info->range / 2); i++) {
-        test_remove(dict, i + 1);
+        test_remove(info->dict, i + 1);
     }
     for (i = 0; i < (info->range / 2); i++) {
-        if (test_get(dict, i + 1)) {
+        if (test_get(info->dict, i + 1)) {
             fprintf(stderr, "didn't delete.\n");
-            testhat_delete(dict);
             return false;
         }
     }
     for (; i < info->range; i++) {
-        if (test_get(dict, i + 1) != i + 1) {
-            fprintf(stderr, "%u != %llu\n", test_get(dict, i + 1), i + 1);
-            testhat_delete(dict);
+        if (test_get(info->dict, i + 1) != i + 1) {
+            fprintf(stderr, "%u != %llu\n", test_get(info->dict, i + 1), i + 1);
             return false;
         }
     }
-    testhat_delete(dict);
     return true;
 }
 
@@ -530,24 +538,22 @@ test_ordering(test_info_t *info)
     uint32_t        k;
     uint32_t        v;
     hatrack_view_t *view;
-    testhat_t      *dict = testhat_new(info->type);
 
     for (i = 0; i < info->range; i++) {
-        test_put(dict, i + 1, i + 1);
+        test_put(info->dict, i + 1, i + 1);
     }
     for (i = 0; i < (info->range / 2); i++) {
-        test_remove(dict, i + 1);
+        test_remove(info->dict, i + 1);
     }
 
     for (i = 0; i < info->range; i++) {
-        test_put(dict, i + 1, i + 1);
+        test_put(info->dict, i + 1, i + 1);
     }
 
-    view = test_view(dict, &n);
+    view = test_view(info->dict, &n);
 
     if (n != info->range) {
         free(view);
-        testhat_delete(dict);
         return false;
     }
     for (i = 0; i < n; i++) {
@@ -555,17 +561,14 @@ test_ordering(test_info_t *info)
         v = (uint32_t)(((uint64_t)view[i].item) & 0xffffffff);
         if (k != v) {
             free(view);
-            testhat_delete(dict);
             return false;
         }
         if (((k + (info->range / 2)) % info->range) != i) {
             free(view);
-            testhat_delete(dict);
             return false;
         }
     }
     free(view);
-    testhat_delete(dict);
     return true;
 }
 
@@ -577,24 +580,21 @@ test_ordering(test_info_t *info)
 bool
 test_parallel(test_info_t *info)
 {
-    uint64_t   i, n;
-    testhat_t *dict = testhat_new(info->type);
+    uint64_t i, n;
 
     for (i = 0; i < info->range; i++) {
-        test_put(dict, i, i);
+        test_put(info->dict, i, i);
     }
 
     for (i = 0; i < info->range; i++) {
-        n = test_get(dict, i);
+        n = test_get(info->dict, i);
         if (n != i) {
             printf("%llu != %llu\n", n, i);
             printf("Is HATRACK_TEST_MAX_KEYS high enough?\n");
-            testhat_delete(dict);
             return false;
         }
     }
 
-    testhat_delete(dict);
     return true;
 }
 // [ rand() ]
@@ -616,36 +616,31 @@ test_rand_speed(test_info_t *info)
 bool
 test_insert_speed(test_info_t *info)
 {
-    uint32_t   i;
-    testhat_t *dict = testhat_new(info->type);
+    uint32_t i;
 
     for (i = 0; i < info->iters; i++) {
-        test_put(dict, i % info->range, test_rand() % info->range);
+        test_put(info->dict, i % info->range, test_rand() % info->range);
     }
 
-    testhat_delete(dict);
     return true;
 }
 
 bool
 test_write_speed(test_info_t *info)
 {
-    uint32_t   i;
-    uint32_t   key;
-    testhat_t *dict = testhat_new(info->type);
+    uint32_t i;
+    uint32_t key;
 
     for (i = 0; i < info->iters; i++) {
         key = test_rand() % info->range;
 
         if (!(test_rand() % info->extra)) {
-            test_remove(dict, key);
+            test_remove(info->dict, key);
         }
         else {
-            test_put(dict, key, key);
+            test_put(info->dict, key, key);
         }
     }
-
-    testhat_delete(dict);
 
     return true;
 }
@@ -653,13 +648,12 @@ test_write_speed(test_info_t *info)
 bool
 test_rw_speed(test_info_t *info)
 {
-    uint32_t   i;
-    uint32_t   key;
-    uint32_t   action;
-    uint32_t   delete_odds  = info->extra & 0xff;
-    uint32_t   write_odds   = info->extra >> 4;
-    uint32_t   nonread_odds = delete_odds + write_odds;
-    testhat_t *dict         = testhat_new(info->type);
+    uint32_t i;
+    uint32_t key;
+    uint32_t action;
+    uint32_t delete_odds  = info->extra & 0xff;
+    uint32_t write_odds   = info->extra >> 4;
+    uint32_t nonread_odds = delete_odds + write_odds;
 
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
@@ -667,18 +661,16 @@ test_rw_speed(test_info_t *info)
         if (action <= nonread_odds) {
             action = test_rand() % 100;
             if (action <= delete_odds) {
-                test_remove(dict, key);
+                test_remove(info->dict, key);
             }
             else {
-                test_put(dict, key, key);
+                test_put(info->dict, key, key);
             }
         }
         else {
-            key = test_get(dict, key);
+            key = test_get(info->dict, key);
         }
     }
-
-    testhat_delete(dict);
 
     return true;
 }
@@ -694,7 +686,6 @@ test_sort_speed(test_info_t *info)
     uint32_t        nonread_odds = delete_odds + write_odds;
     uint64_t        n;
     hatrack_view_t *v;
-    testhat_t      *dict = testhat_new(info->type);
 
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
@@ -702,22 +693,20 @@ test_sort_speed(test_info_t *info)
         if (action <= nonread_odds) {
             action = test_rand() % 100;
             if (action <= delete_odds) {
-                test_remove(dict, key);
+                test_remove(info->dict, key);
             }
             else {
-                test_put(dict, key, key);
+                test_put(info->dict, key, key);
             }
         }
         else {
-            key = test_get(dict, key);
+            key = test_get(info->dict, key);
         }
     }
     for (i = 0; i < info->iters / 100; i++) {
-        v = testhat_view(dict, &n);
+        v = testhat_view(info->dict, &n);
         free(v);
     }
-
-    testhat_delete(dict);
 
     return true;
 }
@@ -733,7 +722,6 @@ test_sort_contention(test_info_t *info)
     uint32_t        nonread_odds = delete_odds + write_odds;
     uint64_t        n;
     hatrack_view_t *v;
-    testhat_t      *dict = testhat_new(info->type);
 
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
@@ -741,23 +729,21 @@ test_sort_contention(test_info_t *info)
         if (action <= nonread_odds) {
             action = test_rand() % 100;
             if (action <= delete_odds) {
-                test_remove(dict, key);
+                test_remove(info->dict, key);
             }
             else {
-                test_put(dict, key, key);
+                test_put(info->dict, key, key);
             }
         }
         else {
-            key = test_get(dict, key);
+            key = test_get(info->dict, key);
         }
 
         if (!(i % 100)) {
-            v = testhat_view(dict, &n);
+            v = testhat_view(info->dict, &n);
             free(v);
         }
     }
-
-    testhat_delete(dict);
 
     return true;
 }
@@ -776,10 +762,10 @@ uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
 char *threadsafe_dicts[] = {
-    "hihat1", "swimcap", "lowhat0", "lowhat1", "lowhat2", NULL
+    "hihat1", "swimcap", "lowhat0", "lowhat1", /*"lowhat2",*/ NULL
 };
 char *all_dicts[]     = {
-    "refhat0", "swimcap", "hihat1", "lowhat0", "lowhat1", "lowhat2",  NULL
+    "refhat0",  "hihat1", "swimcap", "lowhat0", "lowhat1", /*"lowhat2",*/  NULL
 };
 char *st_dicts[]      = {
     "refhat0", NULL
@@ -826,7 +812,7 @@ main(int argc, char *argv[])
                   one_thread,
                   0);
     counters_output_delta();        
-    run_time_test("rand()-nt",
+    run_time_test("rand()-mt",
                   test_rand_speed,
                   DEFAULT_ITERS,
                   threadsafe_dicts,
@@ -842,7 +828,7 @@ main(int argc, char *argv[])
                   one_thread,
                   0);
     counters_output_delta();        
-    run_time_test("insert-nt",
+    run_time_test("insert-mt",
                   test_insert_speed,
                   DEFAULT_ITERS,
                   threadsafe_dicts,
@@ -858,7 +844,7 @@ main(int argc, char *argv[])
                   one_thread,
                   del_rate);
     counters_output_delta();        
-    run_time_test("writes-nt",
+    run_time_test("writes-mt",
                   test_write_speed,
                   DEFAULT_ITERS,
                   threadsafe_dicts,
@@ -874,7 +860,7 @@ main(int argc, char *argv[])
                   one_thread,
                   write_rates);
     counters_output_delta();        
-    run_time_test("rw speed-nt",
+    run_time_test("rw speed-mt",
                   test_rw_speed,
                   DEFAULT_ITERS,
 		  threadsafe_dicts,
@@ -890,7 +876,7 @@ main(int argc, char *argv[])
                   one_thread,
                   write_rates);
     counters_output_delta();
-    run_time_test("sorts-nt",
+    run_time_test("sorts-mt",
                   test_sort_speed,
                   DEFAULT_ITERS/10,
                   threadsafe_dicts,

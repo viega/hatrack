@@ -86,7 +86,7 @@ mmm_retire(void *ptr)
     }
 #endif
 
-    cell->retire_epoch = atomic_load(&mmm_epoch);
+    cell->retire_epoch = atomic_load(&mmm_epoch);//fetch_add(&mmm_epoch, 1);
     cell->next         = mmm_retire_list;
     mmm_retire_list    = cell;
 

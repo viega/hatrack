@@ -133,7 +133,7 @@
 typedef struct lowhat2_history_st lowhat2_history_t;
 
 struct lowhat2_history_st {
-    _Atomic hatrack_hash_t       hv;
+    alignas(32) _Atomic hatrack_hash_t hv;
     _Atomic(lowhat_record_t *)   head;
     _Atomic(lowhat2_history_t *) fwd;
 };
@@ -147,7 +147,7 @@ struct lowhat2_history_st {
 // a particular location in the other array.
 
 typedef struct {
-    _Atomic hatrack_hash_t       hv;
+    alignas(32) _Atomic hatrack_hash_t hv;
     _Atomic(lowhat2_history_t *) ptr;
 } lowhat2_indirect_t;
 
@@ -210,7 +210,7 @@ typedef struct {
 typedef struct lowhat2_store_st lowhat2_store_t;
 
 struct lowhat2_store_st {
-    uint64_t                     last_slot;
+    alignas(32) uint64_t last_slot;
     uint64_t                     threshold;
     _Atomic uint64_t             del_count;
     lowhat2_indirect_t          *ptr_buckets;
@@ -221,7 +221,7 @@ struct lowhat2_store_st {
 };
 
 typedef struct {
-    _Atomic(lowhat2_store_t *) store_current;
+    alignas(32) _Atomic(lowhat2_store_t *) store_current;
 } lowhat2_t;
 
 // clang-format off

@@ -131,7 +131,7 @@
 // applying the actual hash function.
 
 typedef struct {
-    _Atomic hatrack_hash_t     hv;
+    alignas(32) _Atomic hatrack_hash_t hv;
     _Atomic(lowhat_record_t *) head;
 } lowhat1_history_t;
 
@@ -144,7 +144,7 @@ typedef struct {
 // a particular location in the other array.
 
 typedef struct {
-    _Atomic hatrack_hash_t       hv;
+    alignas(32) _Atomic hatrack_hash_t hv;
     _Atomic(lowhat1_history_t *) ptr;
 } lowhat1_indirect_t;
 
@@ -207,7 +207,7 @@ typedef struct {
 typedef struct lowhat1_store_st lowhat1_store_t;
 
 struct lowhat1_store_st {
-    uint64_t                     last_slot;
+    alignas(32) uint64_t last_slot;
     uint64_t                     threshold;
     _Atomic uint64_t             del_count;
     lowhat1_indirect_t          *ptr_buckets;
@@ -218,7 +218,7 @@ struct lowhat1_store_st {
 };
 
 typedef struct {
-    _Atomic(lowhat1_store_t *) store_current;
+    alignas(32) _Atomic(lowhat1_store_t *) store_current;
 } lowhat1_t;
 
 // clang-format off

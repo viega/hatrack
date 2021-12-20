@@ -19,10 +19,6 @@ static hatrack_view_t  *lowhat2_store_view(lowhat2_store_t *, lowhat2_t *,
 static inline void      lowhat2_do_migration(lowhat2_store_t *,
 					     lowhat2_store_t *);
 
-#if defined(HATRACK_QSORT_THRESHOLD) || defined(HATRACK_ALWAYS_USE_QSORT)
-static int              lowhat2_quicksort_cmp(const void *, const void *);
-#endif
-
 #if !defined(HATRACK_DONT_SORT) && !defined(HATRACK_ALWAYS_USE_QSORT)
 static void             lowhat2_insertion_sort(hatrack_view_t *, uint64_t);
 #endif
@@ -34,7 +30,6 @@ lowhat2_init(lowhat2_t *self)
 {
     lowhat2_store_t *store = lowhat2_store_new(1 << HATRACK_MIN_SIZE_LOG);
 
-    mmm_commit_write(store);
     atomic_store(&self->store_current, store);
 }
 
@@ -170,6 +165,7 @@ lowhat2_store_new(uint64_t size)
         = store->hist_buckets + hatrack_compute_table_threshold(size);
     store->hist_next = store->hist_buckets;
 
+    mmm_commit_write(store);
     mmm_commit_write(store->hist_buckets);
     mmm_commit_write(store->ptr_buckets);
 
@@ -978,30 +974,19 @@ lowhat2_store_view(lowhat2_store_t *self,
     // good option.  Otherwise, we should use an insertion sort.
 #ifdef HATRACK_QSORT_THRESHOLD
     if (num_items >= HATRACK_QSORT_THRESHOLD) {
-        qsort(view, num_items, sizeof(hatrack_view_t), lowhat2_quicksort_cmp);
+        qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
     }
     else {
         lowhat2_insertion_sort(view, num_items);
     }
 #elif defined(HATRACK_ALWAYS_USE_QSORT)
-    qsort(view, num_items, sizeof(hatrack_view_t), lowhat2_quicksort_cmp);
+    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
 #elif !defined(HATRACK_DONT_SORT)
     lowhat2_insertion_sort(view, num_items);
 #endif
 
     return view;
 }
-
-#if defined(HATRACK_QSORT_THRESHOLD) || defined(HATRACK_ALWAYS_USE_QSORT)
-static int
-lowhat2_quicksort_cmp(const void *bucket1, const void *bucket2)
-{
-    hatrack_view_t *item1 = (hatrack_view_t *)bucket1;
-    hatrack_view_t *item2 = (hatrack_view_t *)bucket2;
-
-    return item1->sort_epoch - item2->sort_epoch;
-}
-#endif
 
 #if !defined(HATRACK_DONT_SORT) && !defined(HATRACK_ALWAYS_USE_QSORT)
 static inline void

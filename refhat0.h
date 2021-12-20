@@ -16,16 +16,16 @@
 #include "hatrack_common.h"
 
 typedef struct {
-    hatrack_hash_t hv;
-    void          *item;
-    bool           deleted;
+    alignas(32) hatrack_hash_t hv;
+    void *item;
+    bool  deleted;
 #ifndef HATRACK_DONT_SORT
     uint64_t epoch;
 #endif
 } refhat0_bucket_t;
 
 typedef struct {
-    uint64_t          last_slot;
+    alignas(32) uint64_t last_slot;
     uint64_t          threshold;
     uint64_t          used_count;
     uint64_t          item_count;

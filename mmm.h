@@ -326,7 +326,7 @@ typedef struct mmm_header_st mmm_header_t;
 // we need to cache that time in the create_epoch field.
 
 struct mmm_header_st {
-    mmm_header_t    *next;
+    alignas(32) mmm_header_t *next;
     _Atomic uint64_t create_epoch;
     _Atomic uint64_t write_epoch;
     uint64_t         retire_epoch;
@@ -336,8 +336,8 @@ struct mmm_header_st {
 typedef struct mmm_free_tids_st mmm_free_tids_t;
 
 struct mmm_free_tids_st {
-    mmm_free_tids_t *next;
-    uint64_t         tid;
+    alignas(32) mmm_free_tids_t *next;
+    uint64_t tid;
 };
 
 void mmm_register_thread(void);

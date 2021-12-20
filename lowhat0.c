@@ -19,7 +19,6 @@ static hatrack_view_t   *lowhat0_store_view(lowhat0_store_t *, lowhat0_t *,
 					    uint64_t, uint64_t *);
 static inline void       lowhat0_do_migration(lowhat0_store_t *,
 					      lowhat0_store_t *);
-static int               lowhat0_quicksort_cmp(const void *, const void *);
 
 // clang-format on
 
@@ -28,7 +27,6 @@ lowhat0_init(lowhat0_t *self)
 {
     lowhat0_store_t *store = lowhat0_store_new(1 << HATRACK_MIN_SIZE_LOG);
 
-    mmm_commit_write(store);
     atomic_store(&self->store_current, store);
 }
 
@@ -146,6 +144,7 @@ lowhat0_store_new(uint64_t size)
     store->hist_buckets
         = (lowhat0_history_t *)mmm_alloc(sizeof(lowhat0_history_t) * size);
 
+    mmm_commit_write(store);
     mmm_commit_write(store->hist_buckets);
 
     return store;
@@ -753,16 +752,7 @@ lowhat0_store_view(lowhat0_store_t *self,
 
     // Unordered buckets should be in random order, so quicksort is a
     // good option.
-    qsort(view, num_items, sizeof(hatrack_view_t), lowhat0_quicksort_cmp);
+    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
 
     return view;
-}
-
-static int
-lowhat0_quicksort_cmp(const void *bucket1, const void *bucket2)
-{
-    hatrack_view_t *item1 = (hatrack_view_t *)bucket1;
-    hatrack_view_t *item2 = (hatrack_view_t *)bucket2;
-
-    return item1->sort_epoch - item2->sort_epoch;
 }
