@@ -176,11 +176,11 @@ test_init()
 }
 
 typedef struct {
-    uint32_t   tid;
-    testhat_t *dict;
-    uint32_t   range; // Specifies range of keys and values, 0 - range-1
-    uint32_t   iters; // Number of times to run the test;
-    uint32_t   extra;
+    uint32_t tid;
+    char    *type;
+    uint32_t range; // Specifies range of keys and values, 0 - range-1
+    uint32_t iters; // Number of times to run the test;
+    uint32_t extra;
 } test_info_t;
 
 typedef bool (*test_func_t)(test_info_t *);
@@ -207,8 +207,8 @@ start_one_thread(void *info)
 static uint32_t
 time_test(test_func_t      func,
           uint32_t         iters,
+          char            *type,
           uint32_t         num_threads,
-          testhat_t       *dict,
           uint32_t         range,
           uint32_t         extra,
           struct timespec *sspec,
@@ -224,8 +224,8 @@ time_test(test_func_t      func,
 
     for (i = 0; i < num_threads; i++) {
         info[i].tid   = i;
-        info[i].dict  = dict;
         info[i].range = range;
+        info[i].type  = type;
         info[i].iters = iters / num_threads;
         info[i].extra = extra;
         pthread_create(&threads[i], NULL, start_one_thread, &info[i]);
@@ -238,6 +238,8 @@ time_test(test_func_t      func,
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
+
+    atomic_store(&test_func, NULL);
     clock_gettime(CLOCK_MONOTONIC, espec);
     return clock() - start;
 }
@@ -246,8 +248,8 @@ static bool
 functionality_test(test_func_t func,
                    uint32_t    iters,
                    uint32_t    num_threads,
-                   testhat_t  *dict,
                    uint32_t    range,
+                   char       *type,
                    uint32_t    extra)
 {
     pthread_t   threads[num_threads];
@@ -260,8 +262,8 @@ functionality_test(test_func_t func,
 
     for (i = 0; i < num_threads; i++) {
         info[i].tid   = i;
-        info[i].dict  = dict;
         info[i].range = range;
+        info[i].type  = type;
         info[i].iters = iters / num_threads;
         info[i].extra = extra;
         pthread_create(&threads[i], NULL, start_one_thread, &info[i]);
@@ -287,20 +289,17 @@ run_one_time_test(char       *name,
                   uint32_t    thread_count,
                   uint32_t    extra)
 {
-    testhat_t      *dict = NULL;
     uint32_t        ticks;
     double          walltime;
     struct timespec sspec;
     struct timespec espec;
 
-    dict = testhat_new(type);
-
     fprintf(stderr, "%10s:\t", type);
     fflush(stderr);
     ticks    = time_test(func,
                       iters,
+                      type,
                       thread_count,
-                      dict,
                       range,
                       extra,
                       &sspec,
@@ -312,8 +311,6 @@ run_one_time_test(char       *name,
             walltime,
             ticks,
             (double)(((double)ticks) / (double)iters));
-
-    testhat_delete(dict);
 }
 
 static void
@@ -325,20 +322,17 @@ run_one_func_test(char       *name,
                   uint32_t    thread_count,
                   uint32_t    extra)
 {
-    testhat_t *dict = testhat_new(type);
-    bool       ret;
+    bool ret;
 
     fprintf(stderr, "%10s:\t", type);
     fflush(stderr);
-    ret = functionality_test(func, iters, thread_count, dict, range, extra);
+    ret = functionality_test(func, iters, thread_count, range, type, extra);
     if (ret) {
         fprintf(stderr, "pass\n");
     }
     else {
         fprintf(stderr, "FAIL\n");
     }
-
-    testhat_delete(dict);
 }
 
 static void
@@ -393,13 +387,18 @@ run_time_test(char       *name,
                             tcounts[tcount_ix],
                             iters,
                             ranges[range_ix]);
-                    run_one_time_test(name,
-                                      func,
-                                      iters,
-                                      types[dict_ix],
-                                      ranges[range_ix],
-                                      tcounts[tcount_ix],
-                                      0);
+                    dict_ix = 0;
+
+                    while (types[dict_ix]) {
+                        run_one_time_test(name,
+                                          func,
+                                          iters,
+                                          types[dict_ix],
+                                          ranges[range_ix],
+                                          tcounts[tcount_ix],
+                                          0);
+                        dict_ix++;
+                    }
                 }
                 range_ix++;
             }
@@ -459,13 +458,17 @@ run_func_test(char       *name,
                             tcounts[tcount_ix],
                             iters,
                             ranges[range_ix]);
-                    run_one_func_test(name,
-                                      func,
-                                      iters,
-                                      types[dict_ix],
-                                      ranges[range_ix],
-                                      tcounts[tcount_ix],
-                                      0);
+                    dict_ix = 0;
+                    while (types[dict_ix]) {
+                        run_one_func_test(name,
+                                          func,
+                                          iters,
+                                          types[dict_ix],
+                                          ranges[range_ix],
+                                          tcounts[tcount_ix],
+                                          0);
+                        dict_ix++;
+                    }
                 }
                 range_ix++;
             }
@@ -486,27 +489,30 @@ run_func_test(char       *name,
 bool
 test_basic(test_info_t *info)
 {
-    uint64_t i;
+    uint64_t   i;
+    testhat_t *dict = testhat_new(info->type);
 
     for (i = 0; i < info->range; i++) {
-        test_put(info->dict, i + 1, i + 1);
+        test_put(dict, i + 1, i + 1);
     }
     for (i = 0; i < (info->range / 2); i++) {
-        test_remove(info->dict, i + 1);
+        test_remove(dict, i + 1);
     }
     for (i = 0; i < (info->range / 2); i++) {
-        if (test_get(info->dict, i + 1)) {
+        if (test_get(dict, i + 1)) {
             fprintf(stderr, "didn't delete.\n");
+            testhat_delete(dict);
             return false;
         }
     }
     for (; i < info->range; i++) {
-        if (test_get(info->dict, i + 1) != i + 1) {
-            fprintf(stderr, "%u != %llu\n", test_get(info->dict, i + 1), i + 1);
+        if (test_get(dict, i + 1) != i + 1) {
+            fprintf(stderr, "%u != %llu\n", test_get(dict, i + 1), i + 1);
+            testhat_delete(dict);
             return false;
         }
     }
-
+    testhat_delete(dict);
     return true;
 }
 
@@ -524,22 +530,24 @@ test_ordering(test_info_t *info)
     uint32_t        k;
     uint32_t        v;
     hatrack_view_t *view;
+    testhat_t      *dict = testhat_new(info->type);
 
     for (i = 0; i < info->range; i++) {
-        test_put(info->dict, i + 1, i + 1);
+        test_put(dict, i + 1, i + 1);
     }
     for (i = 0; i < (info->range / 2); i++) {
-        test_remove(info->dict, i + 1);
+        test_remove(dict, i + 1);
     }
 
     for (i = 0; i < info->range; i++) {
-        test_put(info->dict, i + 1, i + 1);
+        test_put(dict, i + 1, i + 1);
     }
 
-    view = test_view(info->dict, &n);
+    view = test_view(dict, &n);
 
     if (n != info->range) {
         free(view);
+        testhat_delete(dict);
         return false;
     }
     for (i = 0; i < n; i++) {
@@ -547,14 +555,17 @@ test_ordering(test_info_t *info)
         v = (uint32_t)(((uint64_t)view[i].item) & 0xffffffff);
         if (k != v) {
             free(view);
+            testhat_delete(dict);
             return false;
         }
         if (((k + (info->range / 2)) % info->range) != i) {
             free(view);
+            testhat_delete(dict);
             return false;
         }
     }
     free(view);
+    testhat_delete(dict);
     return true;
 }
 
@@ -566,21 +577,24 @@ test_ordering(test_info_t *info)
 bool
 test_parallel(test_info_t *info)
 {
-    uint64_t i, n;
+    uint64_t   i, n;
+    testhat_t *dict = testhat_new(info->type);
 
     for (i = 0; i < info->range; i++) {
-        test_put(info->dict, i, i);
+        test_put(dict, i, i);
     }
 
     for (i = 0; i < info->range; i++) {
-        n = test_get(info->dict, i);
+        n = test_get(dict, i);
         if (n != i) {
             printf("%llu != %llu\n", n, i);
             printf("Is HATRACK_TEST_MAX_KEYS high enough?\n");
+            testhat_delete(dict);
             return false;
         }
     }
 
+    testhat_delete(dict);
     return true;
 }
 // [ rand() ]
@@ -602,30 +616,36 @@ test_rand_speed(test_info_t *info)
 bool
 test_insert_speed(test_info_t *info)
 {
-    uint32_t i;
+    uint32_t   i;
+    testhat_t *dict = testhat_new(info->type);
+
     for (i = 0; i < info->iters; i++) {
-        test_put(info->dict, i % info->range, test_rand() % info->range);
+        test_put(dict, i % info->range, test_rand() % info->range);
     }
 
+    testhat_delete(dict);
     return true;
 }
 
 bool
 test_write_speed(test_info_t *info)
 {
-    uint32_t i;
-    uint32_t key;
+    uint32_t   i;
+    uint32_t   key;
+    testhat_t *dict = testhat_new(info->type);
 
     for (i = 0; i < info->iters; i++) {
         key = test_rand() % info->range;
 
         if (!(test_rand() % info->extra)) {
-            test_remove(info->dict, key);
+            test_remove(dict, key);
         }
         else {
-            test_put(info->dict, key, key);
+            test_put(dict, key, key);
         }
     }
+
+    testhat_delete(dict);
 
     return true;
 }
@@ -633,12 +653,13 @@ test_write_speed(test_info_t *info)
 bool
 test_rw_speed(test_info_t *info)
 {
-    uint32_t i;
-    uint32_t key;
-    uint32_t action;
-    uint32_t delete_odds  = info->extra & 0xff;
-    uint32_t write_odds   = info->extra >> 4;
-    uint32_t nonread_odds = delete_odds + write_odds;
+    uint32_t   i;
+    uint32_t   key;
+    uint32_t   action;
+    uint32_t   delete_odds  = info->extra & 0xff;
+    uint32_t   write_odds   = info->extra >> 4;
+    uint32_t   nonread_odds = delete_odds + write_odds;
+    testhat_t *dict         = testhat_new(info->type);
 
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
@@ -646,16 +667,19 @@ test_rw_speed(test_info_t *info)
         if (action <= nonread_odds) {
             action = test_rand() % 100;
             if (action <= delete_odds) {
-                test_remove(info->dict, key);
+                test_remove(dict, key);
             }
             else {
-                test_put(info->dict, key, key);
+                test_put(dict, key, key);
             }
         }
         else {
-            key = test_get(info->dict, key);
+            key = test_get(dict, key);
         }
     }
+
+    testhat_delete(dict);
+
     return true;
 }
 
@@ -670,6 +694,7 @@ test_sort_speed(test_info_t *info)
     uint32_t        nonread_odds = delete_odds + write_odds;
     uint64_t        n;
     hatrack_view_t *v;
+    testhat_t      *dict = testhat_new(info->type);
 
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
@@ -677,20 +702,22 @@ test_sort_speed(test_info_t *info)
         if (action <= nonread_odds) {
             action = test_rand() % 100;
             if (action <= delete_odds) {
-                test_remove(info->dict, key);
+                test_remove(dict, key);
             }
             else {
-                test_put(info->dict, key, key);
+                test_put(dict, key, key);
             }
         }
         else {
-            key = test_get(info->dict, key);
+            key = test_get(dict, key);
         }
     }
     for (i = 0; i < info->iters / 100; i++) {
-        v = testhat_view(info->dict, &n);
+        v = testhat_view(dict, &n);
         free(v);
     }
+
+    testhat_delete(dict);
 
     return true;
 }
@@ -706,6 +733,7 @@ test_sort_contention(test_info_t *info)
     uint32_t        nonread_odds = delete_odds + write_odds;
     uint64_t        n;
     hatrack_view_t *v;
+    testhat_t      *dict = testhat_new(info->type);
 
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
@@ -713,21 +741,24 @@ test_sort_contention(test_info_t *info)
         if (action <= nonread_odds) {
             action = test_rand() % 100;
             if (action <= delete_odds) {
-                test_remove(info->dict, key);
+                test_remove(dict, key);
             }
             else {
-                test_put(info->dict, key, key);
+                test_put(dict, key, key);
             }
         }
         else {
-            key = test_get(info->dict, key);
+            key = test_get(dict, key);
         }
 
         if (!(i % 100)) {
-            v = testhat_view(info->dict, &n);
+            v = testhat_view(dict, &n);
             free(v);
         }
     }
+
+    testhat_delete(dict);
+
     return true;
 }
 
@@ -740,15 +771,15 @@ uint32_t            large_sizes[]   = {100000, 1000000, 0};
 uint32_t            shrug_sizes[]   = {1, 0};
 uint32_t            small_size[]    = {10, 0};
 uint32_t            one_thread[]    = {1, 0};
-uint32_t            basic_threads[] = {2, 4, 10, 20, 0};
+uint32_t            basic_threads[] = {2, 4, 10, 20, 100, 0};
 uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
 char *threadsafe_dicts[] = {
-    "hihat1", "lowhat0", "lowhat1", "lowhat2", NULL
+    "hihat1", "swimcap", "lowhat0", "lowhat1", "lowhat2", NULL
 };
 char *all_dicts[]     = {
-    "refhat0", "hihat1", "lowhat0", "lowhat1", "lowhat2", NULL
+    "refhat0", "swimcap", "hihat1", "lowhat0", "lowhat1", "lowhat2",  NULL
 };
 char *st_dicts[]      = {
     "refhat0", NULL
@@ -757,13 +788,12 @@ char *st_dicts[]      = {
 //  clang-format on
 
 #ifndef DEFAULT_ITERS
-#define DEFAULT_ITERS 100000
+#define DEFAULT_ITERS 1000000
 #endif
 int
 main(int argc, char *argv[])
 {
     test_init();
-
     run_func_test("basic",
                   test_basic,
                   1,
@@ -859,7 +889,7 @@ main(int argc, char *argv[])
                   sort_sizes,
                   one_thread,
                   write_rates);
-    counters_output_delta();    
+    counters_output_delta();
     run_time_test("sorts-nt",
                   test_sort_speed,
                   DEFAULT_ITERS/10,

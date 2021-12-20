@@ -153,6 +153,16 @@ hatrack_vtable_t lowhat2_vtable = {
     .view   = (hatrack_view_func)lowhat2_view
 };
 
+hatrack_vtable_t swimcap_vtable = {
+    .init   = (hatrack_init_func)swimcap_init,
+    .get    = (hatrack_get_func)swimcap_get,
+    .put    = (hatrack_put_func)swimcap_base_put,
+    .remove = (hatrack_remove_func)swimcap_remove,
+    .delete = (hatrack_delete_func)swimcap_delete,
+    .len    = (hatrack_len_func)swimcap_len,
+    .view   = (hatrack_view_func)swimcap_view
+};
+
 // clang-format on
 
 static void
@@ -163,4 +173,5 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("lowhat0", &lowhat0_vtable, sizeof(lowhat0_t));
     testhat_register_algorithm("lowhat1", &lowhat1_vtable, sizeof(lowhat1_t));
     testhat_register_algorithm("lowhat2", &lowhat2_vtable, sizeof(lowhat2_t));
+    testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
 }

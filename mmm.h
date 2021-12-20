@@ -92,7 +92,7 @@ extern uint64_t         mmm_reservations[MMM_THREADS_MAX];
 // require it.  That's controlled with the MMM_ALLOW_TID_GIVEBACKS
 // preprocessor variable.
 
-extern __thread uint64_t       mmm_mytid;
+extern __thread int64_t        mmm_mytid;
 extern __thread pthread_once_t mmm_inited;
 
 // This epoch system was inspired by my research into what was out
@@ -479,4 +479,5 @@ mmm_get_create_epoch(void *ptr)
     return header->create_epoch ? header->create_epoch : header->write_epoch;
 }
 
+void mmm_reset_tids(void);
 #endif

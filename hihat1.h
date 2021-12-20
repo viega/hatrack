@@ -56,7 +56,6 @@ struct hihat1_store_st {
 };
 
 typedef struct {
-    hatrack_vtable_t          vtable;
     uint64_t                  epoch;
     _Atomic(hihat1_store_t *) store_current;
 } hihat1_t;

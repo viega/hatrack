@@ -19,6 +19,7 @@
 #include "lowhat0.h"
 #include "lowhat1.h"
 #include "lowhat2.h"
+#include "swimcap.h"
 
 typedef struct {
     hatrack_vtable_t vtable;

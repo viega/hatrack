@@ -5,7 +5,7 @@
 __thread pthread_once_t mmm_inited       = PTHREAD_ONCE_INIT;
 _Atomic  uint64_t       mmm_epoch        = ATOMIC_VAR_INIT(MMM_EPOCH_FIRST);
 _Atomic  uint64_t       mmm_nexttid      = ATOMIC_VAR_INIT(0);
-__thread uint64_t       mmm_mytid        = -1; 
+__thread int64_t        mmm_mytid        = -1; 
 __thread uint64_t       mmm_retire_ctr   = 0;
 __thread mmm_header_t  *mmm_retire_list  = NULL;
          uint64_t       mmm_reservations[MMM_THREADS_MAX] = { 0, };
@@ -36,7 +36,7 @@ mmm_register_thread(void)
 {
     mmm_free_tids_t *head;
 
-    if (mmm_mytid != (uint64_t)-1) {
+    if (mmm_mytid != -1) {
 	return;
     }
     mmm_mytid = atomic_fetch_add(&mmm_nexttid, 1);
@@ -99,10 +99,13 @@ mmm_retire(void *ptr)
 // For now, our cleanup function spins until it is able to retire
 // everything on its list. Soon, when we start worrying about thread
 // kills, we will change this to add its contents to an "ophan" list.
-
 void
 mmm_clean_up_before_exit(void)
 {
+    if (mmm_mytid == -1) {
+	return;
+    }
+
     mmm_end_op();
     
     while (mmm_retire_list) {
@@ -195,4 +198,9 @@ mmm_empty(void)
 	HATRACK_FREE_CTR();
 	free(tmp);
     }
+}
+
+void mmm_reset_tids(void)
+{
+    atomic_store(&mmm_nexttid, 0);
 }

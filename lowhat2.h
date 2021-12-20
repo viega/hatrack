@@ -221,7 +221,6 @@ struct lowhat2_store_st {
 };
 
 typedef struct {
-    hatrack_vtable_t           vtable;
     _Atomic(lowhat2_store_t *) store_current;
 } lowhat2_t;
 

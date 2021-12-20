@@ -25,7 +25,6 @@ typedef struct {
 } refhat0_bucket_t;
 
 typedef struct {
-    hatrack_vtable_t  vtable;
     uint64_t          last_slot;
     uint64_t          threshold;
     uint64_t          used_count;
