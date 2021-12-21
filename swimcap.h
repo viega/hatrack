@@ -52,7 +52,7 @@ swimcap_reader_enter(swimcap_t *self)
     // atomically read the pointer to the store and register our
     // reference to the store, we are fine. As an alternative, we
     // could do this without locks using a 128-bit CAS that holds the
-    // pointer.
+    // pointer, or use mmm_alloc() for the stores.
     pthread_mutex_lock(&self->write_mutex);
     ret = self->store;
     atomic_fetch_add(&ret->readers, 1);

@@ -16,6 +16,7 @@
 
 #include "refhat0.h"
 #include "hihat1.h"
+#include "hihat64.h"
 #include "lowhat0.h"
 #include "lowhat1.h"
 #include "lowhat2.h"

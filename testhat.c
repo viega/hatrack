@@ -123,6 +123,17 @@ hatrack_vtable_t hihat1_vtable = {
     .view   = (hatrack_view_func)hihat1_view
 };
 
+
+hatrack_vtable_t hihat64_vtable = {
+    .init   = (hatrack_init_func)hihat64_init,
+    .get    = (hatrack_get_func)hihat64_get,
+    .put    = (hatrack_put_func)hihat64_put,
+    .remove = (hatrack_remove_func)hihat64_remove,
+    .delete = (hatrack_delete_func)hihat64_delete,
+    .len    = (hatrack_len_func)hihat64_len,
+    .view   = (hatrack_view_func)hihat64_view
+};
+
 hatrack_vtable_t lowhat0_vtable = {
     .init   = (hatrack_init_func)lowhat0_init,
     .get    = (hatrack_get_func)lowhat0_get,
@@ -170,6 +181,7 @@ testhat_init_default_algorithms()
 {
     testhat_register_algorithm("refhat0", &refhat0_vtable, sizeof(refhat0_t));
     testhat_register_algorithm("hihat1", &hihat1_vtable, sizeof(hihat1_t));
+    testhat_register_algorithm("hihat64", &hihat64_vtable, sizeof(hihat64_t));
     testhat_register_algorithm("lowhat0", &lowhat0_vtable, sizeof(lowhat0_t));
     testhat_register_algorithm("lowhat1", &lowhat1_vtable, sizeof(lowhat1_t));
     testhat_register_algorithm("lowhat2", &lowhat2_vtable, sizeof(lowhat2_t));

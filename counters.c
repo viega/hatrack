@@ -80,7 +80,19 @@ char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
     "hi1 len installed",        // 57
     "hi1 store installs",       // 58
     "hi1 woke up to no job",    // 59
-
+    "hi64 bucket acquires",     // 60
+    "hi64 bucket acquires 2",   // 61
+    "hi64 record installs",     // 62
+    "hi64 record deletes",      // 63
+    "hi64 store creates",       // 64
+    "hi64 store installs",      // 65    
+    "hi64 F_MOVING set",        // 66
+    "hi64 F_MOVED (empty)",     // 67
+    "hi64 migrate hash",        // 68
+    "hi64 migrate hash 2",      // 69
+    "hi64 migrate record",      // 70
+    "hi64 F_MOVE (migrate)",    // 71
+    "hi64 len installed",       // 72
 };
 
 // clang-format on

@@ -1,4 +1,5 @@
 #include "mmm.h"
+#include "hatrack_common.h"
 
 // clang-format off
 
@@ -24,6 +25,8 @@ mmm_register_thread(void)
 	abort();
     }
 
+    DEBUG("registered thread");
+    
     mmm_reservations[mmm_mytid] = MMM_EPOCH_UNRESERVED;
 }
 
@@ -71,25 +74,34 @@ mmm_tid_giveback(void)
 }
 #endif /* MMM_ALLOW_TID_GIVEBACKS */
 
-
 void
 mmm_retire(void *ptr)
 {
     mmm_header_t *cell = mmm_get_header(ptr);
 
-#if 1
+#ifdef HATRACK_DEBUG
+    if (hatrack_pflag_test(ptr, 0x07)) {
+	DEBUG_MMM(ptr, "Bad alignment on retired pointer.");
+	abort();
+    }
+#endif
+    
     // Avoid multiple threads adding this to their retire list.
     // Since retire_epoch is meant to only be accessed by a single
     // thread at once, we really should make this atomic.
     if (cell->retire_epoch) {
+#ifdef HATRACK_DEBUG
+	DEBUG_MMM(ptr, "Double free");
+	abort();
+#endif	
 	return;
     }
-#endif
-
-    cell->retire_epoch = atomic_load(&mmm_epoch);//fetch_add(&mmm_epoch, 1);
+    cell->retire_epoch = atomic_load(&mmm_epoch);
     cell->next         = mmm_retire_list;
     mmm_retire_list    = cell;
 
+    DEBUG_MMM(cell->data, "mmm_retire()");
+    
     if (++mmm_retire_ctr & MMM_RETIRE_FREQ) {
 	mmm_retire_ctr = 0;
 	mmm_empty();
@@ -196,6 +208,7 @@ mmm_empty(void)
 	tmp  = cell;
 	cell = cell->next;
 	HATRACK_FREE_CTR();
+	DEBUG_MMM(tmp->data, "mmm_empty::free (w epoch data)");
 	free(tmp);
     }
 }

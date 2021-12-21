@@ -27,21 +27,34 @@
 #ifndef __MMM_H__
 #define __MMM_H__
 
-#include "counters.h"
-
-#ifdef HATRACK_MMMALLOC_CTRS
-#define HATRACK_MALLOC_CTR()        HATRACK_CTR(MMM_CTR_MALLOCS)
-#define HATRACK_FREE_CTR()          HATRACK_CTR(MMM_CTR_FREES)
-#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(MMM_CTR_RETIRE_UNUSED)
-#else
-#define HATRACK_MALLOC_CTR()
-#define HATRACK_FREE_CTR()
-#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(MMM_CTR_RETIRE_UNUSED)
-#endif
-
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <stdalign.h>
+
+#include "debug.h"
+
+typedef struct mmm_header_st mmm_header_t;
+static inline mmm_header_t  *mmm_get_header(void *);
+static inline void           hatrack_debug_mmm(void *, char *);
+
+// The header data structure. Note that we keep a linked list of
+// "retired" records, which is the purpose of the field 'next'.  The
+// 'data' field is a mere convenience for returning the non-hidden
+// part of an allocation.
+//
+// Note that, when we perform an overwrite, since we want to preserve
+// ordering, we need to know the original create time. Since we want
+// to be able to free the old records from the original creation,
+// we need to cache that time in the create_epoch field.
+
+struct mmm_header_st {
+    alignas(32) mmm_header_t *next;
+    _Atomic uint64_t create_epoch;
+    _Atomic uint64_t write_epoch;
+    uint64_t         retire_epoch;
+    uint8_t          data[];
+};
 
 // This algorithm keeps an array of thread reader epochs that's shared
 // across threads. The basic idea is that each reader writes the
@@ -94,6 +107,24 @@ extern uint64_t         mmm_reservations[MMM_THREADS_MAX];
 
 extern __thread int64_t        mmm_mytid;
 extern __thread pthread_once_t mmm_inited;
+
+#define MMM_DEBUG
+#ifdef MMM_DEBUG
+#include <stdio.h>
+#endif
+
+#include "counters.h"
+#include "debug.h"
+
+#ifdef HATRACK_MMMALLOC_CTRS
+#define HATRACK_MALLOC_CTR()        HATRACK_CTR(MMM_CTR_MALLOCS)
+#define HATRACK_FREE_CTR()          HATRACK_CTR(MMM_CTR_FREES)
+#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(MMM_CTR_RETIRE_UNUSED)
+#else
+#define HATRACK_MALLOC_CTR()
+#define HATRACK_FREE_CTR()
+#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(MMM_CTR_RETIRE_UNUSED)
+#endif
 
 // This epoch system was inspired by my research into what was out
 // there that would be faster and easier to use than hazard
@@ -313,26 +344,6 @@ enum : uint64_t
     MMM_EPOCH_MAX          = 0xffffffffffffffff
 };
 
-typedef struct mmm_header_st mmm_header_t;
-
-// The header data structure. Note that we keep a linked list of
-// "retired" records, which is the purpose of the field 'next'.  The
-// 'data' field is a mere convenience for returning the non-hidden
-// part of an allocation.
-//
-// Note that, when we perform an overwrite, since we want to preserve
-// ordering, we need to know the original create time. Since we want
-// to be able to free the old records from the original creation,
-// we need to cache that time in the create_epoch field.
-
-struct mmm_header_st {
-    alignas(32) mmm_header_t *next;
-    _Atomic uint64_t create_epoch;
-    _Atomic uint64_t write_epoch;
-    uint64_t         retire_epoch;
-    uint8_t          data[];
-};
-
 typedef struct mmm_free_tids_st mmm_free_tids_t;
 
 struct mmm_free_tids_st {
@@ -343,6 +354,12 @@ struct mmm_free_tids_st {
 void mmm_register_thread(void);
 void mmm_retire(void *);
 void mmm_clean_up_before_exit(void);
+
+#ifdef HATRACK_DEBUG
+#define DEBUG_MMM(x, y) hatrack_debug_mmm((void *)(x), y)
+#else
+#define DEBUG_MMM(x, y)
+#endif
 
 #ifdef MMM_ALLOW_TID_GIVEBACKS
 void mmm_tid_giveback(void);
@@ -446,7 +463,18 @@ mmm_alloc(uint64_t size)
     mmm_header_t *item = (mmm_header_t *)calloc(1, sizeof(mmm_header_t) + size);
 
     HATRACK_MALLOC_CTR();
+    DEBUG_MMM(item->data, "mmm_alloc");
+    return (void *)item->data;
+}
 
+static inline void *
+mmm_alloc_committed(uint64_t size)
+{
+    mmm_header_t *item = (mmm_header_t *)calloc(1, sizeof(mmm_header_t) + size);
+
+    atomic_store(&item->write_epoch, atomic_fetch_add(&mmm_epoch, 1) + 1);
+    HATRACK_MALLOC_CTR();
+    DEBUG_MMM(item->data, "mmm_alloc_committed");
     return (void *)item->data;
 }
 
@@ -456,6 +484,7 @@ mmm_alloc(uint64_t size)
 static inline void
 mmm_retire_unused(void *ptr)
 {
+    DEBUG_MMM(ptr, "mmm_retire_unused");
     free(mmm_get_header(ptr));
     HATRACK_RETIRE_UNUSED_CTR();
 }
@@ -480,4 +509,75 @@ mmm_get_create_epoch(void *ptr)
 }
 
 void mmm_reset_tids(void);
+
+#ifdef HATRACK_DEBUG
+
+// Epochs are truncated to this many hex digits for brevity.
+#ifndef HATRACK_EPOCH_DEBUG_LEN
+#define HATRACK_EPOCH_DEBUG_LEN 8
+#endif
+
+static inline void
+hatrack_debug_mmm(void *addr, char *msg)
+{
+    static const char rest[] = " :)  :r , :w , :c( :x0";
+    mmm_header_t     *hdr    = mmm_get_header(addr);
+    ;
+    char buf[HATRACK_DEBUG_MSG_SIZE] = {
+        '0',
+        'x',
+    };
+    char *p
+        = buf + (HATRACK_PTR_CHRS + 3 * HATRACK_EPOCH_DEBUG_LEN + sizeof(rest));
+    const char *r = &rest[0];
+    uint64_t    i;
+    uintptr_t   n;
+
+    strncpy(p, msg, HATRACK_DEBUG_MSG_SIZE - (p - buf));
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    n    = hdr->retire_epoch;
+    for (i = 0; i < HATRACK_EPOCH_DEBUG_LEN; i++) {
+        *--p = __hatrack_hex_conversion_table[n & 0xf];
+        n >>= 4;
+    }
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    n    = hdr->write_epoch;
+    for (i = 0; i < HATRACK_EPOCH_DEBUG_LEN; i++) {
+        *--p = __hatrack_hex_conversion_table[n & 0xf];
+        n >>= 4;
+    }
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    n    = hdr->create_epoch;
+    for (i = 0; i < HATRACK_EPOCH_DEBUG_LEN; i++) {
+        *--p = __hatrack_hex_conversion_table[n & 0xf];
+        n >>= 4;
+    }
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    *--p = *r++;
+    n    = (intptr_t)addr;
+    for (i = 0; i < HATRACK_PTR_CHRS; i++) {
+        *--p = __hatrack_hex_conversion_table[n & 0xf];
+        n >>= 4;
+    }
+    *--p = *r++;
+    *--p = *r++;
+    hatrack_debug(buf);
+}
+#endif
+
 #endif

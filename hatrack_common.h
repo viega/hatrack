@@ -99,7 +99,7 @@ hatrack_bucket_unreserved(hatrack_hash_t *hv)
 static inline uint64_t
 hatrack_bucket_index(hatrack_hash_t *hv, uint64_t last_slot)
 {
-    return hv->w2 & last_slot;
+    return hv->w1 & last_slot;
 }
 
 // Inline to hide the pointer casting.

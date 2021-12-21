@@ -762,10 +762,10 @@ uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
 char *threadsafe_dicts[] = {
-    "hihat1", "swimcap", "lowhat0", "lowhat1", /*"lowhat2",*/ NULL
+    "hihat1", "hihat64", "swimcap", "lowhat0", "lowhat1", /*"lowhat2",*/ NULL
 };
 char *all_dicts[]     = {
-    "refhat0",  "hihat1", "swimcap", "lowhat0", "lowhat1", /*"lowhat2",*/  NULL
+    "refhat0",  "hihat1", "hihat64", "swimcap", "lowhat0", "lowhat1", /*"lowhat2",*/  NULL
 };
 char *st_dicts[]      = {
     "refhat0", NULL
@@ -777,7 +777,7 @@ char *st_dicts[]      = {
 #define DEFAULT_ITERS 1000000
 #endif
 int
-main(int argc, char *argv[])
+main(int argc, char *argv[], char *envp[])
 {
     test_init();
     run_func_test("basic",
