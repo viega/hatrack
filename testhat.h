@@ -21,6 +21,7 @@
 #include "lowhat1.h"
 #include "lowhat2.h"
 #include "swimcap.h"
+#include "swimcap2.h"
 
 typedef struct {
     hatrack_vtable_t vtable;
