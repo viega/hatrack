@@ -22,6 +22,7 @@
 #include "lowhat2.h"
 #include "swimcap.h"
 #include "swimcap2.h"
+#include "newshat.h"
 
 typedef struct {
     hatrack_vtable_t vtable;

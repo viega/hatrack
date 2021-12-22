@@ -748,7 +748,13 @@ lowhat0_store_view(lowhat0_store_t *self,
 
     num_items = p - view;
     *num      = num_items;
-    view      = realloc(view, *num * sizeof(hatrack_view_t));
+
+    if (!num_items) {
+	free(view);
+	return NULL;
+    }
+    
+    view = realloc(view, *num * sizeof(hatrack_view_t));
 
     // Unordered buckets should be in random order, so quicksort is a
     // good option.

@@ -50,10 +50,11 @@ static inline void           hatrack_debug_mmm(void *, char *);
 
 struct mmm_header_st {
     alignas(32) mmm_header_t *next;
-    _Atomic uint64_t create_epoch;
-    _Atomic uint64_t write_epoch;
-    uint64_t         retire_epoch;
-    uint8_t          data[];
+    void  (*cleanup)(void *);
+    _Atomic uint64_t         create_epoch;
+    _Atomic uint64_t         write_epoch;
+    uint64_t                 retire_epoch;
+    alignas(32) uint8_t      data[];
 };
 
 // This algorithm keeps an array of thread reader epochs that's shared
@@ -377,6 +378,7 @@ static inline void
 mmm_start_basic_op(void)
 {
     pthread_once(&mmm_inited, mmm_register_thread);
+    if (mmm_mytid < 0 || mmm_mytid > 8192) abort();        
     mmm_reservations[mmm_mytid] = atomic_load(&mmm_epoch);
 }
 
@@ -404,6 +406,7 @@ mmm_start_linearized_op(void)
 static inline void
 mmm_end_op(void)
 {
+    if (mmm_mytid < 0 || mmm_mytid > 8192) abort();    	
     mmm_reservations[mmm_mytid] = MMM_EPOCH_UNRESERVED;
 }
 
@@ -460,7 +463,8 @@ mmm_help_commit(void *ptr)
 static inline void *
 mmm_alloc(uint64_t size)
 {
-    mmm_header_t *item = (mmm_header_t *)calloc(1, sizeof(mmm_header_t) + size);
+    uint64_t      actual_size = sizeof(mmm_header_t) + size;
+    mmm_header_t *item        = (mmm_header_t *)calloc(1, actual_size);
 
     HATRACK_MALLOC_CTR();
     DEBUG_MMM(item->data, "mmm_alloc");
@@ -470,12 +474,21 @@ mmm_alloc(uint64_t size)
 static inline void *
 mmm_alloc_committed(uint64_t size)
 {
-    mmm_header_t *item = (mmm_header_t *)calloc(1, sizeof(mmm_header_t) + size);
+    uint64_t      actual_size = sizeof(mmm_header_t) + size;    
+    mmm_header_t *item        = (mmm_header_t *)calloc(1, actual_size);
 
     atomic_store(&item->write_epoch, atomic_fetch_add(&mmm_epoch, 1) + 1);
     HATRACK_MALLOC_CTR();
     DEBUG_MMM(item->data, "mmm_alloc_committed");
     return (void *)item->data;
+}
+
+static inline void
+mmm_add_cleanup_handler(void *ptr, void (*handler)(void *))
+{
+    mmm_header_t *header = mmm_get_header(ptr);
+
+    header->cleanup = handler;
 }
 
 // Call this when we know no other thread ever could have seen the
@@ -576,7 +589,7 @@ hatrack_debug_mmm(void *addr, char *msg)
     }
     *--p = *r++;
     *--p = *r++;
-    hatrack_debug(buf);
+    hatrack_debug(p);
 }
 #endif
 

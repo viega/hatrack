@@ -30,7 +30,7 @@ debug_dump(uint64_t max_msgs)
 
     if (oldest_sequence >= cur_sequence) {
         for (i = oldest_sequence; i < (1 << HATRACK_DEBUG_RING_LOG); i++) {
-            printf("%06llu: (tid %lu) %s\n",
+            printf("%06llu: (tid %ld) %s\n",
                    __hatrack_debug[i].sequence,
                    (long)__hatrack_debug[i].thread,
                    __hatrack_debug[i].msg);
@@ -41,79 +41,38 @@ debug_dump(uint64_t max_msgs)
         i = oldest_sequence;
     }
     for (; i < cur_sequence; i++) {
-        printf("%06llu: (tid %lu) %s\n",
+        printf("%06llu: (tid %ld) %s\n",
                __hatrack_debug[i].sequence,
                (long)__hatrack_debug[i].thread,
                __hatrack_debug[i].msg);
     }
 }
 
-#if 0
 void
-debug_dump_thread(uint64_t max_msgs)
+debug_thread()
 {
-    int64_t   oldest_sequence;
-    int64_t   cur_sequence;
-    int64_t   i;
-    int64_t   self = mmm_mytid;
-
-    if (!max_msgs || max_msgs > (1 << HATRACK_DEBUG_RING_LOG)) {
-	max_msgs = 1 << HATRACK_DEBUG_RING_LOG;
-    }
-    cur_sequence = atomic_load(&__hatrack_debug_sequence);
-    oldest_sequence = cur_sequence - max_msgs;
-
-    if (oldest_sequence < 0) {
-	oldest_sequence = 0;
-    }
-    oldest_sequence &= ((1 << HATRACK_DEBUG_RING_LOG) - 1);
-    cur_sequence    &= ((1 << HATRACK_DEBUG_RING_LOG) - 1);
-
-    if (oldest_sequence >= cur_sequence) {
-	for (i = oldest_sequence; i < (1 << HATRACK_DEBUG_RING_LOG); i++) {
-	    if (self != __hatrack_debug[i].thread) {
-		continue;
-	    }
-	    printf("%06llu: (tid %lu) %s\n", __hatrack_debug[i].sequence,
-		   (long) __hatrack_debug[i].thread,
-		   __hatrack_debug[i].msg);
-	}
-	i = 0;
-    }
-    else {
-	i = oldest_sequence;
-    }
-    for (; i < cur_sequence; i++) {
-	if (self != __hatrack_debug[i].thread) {
-	    continue;
-	}
-	printf("%06llu: (tid %lu) %s\n", __hatrack_debug[i].sequence,
-	       (long) __hatrack_debug[i].thread,
-	       __hatrack_debug[i].msg);
-    }
+    debug_other_thread(mmm_mytid);
 }
-#endif
 
 void
-debug_dump_thread()
+debug_other_thread(int64_t tid)
 {
     int64_t start = atomic_load(&__hatrack_debug_sequence);
     int64_t i;
-    int64_t self = mmm_mytid;
 
     start &= ((1 << HATRACK_DEBUG_RING_LOG) - 1);
 
     for (i = start; i < ((1 << HATRACK_DEBUG_RING_LOG) - 1); i++) {
-        if (self == __hatrack_debug[i].thread) {
-            printf("%06llu: (tid %lu) %s\n",
+        if (tid == __hatrack_debug[i].thread) {
+            printf("%06llu: (tid %ld) %s\n",
                    __hatrack_debug[i].sequence,
                    (long)__hatrack_debug[i].thread,
                    __hatrack_debug[i].msg);
         }
     }
     for (i = 0; i < start; i++) {
-        if (self == __hatrack_debug[i].thread) {
-            printf("%06llu: (tid %lu) %s\n",
+        if (tid == __hatrack_debug[i].thread) {
+            printf("%06llu: (tid %ld) %s\n",
                    __hatrack_debug[i].sequence,
                    (long)__hatrack_debug[i].thread,
                    __hatrack_debug[i].msg);
@@ -126,21 +85,20 @@ debug_grep(char *s)
 {
     int64_t start = atomic_load(&__hatrack_debug_sequence);
     int64_t i;
-    int64_t len = strlen(s);
 
     start &= ((1 << HATRACK_DEBUG_RING_LOG) - 1);
 
     for (i = start; i < ((1 << HATRACK_DEBUG_RING_LOG) - 1); i++) {
-        if (!strncmp(__hatrack_debug[i].msg, s, len)) {
-            printf("%06llu: (tid %lu) %s\n",
+        if (strstr(__hatrack_debug[i].msg, s)) {
+            printf("%06llu: (tid %ld) %s\n",
                    __hatrack_debug[i].sequence,
                    (long)__hatrack_debug[i].thread,
                    __hatrack_debug[i].msg);
         }
     }
     for (i = 0; i < start; i++) {
-        if (!strncmp(__hatrack_debug[i].msg, s, len)) {
-            printf("%06llu: (tid %lu) %s\n",
+        if (strstr(__hatrack_debug[i].msg, s)) {
+            printf("%06llu: (tid %ld) %s\n",
                    __hatrack_debug[i].sequence,
                    (long)__hatrack_debug[i].thread,
                    __hatrack_debug[i].msg);
@@ -169,7 +127,7 @@ debug_pgrep(uintptr_t n)
 
     for (i = start; i < ((1 << HATRACK_DEBUG_RING_LOG) - 1); i++) {
         if (!strncmp(__hatrack_debug[i].msg, s, len)) {
-            printf("%06llu: (tid %lu) %s\n",
+            printf("%06llu: (tid %ld) %s\n",
                    __hatrack_debug[i].sequence,
                    (long)__hatrack_debug[i].thread,
                    __hatrack_debug[i].msg);
@@ -177,7 +135,7 @@ debug_pgrep(uintptr_t n)
     }
     for (i = 0; i < start; i++) {
         if (!strncmp(__hatrack_debug[i].msg, s, len)) {
-            printf("%06llu: (tid %lu) %s\n",
+            printf("%06llu: (tid %ld) %s\n",
                    __hatrack_debug[i].sequence,
                    (long)__hatrack_debug[i].thread,
                    __hatrack_debug[i].msg);

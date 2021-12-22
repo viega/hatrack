@@ -31,10 +31,6 @@ typedef struct {
     alignas(32) uint64_t item_count;
     swimcap2_store_t *store;
     pthread_mutex_t   write_mutex;
-
-#ifndef HATRACK_DONT_SORT
-    uint64_t next_epoch;
-#endif
 } swimcap2_t;
 
 void  swimcap2_init(swimcap2_t *);

@@ -2,13 +2,13 @@
 #include "hatrack_common.h"
 
 // clang-format off
-
+__thread mmm_header_t  *mmm_retire_list  = NULL;
 __thread pthread_once_t mmm_inited       = PTHREAD_ONCE_INIT;
 _Atomic  uint64_t       mmm_epoch        = ATOMIC_VAR_INIT(MMM_EPOCH_FIRST);
 _Atomic  uint64_t       mmm_nexttid      = ATOMIC_VAR_INIT(0);
 __thread int64_t        mmm_mytid        = -1; 
 __thread uint64_t       mmm_retire_ctr   = 0;
-__thread mmm_header_t  *mmm_retire_list  = NULL;
+
          uint64_t       mmm_reservations[MMM_THREADS_MAX] = { 0, };
 
 //clang-format on
@@ -100,7 +100,7 @@ mmm_retire(void *ptr)
     cell->next         = mmm_retire_list;
     mmm_retire_list    = cell;
 
-    DEBUG_MMM(cell->data, "mmm_retire()");
+    DEBUG_MMM(cell->data, "mmm_retire");
     
     if (++mmm_retire_ctr & MMM_RETIRE_FREQ) {
 	mmm_retire_ctr = 0;
@@ -208,7 +208,10 @@ mmm_empty(void)
 	tmp  = cell;
 	cell = cell->next;
 	HATRACK_FREE_CTR();
-	DEBUG_MMM(tmp->data, "mmm_empty::free (w epoch data)");
+	DEBUG_MMM(tmp->data, "mmm_empty::free");
+	if (tmp->cleanup) {
+	    (*tmp->cleanup)(&tmp->data);
+	}
 	free(tmp);
     }
 }

@@ -174,6 +174,26 @@ hatrack_vtable_t swimcap_vtable = {
     .view   = (hatrack_view_func)swimcap_view
 };
 
+hatrack_vtable_t swimcap2_vtable = {
+    .init   = (hatrack_init_func)swimcap2_init,
+    .get    = (hatrack_get_func)swimcap2_get,
+    .put    = (hatrack_put_func)swimcap2_base_put,
+    .remove = (hatrack_remove_func)swimcap2_remove,
+    .delete = (hatrack_delete_func)swimcap2_delete,
+    .len    = (hatrack_len_func)swimcap2_len,
+    .view   = (hatrack_view_func)swimcap2_view
+};
+
+hatrack_vtable_t newshat_vtable = {
+    .init   = (hatrack_init_func)newshat_init,
+    .get    = (hatrack_get_func)newshat_get,
+    .put    = (hatrack_put_func)newshat_base_put,
+    .remove = (hatrack_remove_func)newshat_remove,
+    .delete = (hatrack_delete_func)newshat_delete,
+    .len    = (hatrack_len_func)newshat_len,
+    .view   = (hatrack_view_func)newshat_view
+};
+
 // clang-format on
 
 static void
@@ -186,5 +206,6 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("lowhat1", &lowhat1_vtable, sizeof(lowhat1_t));
     testhat_register_algorithm("lowhat2", &lowhat2_vtable, sizeof(lowhat2_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
-    testhat_register_algorithm("swimcap2", &swimcap_vtable, sizeof(swimcap2_t));
+    testhat_register_algorithm("swimcap2", &swimcap2_vtable, sizeof(swimcap2_t));
+    testhat_register_algorithm("newshat", &newshat_vtable, sizeof(newshat_t));
 }

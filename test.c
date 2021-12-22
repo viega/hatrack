@@ -226,7 +226,6 @@ time_test(test_func_t      func,
     atomic_store(&mmm_nexttid, 0); // Reset thread ids.
 
     dict = testhat_new(type);
-
     for (i = 0; i < num_threads; i++) {
         info[i].tid   = i;
         info[i].range = range;
@@ -240,7 +239,6 @@ time_test(test_func_t      func,
     start = clock();
     clock_gettime(CLOCK_MONOTONIC, sspec);
     atomic_store(&test_func, func); // Start the threads.
-
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
@@ -762,13 +760,13 @@ uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
 char *threadsafe_dicts[] = {
-    "hihat1", "hihat64", "swimcap", "swimcap2", "lowhat0", "lowhat1", /*"lowhat2",*/ NULL
+    "hihat1", "hihat64", "swimcap", "swimcap2", "newshat", "lowhat0", "lowhat1", /*"lowhat2",*/ NULL
 };
 char *all_dicts[]     = {
-    "refhat0",  "hihat1", "hihat64", "swimcap", "swimcap2", "lowhat0", "lowhat1", /*"lowhat2",*/  NULL
+    "refhat0",  "hihat1", "hihat64", "swimcap", "swimcap2","newshat", "lowhat0", "lowhat1",/* "lowhat2",*/  NULL
 };
 char *st_dicts[]      = {
-    "refhat0", NULL
+    /*    "refhat0",*/ NULL
 };
 
 //  clang-format on

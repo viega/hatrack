@@ -6,7 +6,8 @@
 #ifdef HATRACK_DEBUG
 
 void debug_dump(uint64_t);
-void debug_dump_thread();
+void debug_thread();
+void debug_other_thread(int64_t);
 void debug_grep(char *);
 void debug_pgrep(uintptr_t);
 

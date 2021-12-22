@@ -541,7 +541,13 @@ hihat1_store_view(hihat1_store_t *self, hihat1_t *top, uint64_t *num)
 
     num_items = p - view;
     *num      = num_items;
-    view      = realloc(view, num_items * sizeof(hatrack_view_t));
+
+    if (!num_items) {
+	free(view);
+	return NULL;
+    }
+    
+    view = realloc(view, num_items * sizeof(hatrack_view_t));
 
     // Unordered buckets should be in random order, so quicksort is a
     // good option.

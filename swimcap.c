@@ -93,9 +93,9 @@ swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
     swimcap_store_t  *store;
     void             *ret;
 
-    //    if (found) abort();
-    if (pthread_mutex_lock(&self->write_mutex))
+    if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
+    }
 again_after_migration:
     store     = self->store;
     last_slot = store->last_slot;
@@ -169,8 +169,9 @@ swimcap_put_if_empty(swimcap_t *self, hatrack_hash_t *hv, void *item)
     swimcap_bucket_t *cur;
     swimcap_store_t  *store;
 
-    if (pthread_mutex_lock(&self->write_mutex))
+    if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
+    }
 
 again_after_migration:
     store     = self->store;
@@ -232,8 +233,9 @@ swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
     swimcap_store_t  *store;
     void             *ret;
 
-    if (pthread_mutex_lock(&self->write_mutex))
+    if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
+    }
 
     store     = self->store;
     last_slot = store->last_slot;
@@ -306,8 +308,9 @@ swimcap_view(swimcap_t *self, uint64_t *num)
     uint64_t          count;
     uint64_t          last_slot;
 
-    if (pthread_mutex_lock(&self->write_mutex))
+    if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
+    }
     store     = self->store;
     last_slot = store->last_slot;
     view = (hatrack_view_t *)malloc(sizeof(hatrack_view_t) * store->used_count);
@@ -334,14 +337,21 @@ swimcap_view(swimcap_t *self, uint64_t *num)
     }
 
     *num = count;
+
+    if (!count) {
+	free(view);
+	return NULL;
+    }
+    
     view = (hatrack_view_t *)realloc(view, sizeof(hatrack_view_t) * count);
 
 #ifndef HATRACK_DONT_SORT
     qsort(view, count, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
 #endif
 
-    if (pthread_mutex_unlock(&self->write_mutex))
+    if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
+    }
 
     return view;
 }

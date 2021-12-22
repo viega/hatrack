@@ -8,14 +8,15 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #ifndef HATRACK_DEBUG_MSG_SIZE
 #define HATRACK_DEBUG_MSG_SIZE 128
 #endif
 
-#if !defined(HATRACK_DEBUG_RING_LOG) || HATRACK_DEBUG_RING_LOG < 15
+#if !defined(HATRACK_DEBUG_RING_LOG) || HATRACK_DEBUG_RING_LOG < 17
 #undef HATRACK_DEBUG_RING_LONG
-#define HATRACK_DEBUG_RING_LOG 15
+#define HATRACK_DEBUG_RING_LOG 17
 #endif
 
 #ifndef HATRACK_PTR_CHRS
@@ -85,7 +86,7 @@ hatrack_debug_ptr(void *addr, char *msg)
 #else
 
 #define DEBUG(x)
-#define DEBUG_PTR(x)
+#define DEBUG_PTR(x, y)
 
 #endif
 
