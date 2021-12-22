@@ -970,10 +970,10 @@ lowhat2_store_view(lowhat2_store_t *self,
     *num      = num_items;
 
     if (!num_items) {
-	free(view);
-	return NULL;
+        free(view);
+        return NULL;
     }
-    
+
     view = realloc(view, *num * sizeof(hatrack_view_t));
 
     // Unordered buckets should be in random order, so quicksort is a

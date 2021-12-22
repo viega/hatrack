@@ -339,10 +339,10 @@ swimcap_view(swimcap_t *self, uint64_t *num)
     *num = count;
 
     if (!count) {
-	free(view);
-	return NULL;
+        free(view);
+        return NULL;
     }
-    
+
     view = (hatrack_view_t *)realloc(view, sizeof(hatrack_view_t) * count);
 
 #ifndef HATRACK_DONT_SORT

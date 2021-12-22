@@ -34,7 +34,7 @@ swimcap2_init(swimcap2_t *self)
 {
     swimcap2_store_t *store = swimcap2_new_store(1 << HATRACK_MIN_SIZE_LOG);
     self->item_count        = 0;
-    self->store = store;
+    self->store             = store;
     pthread_mutex_init(&self->write_mutex, NULL);
 
     return;
@@ -115,7 +115,7 @@ again_after_migration:
                 if (pthread_mutex_unlock(&self->write_mutex)) {
                     abort();
                 }
-		mmm_end_op();
+                mmm_end_op();
                 return NULL;
             }
             ret       = cur->item;
@@ -126,7 +126,7 @@ again_after_migration:
             if (pthread_mutex_unlock(&self->write_mutex)) {
                 abort();
             }
-	    mmm_end_op();
+            mmm_end_op();
             return ret;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -145,7 +145,7 @@ again_after_migration:
             if (pthread_mutex_unlock(&self->write_mutex)) {
                 abort();
             }
-	    mmm_end_op();
+            mmm_end_op();
             return NULL;
         }
         bix = (bix + 1) & last_slot;
@@ -166,7 +166,7 @@ swimcap2_put_if_empty(swimcap2_t *self, hatrack_hash_t *hv, void *item)
     if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
     }
-    
+
 again_after_migration:
     store     = self->store;
     last_slot = store->last_slot;
@@ -182,13 +182,13 @@ again_after_migration:
                 if (pthread_mutex_unlock(&self->write_mutex)) {
                     abort();
                 }
-		mmm_end_op();
+                mmm_end_op();
                 return true;
             }
             if (pthread_mutex_unlock(&self->write_mutex)) {
                 abort();
             }
-	    mmm_end_op();
+            mmm_end_op();
             return false;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -203,7 +203,7 @@ again_after_migration:
             if (pthread_mutex_unlock(&self->write_mutex)) {
                 abort();
             }
-	    mmm_end_op();
+            mmm_end_op();
             return true;
         }
         bix = (bix + 1) & last_slot;
@@ -239,7 +239,7 @@ swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
                 if (pthread_mutex_unlock(&self->write_mutex)) {
                     abort();
                 }
-		mmm_end_op();
+                mmm_end_op();
                 return NULL;
             }
 
@@ -253,7 +253,7 @@ swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
             if (pthread_mutex_unlock(&self->write_mutex)) {
                 abort();
             }
-	    mmm_end_op();
+            mmm_end_op();
             return ret;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -263,7 +263,7 @@ swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
             if (pthread_mutex_unlock(&self->write_mutex)) {
                 abort();
             }
-	    mmm_end_op();
+            mmm_end_op();
             return NULL;
         }
         bix = (bix + 1) & last_slot;
@@ -302,12 +302,12 @@ swimcap2_view(swimcap2_t *self, uint64_t *num)
     mmm_start_basic_op();
     store     = self->store;
     last_slot = store->last_slot;
-    view = (hatrack_view_t *)malloc(sizeof(hatrack_view_t) *
-				    (store->last_slot + 1));
-    p    = view;
-    cur  = store->buckets;
-    end  = cur + (last_slot + 1);
-    count = 0;
+    view      = (hatrack_view_t *)malloc(sizeof(hatrack_view_t)
+                                    * (store->last_slot + 1));
+    p         = view;
+    cur       = store->buckets;
+    end       = cur + (last_slot + 1);
+    count     = 0;
 
     while (cur < end) {
         if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
@@ -324,11 +324,11 @@ swimcap2_view(swimcap2_t *self, uint64_t *num)
 
     *num = count;
     if (!count) {
-	free(view);
-	mmm_end_op();
-	return NULL;
+        free(view);
+        mmm_end_op();
+        return NULL;
     }
-    
+
     view = (hatrack_view_t *)realloc(view, sizeof(hatrack_view_t) * count);
 
 #ifndef HATRACK_DONT_SORT

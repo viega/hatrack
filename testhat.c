@@ -206,6 +206,8 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("lowhat1", &lowhat1_vtable, sizeof(lowhat1_t));
     testhat_register_algorithm("lowhat2", &lowhat2_vtable, sizeof(lowhat2_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
-    testhat_register_algorithm("swimcap2", &swimcap2_vtable, sizeof(swimcap2_t));
+    testhat_register_algorithm("swimcap2",
+                               &swimcap2_vtable,
+                               sizeof(swimcap2_t));
     testhat_register_algorithm("newshat", &newshat_vtable, sizeof(newshat_t));
 }

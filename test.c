@@ -755,7 +755,7 @@ uint32_t            large_sizes[]   = {100000, 1000000, 0};
 uint32_t            shrug_sizes[]   = {1, 0};
 uint32_t            small_size[]    = {10, 0};
 uint32_t            one_thread[]    = {1, 0};
-uint32_t            basic_threads[] = {2, 4, 10, 20, 100, 0};
+uint32_t            basic_threads[] = {2, 4, 8, 20, 100, 0};
 uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
