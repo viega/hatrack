@@ -85,25 +85,23 @@ lohat2_get(lohat2_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-lohat2_put(lohat2_t       *self,
-           hatrack_hash_t *hv,
-           void           *item,
-           bool            ifempty,
-           bool           *found)
+lohat2_put(lohat2_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
-    bool  bool_ret;
 
     mmm_start_basic_op();
-    if (ifempty) {
-        bool_ret
-            = lohat2_store_put_if_empty(self->store_current, self, hv, item);
-        mmm_end_op();
-
-        return (void *)bool_ret;
-    }
-
     ret = lohat2_store_put(self->store_current, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+bool
+lohat2_put_if_empty(lohat2_t *self, hatrack_hash_t *hv, void *item)
+{
+    bool ret;
+    mmm_start_basic_op();
+    ret = lohat2_store_put_if_empty(self->store_current, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -632,7 +630,8 @@ found_history_bucket:
     if (head) {
         // If there's already something in this bucket, and the
         // request was to put only if the bucket is empty.
-        if (hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+        if (head && head->next
+            && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
             return false;
         }
         // There's a delete record here. Grab a new bucket, try to

@@ -105,94 +105,103 @@ testhat_new(char *name)
 // clang-format off
 
 hatrack_vtable_t refhat0_vtable = {
-    .init   = (hatrack_init_func)refhat0_init,
-    .get    = (hatrack_get_func)refhat0_get,
-    .put    = (hatrack_put_func)refhat0_base_put,
-    .remove = (hatrack_remove_func)refhat0_remove,
-    .delete = (hatrack_delete_func)refhat0_delete,
-    .len    = (hatrack_len_func)refhat0_len,
-    .view   = (hatrack_view_func)refhat0_view
+    .init    = (hatrack_init_func)refhat0_init,
+    .get     = (hatrack_get_func)refhat0_get,
+    .put     = (hatrack_put_func)refhat0_put,
+    .putcond = (hatrack_putcond_func)refhat0_put_if_empty,    
+    .remove  = (hatrack_remove_func)refhat0_remove,
+    .delete  = (hatrack_delete_func)refhat0_delete,
+    .len     = (hatrack_len_func)refhat0_len,
+    .view    = (hatrack_view_func)refhat0_view
+};
+
+hatrack_vtable_t swimcap_vtable = {
+    .init    = (hatrack_init_func)swimcap_init,
+    .get     = (hatrack_get_func)swimcap_get,
+    .put     = (hatrack_put_func)swimcap_put,
+    .putcond = (hatrack_putcond_func)swimcap_put_if_empty,    
+    .remove  = (hatrack_remove_func)swimcap_remove,
+    .delete  = (hatrack_delete_func)swimcap_delete,
+    .len     = (hatrack_len_func)swimcap_len,
+    .view    = (hatrack_view_func)swimcap_view
+};
+
+hatrack_vtable_t swimcap2_vtable = {
+    .init    = (hatrack_init_func)swimcap2_init,
+    .get     = (hatrack_get_func)swimcap2_get,
+    .put     = (hatrack_put_func)swimcap2_put,
+    .putcond = (hatrack_putcond_func)swimcap2_put_if_empty,    
+    .remove  = (hatrack_remove_func)swimcap2_remove,
+    .delete  = (hatrack_delete_func)swimcap2_delete,
+    .len     = (hatrack_len_func)swimcap2_len,
+    .view    = (hatrack_view_func)swimcap2_view
+};
+
+hatrack_vtable_t newshat_vtable = {
+    .init    = (hatrack_init_func)newshat_init,
+    .get     = (hatrack_get_func)newshat_get,
+    .put     = (hatrack_put_func)newshat_put,
+    .putcond = (hatrack_putcond_func)newshat_put_if_empty,    
+    .remove  = (hatrack_remove_func)newshat_remove,
+    .delete  = (hatrack_delete_func)newshat_delete,
+    .len     = (hatrack_len_func)newshat_len,
+    .view    = (hatrack_view_func)newshat_view
 };
 
 hatrack_vtable_t hihat1_vtable = {
-    .init   = (hatrack_init_func)hihat1_init,
-    .get    = (hatrack_get_func)hihat1_get,
-    .put    = (hatrack_put_func)hihat1_put,
-    .remove = (hatrack_remove_func)hihat1_remove,
-    .delete = (hatrack_delete_func)hihat1_delete,
-    .len    = (hatrack_len_func)hihat1_len,
-    .view   = (hatrack_view_func)hihat1_view
+    .init    = (hatrack_init_func)hihat1_init,
+    .get     = (hatrack_get_func)hihat1_get,
+    .put     = (hatrack_put_func)hihat1_put,
+    .putcond = (hatrack_putcond_func)hihat1_put_if_empty,
+    .remove  = (hatrack_remove_func)hihat1_remove,
+    .delete  = (hatrack_delete_func)hihat1_delete,
+    .len     = (hatrack_len_func)hihat1_len,
+    .view    = (hatrack_view_func)hihat1_view
 };
 
 
 hatrack_vtable_t hihat64_vtable = {
-    .init   = (hatrack_init_func)hihat64_init,
-    .get    = (hatrack_get_func)hihat64_get,
-    .put    = (hatrack_put_func)hihat64_put,
-    .remove = (hatrack_remove_func)hihat64_remove,
-    .delete = (hatrack_delete_func)hihat64_delete,
-    .len    = (hatrack_len_func)hihat64_len,
-    .view   = (hatrack_view_func)hihat64_view
+    .init    = (hatrack_init_func)hihat64_init,
+    .get     = (hatrack_get_func)hihat64_get,
+    .put     = (hatrack_put_func)hihat64_put,
+    .putcond = (hatrack_putcond_func)hihat64_put_if_empty,    
+    .remove  = (hatrack_remove_func)hihat64_remove,
+    .delete  = (hatrack_delete_func)hihat64_delete,
+    .len     = (hatrack_len_func)hihat64_len,
+    .view    = (hatrack_view_func)hihat64_view
 };
 
 hatrack_vtable_t lohat0_vtable = {
-    .init   = (hatrack_init_func)lohat0_init,
-    .get    = (hatrack_get_func)lohat0_get,
-    .put    = (hatrack_put_func)lohat0_put,
-    .remove = (hatrack_remove_func)lohat0_remove,
-    .delete = (hatrack_delete_func)lohat0_delete,
-    .len    = (hatrack_len_func)lohat0_len,
-    .view   = (hatrack_view_func)lohat0_view
+    .init    = (hatrack_init_func)lohat0_init,
+    .get     = (hatrack_get_func)lohat0_get,
+    .put     = (hatrack_put_func)lohat0_put,
+    .putcond = (hatrack_putcond_func)lohat0_put_if_empty,
+    .remove  = (hatrack_remove_func)lohat0_remove,
+    .delete  = (hatrack_delete_func)lohat0_delete,
+    .len     = (hatrack_len_func)lohat0_len,
+    .view    = (hatrack_view_func)lohat0_view
 };
 
 hatrack_vtable_t lohat1_vtable = {
-    .init   = (hatrack_init_func)lohat1_init,
-    .get    = (hatrack_get_func)lohat1_get,
-    .put    = (hatrack_put_func)lohat1_put,
-    .remove = (hatrack_remove_func)lohat1_remove,
-    .delete = (hatrack_delete_func)lohat1_delete,
-    .len    = (hatrack_len_func)lohat1_len,
-    .view   = (hatrack_view_func)lohat1_view
+    .init    = (hatrack_init_func)lohat1_init,
+    .get     = (hatrack_get_func)lohat1_get,
+    .put     = (hatrack_put_func)lohat1_put,
+    .putcond = (hatrack_putcond_func)lohat1_put_if_empty,    
+    .remove  = (hatrack_remove_func)lohat1_remove,
+    .delete  = (hatrack_delete_func)lohat1_delete,
+    .len     = (hatrack_len_func)lohat1_len,
+    .view    = (hatrack_view_func)lohat1_view
 };
 
 hatrack_vtable_t lohat2_vtable = {
-    .init   = (hatrack_init_func)lohat2_init,
-    .get    = (hatrack_get_func)lohat2_get,
-    .put    = (hatrack_put_func)lohat2_put,
-    .remove = (hatrack_remove_func)lohat2_remove,
-    .delete = (hatrack_delete_func)lohat2_delete,
-    .len    = (hatrack_len_func)lohat2_len,
-    .view   = (hatrack_view_func)lohat2_view
-};
-
-hatrack_vtable_t swimcap_vtable = {
-    .init   = (hatrack_init_func)swimcap_init,
-    .get    = (hatrack_get_func)swimcap_get,
-    .put    = (hatrack_put_func)swimcap_base_put,
-    .remove = (hatrack_remove_func)swimcap_remove,
-    .delete = (hatrack_delete_func)swimcap_delete,
-    .len    = (hatrack_len_func)swimcap_len,
-    .view   = (hatrack_view_func)swimcap_view
-};
-
-hatrack_vtable_t swimcap2_vtable = {
-    .init   = (hatrack_init_func)swimcap2_init,
-    .get    = (hatrack_get_func)swimcap2_get,
-    .put    = (hatrack_put_func)swimcap2_base_put,
-    .remove = (hatrack_remove_func)swimcap2_remove,
-    .delete = (hatrack_delete_func)swimcap2_delete,
-    .len    = (hatrack_len_func)swimcap2_len,
-    .view   = (hatrack_view_func)swimcap2_view
-};
-
-hatrack_vtable_t newshat_vtable = {
-    .init   = (hatrack_init_func)newshat_init,
-    .get    = (hatrack_get_func)newshat_get,
-    .put    = (hatrack_put_func)newshat_base_put,
-    .remove = (hatrack_remove_func)newshat_remove,
-    .delete = (hatrack_delete_func)newshat_delete,
-    .len    = (hatrack_len_func)newshat_len,
-    .view   = (hatrack_view_func)newshat_view
+    .init    = (hatrack_init_func)lohat2_init,
+    .get     = (hatrack_get_func)lohat2_get,
+    .put     = (hatrack_put_func)lohat2_put,
+    .putcond = (hatrack_putcond_func)lohat2_put_if_empty,    
+    .remove  = (hatrack_remove_func)lohat2_remove,
+    .delete  = (hatrack_delete_func)lohat2_delete,
+    .len     = (hatrack_len_func)lohat2_len,
+    .view    = (hatrack_view_func)lohat2_view
 };
 
 // clang-format on
@@ -201,14 +210,14 @@ static void
 testhat_init_default_algorithms()
 {
     testhat_register_algorithm("refhat0", &refhat0_vtable, sizeof(refhat0_t));
-    testhat_register_algorithm("hihat1", &hihat1_vtable, sizeof(hihat1_t));
-    testhat_register_algorithm("hihat64", &hihat64_vtable, sizeof(hihat64_t));
-    testhat_register_algorithm("lohat0", &lohat0_vtable, sizeof(lohat0_t));
-    testhat_register_algorithm("lohat1", &lohat1_vtable, sizeof(lohat1_t));
-    testhat_register_algorithm("lohat2", &lohat2_vtable, sizeof(lohat2_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
     testhat_register_algorithm("swimcap2",
                                &swimcap2_vtable,
                                sizeof(swimcap2_t));
     testhat_register_algorithm("newshat", &newshat_vtable, sizeof(newshat_t));
+    testhat_register_algorithm("hihat1", &hihat1_vtable, sizeof(hihat1_t));
+    testhat_register_algorithm("hihat64", &hihat64_vtable, sizeof(hihat64_t));
+    testhat_register_algorithm("lohat0", &lohat0_vtable, sizeof(lohat0_t));
+    testhat_register_algorithm("lohat1", &lohat1_vtable, sizeof(lohat1_t));
+    testhat_register_algorithm("lohat2", &lohat2_vtable, sizeof(lohat2_t));
 }

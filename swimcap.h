@@ -98,8 +98,6 @@ swimcap_reader_exit(swimcap_store_t *store)
 // clang-format off
 void            swimcap_init        (swimcap_t *);
 void           *swimcap_get         (swimcap_t *, hatrack_hash_t *, bool *);
-void           *swimcap_base_put    (swimcap_t *, hatrack_hash_t *, void *,
-				     bool, bool *);
 void           *swimcap_put         (swimcap_t *, hatrack_hash_t *, void *,
 				     bool *);
 bool            swimcap_put_if_empty(swimcap_t *, hatrack_hash_t *, void *);

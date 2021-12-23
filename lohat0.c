@@ -73,25 +73,24 @@ lohat0_get(lohat0_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-lohat0_put(lohat0_t       *self,
-           hatrack_hash_t *hv,
-           void           *item,
-           bool            ifempty,
-           bool           *found)
+lohat0_put(lohat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
-    bool  bool_ret;
 
     mmm_start_basic_op();
-    if (ifempty) {
-        bool_ret
-            = lohat0_store_put_if_empty(self->store_current, self, hv, item);
-        mmm_end_op();
-
-        return (void *)bool_ret;
-    }
-
     ret = lohat0_store_put(self->store_current, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+bool
+lohat0_put_if_empty(lohat0_t *self, hatrack_hash_t *hv, void *item)
+{
+    bool ret;
+
+    mmm_start_basic_op();
+    ret = lohat0_store_put_if_empty(self->store_current, self, hv, item);
     mmm_end_op();
 
     return ret;

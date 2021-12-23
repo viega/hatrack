@@ -60,8 +60,6 @@ typedef struct {
 
 void            swimcap2_init        (swimcap2_t *);
 void           *swimcap2_get         (swimcap2_t *, hatrack_hash_t *, bool *);
-void           *swimcap2_base_put    (swimcap2_t *, hatrack_hash_t *, void *,
-				      bool, bool *);
 void           *swimcap2_put         (swimcap2_t *, hatrack_hash_t *, void *, 
 				      bool *);
 bool            swimcap2_put_if_empty(swimcap2_t *, hatrack_hash_t *, void *);

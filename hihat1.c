@@ -27,7 +27,6 @@
 #include "hihat1.h"
 
 // clang-format off
-
 static hihat1_store_t  *hihat1_store_new         (uint64_t);
 static void            *hihat1_store_get         (hihat1_store_t *, hihat1_t *,
 					          hatrack_hash_t *, bool *);
@@ -41,7 +40,6 @@ static bool             hihat1_store_put_if_empty(hihat1_store_t *,
 static void            *hihat1_store_remove      (hihat1_store_t *, hihat1_t *,
 					          hatrack_hash_t *, bool *);
 static hihat1_store_t *hihat1_store_migrate      (hihat1_store_t *, hihat1_t *);
-
 // clang-format on
 
 void
@@ -66,25 +64,24 @@ hihat1_get(hihat1_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-hihat1_put(hihat1_t       *self,
-           hatrack_hash_t *hv,
-           void           *item,
-           bool            ifempty,
-           bool           *found)
+hihat1_put(hihat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
-    bool  bool_ret;
 
     mmm_start_basic_op();
-    if (ifempty) {
-        bool_ret
-            = hihat1_store_put_if_empty(self->store_current, self, hv, item);
-        mmm_end_op();
-
-        return (void *)bool_ret;
-    }
-
     ret = hihat1_store_put(self->store_current, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+bool
+hihat1_put_if_empty(hihat1_t *self, hatrack_hash_t *hv, void *item)
+{
+    bool ret;
+
+    mmm_start_basic_op();
+    ret = hihat1_store_put_if_empty(self->store_current, self, hv, item);
     mmm_end_op();
 
     return ret;

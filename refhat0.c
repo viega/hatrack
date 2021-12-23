@@ -74,24 +74,6 @@ refhat0_get(refhat0_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-refhat0_base_put(refhat0_t      *self,
-                 hatrack_hash_t *hv,
-                 void           *item,
-                 bool            ifempty,
-                 bool           *found)
-{
-    bool bool_ret;
-
-    if (ifempty) {
-        bool_ret = refhat0_put_if_empty(self, hv, item);
-
-        return (void *)bool_ret;
-    }
-
-    return refhat0_put(self, hv, item, found);
-}
-
-void *
 refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     uint64_t          bix = hatrack_bucket_index(hv, self->last_slot);

@@ -76,24 +76,6 @@ newshat_get(newshat_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-newshat_base_put(newshat_t      *self,
-                 hatrack_hash_t *hv,
-                 void           *item,
-                 bool            ifempty,
-                 bool           *found)
-{
-    bool bool_ret;
-
-    if (ifempty) {
-        bool_ret = newshat_put_if_empty(self, hv, item);
-
-        return (void *)bool_ret;
-    }
-
-    return newshat_put(self, hv, item, found);
-}
-
-void *
 newshat_put(newshat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;

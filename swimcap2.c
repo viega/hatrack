@@ -77,24 +77,6 @@ swimcap2_get(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-swimcap2_base_put(swimcap2_t     *self,
-                  hatrack_hash_t *hv,
-                  void           *item,
-                  bool            ifempty,
-                  bool           *found)
-{
-    bool bool_ret;
-
-    if (ifempty) {
-        bool_ret = swimcap2_put_if_empty(self, hv, item);
-
-        return (void *)bool_ret;
-    }
-
-    return swimcap2_put(self, hv, item, found);
-}
-
-void *
 swimcap2_put(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;

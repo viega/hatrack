@@ -67,25 +67,24 @@ hihat64_get(hihat64_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-hihat64_put(hihat64_t      *self,
-            hatrack_hash_t *hv,
-            void           *item,
-            bool            ifempty,
-            bool           *found)
+hihat64_put(hihat64_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
-    bool  bool_ret;
 
     mmm_start_basic_op();
-    if (ifempty) {
-        bool_ret
-            = hihat64_store_put_if_empty(self->store_current, self, hv, item);
-        mmm_end_op();
-
-        return (void *)bool_ret;
-    }
-
     ret = hihat64_store_put(self->store_current, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+bool
+hihat64_put_if_empty(hihat64_t *self, hatrack_hash_t *hv, void *item)
+{
+    bool ret;
+
+    mmm_start_basic_op();
+    ret = hihat64_store_put_if_empty(self->store_current, self, hv, item);
     mmm_end_op();
 
     return ret;

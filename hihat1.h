@@ -80,13 +80,14 @@ typedef struct {
 } hihat1_t;
 
 
-void            hihat1_init  (hihat1_t *);
-void           *hihat1_get   (hihat1_t *, hatrack_hash_t *, bool *);
-void           *hihat1_put   (hihat1_t *, hatrack_hash_t *, void *, bool,
-			      bool *);
-void           *hihat1_remove(hihat1_t *, hatrack_hash_t *, bool *);
-void            hihat1_delete(hihat1_t *);
-uint64_t        hihat1_len   (hihat1_t *);
-hatrack_view_t *hihat1_view  (hihat1_t *, uint64_t *);
+void            hihat1_init        (hihat1_t *);
+void           *hihat1_get         (hihat1_t *, hatrack_hash_t *, bool *);
+void           *hihat1_put         (hihat1_t *, hatrack_hash_t *, void *,
+				    bool *);
+bool            hihat1_put_if_empty(hihat1_t *, hatrack_hash_t *, void *);
+void           *hihat1_remove      (hihat1_t *, hatrack_hash_t *, bool *);
+void            hihat1_delete      (hihat1_t *);
+uint64_t        hihat1_len         (hihat1_t *);
+hatrack_view_t *hihat1_view        (hihat1_t *, uint64_t *);
 
 #endif

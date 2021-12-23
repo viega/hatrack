@@ -49,7 +49,18 @@ test_put(testhat_t *self, uint32_t key, uint32_t value)
     item.s.key   = key;
     item.s.value = value;
 
-    testhat_put(self, &precomputed_hashes[key], (void *)item.i, false, NULL);
+    testhat_put(self, &precomputed_hashes[key], (void *)item.i, NULL);
+}
+
+static inline bool
+test_put_if_empty(testhat_t *self, uint32_t key, uint32_t value)
+{
+    test_item item;
+
+    item.s.key   = key;
+    item.s.value = value;
+
+    return testhat_put_if_empty(self, &precomputed_hashes[key], (void *)item.i);
 }
 
 static inline uint32_t
@@ -581,6 +592,46 @@ test_ordering(test_info_t *info)
     return true;
 }
 
+/* [ condput ]
+ *
+ * Add n items in numerical order, check them, try to condput on all
+ * of them, delete them, re-add them, and check one more time.
+ */
+
+bool
+test_condput(test_info_t *info)
+{
+    uint64_t i;
+
+    for (i = 0; i < info->range; i++) {
+        test_put_if_empty(info->dict, i + 1, i + 1);
+    }
+    for (i = 0; i < info->range; i++) {
+        if (test_get(info->dict, i + 1) != i + 1) {
+            return false;
+        }
+    }
+    for (i = 0; i < info->range; i++) {
+        if (test_put_if_empty(info->dict, i + 1, i + 2)) {
+            return false;
+        }
+        test_remove(info->dict, i + 1);
+    }
+
+    for (i = 0; i < info->range; i++) {
+        if (!test_put_if_empty(info->dict, i + 1, i + 2)) {
+            return false;
+        }
+    }
+    for (i = 0; i < info->range; i++) {
+        if (test_get(info->dict, i + 1) != i + 2) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 // Validate this by looking at counters.
 bool
 test_shrinking(test_info_t *info)
@@ -777,7 +828,6 @@ test_sort_contention(test_info_t *info)
 }
 
 // clang-format off
-
 uint32_t            basic_sizes[]   = {10, 100, 1000, 10000, 0};
 uint32_t            sort_sizes[]    = {10, 128, 256, 512, 1024, 2048, 4096,
                                        8192, 100000, 0};
@@ -788,20 +838,19 @@ uint32_t            one_thread[]    = {1, 0};
 uint32_t            basic_threads[] = {2, 4, 8, 20, 100, 0};
 uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
+//  clang-format on
 
 char *threadsafe_dicts[] = {
     "swimcap", "swimcap2", "newshat", "hihat1", "hihat64", "lohat0", "lohat1",
     "lohat2", NULL
 };
 char *all_dicts[]     = {
-    "refhat0", "swimcap", "swimcap2", "newshat", "hihat1", "hihat64", "lohat0", "lohat1",
-     "lohat2",  NULL
+    "refhat0", "swimcap", "swimcap2", "newshat", "hihat1", "hihat64", "lohat0",
+    "lohat1",  "lohat2",  NULL
 };
 char *st_dicts[]      = {
     "refhat0", NULL
 };
-
-//  clang-format on
 
 #ifndef DEFAULT_ITERS
 #define DEFAULT_ITERS 1000000
@@ -828,6 +877,14 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_func_test("shrinking",
 		  test_shrinking,
+		  1,
+		  all_dicts,
+		  shrug_sizes,
+		  one_thread,
+		  0);
+    counters_output_delta();
+    run_func_test("condput",
+		  test_condput,
 		  1,
 		  all_dicts,
 		  shrug_sizes,

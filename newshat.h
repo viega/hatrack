@@ -55,8 +55,6 @@ typedef struct {
 
 void            newshat_init        (newshat_t *);
 void           *newshat_get         (newshat_t *, hatrack_hash_t *, bool *);
-void           *newshat_base_put    (newshat_t *, hatrack_hash_t *, void *,
-				     bool, bool *);
 void           *newshat_put         (newshat_t *, hatrack_hash_t *, void *,
 				     bool *);
 bool            newshat_put_if_empty(newshat_t *, hatrack_hash_t *, void *);

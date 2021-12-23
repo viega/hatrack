@@ -49,8 +49,6 @@ typedef struct {
 
 void     refhat0_init         (refhat0_t *);
 void    *refhat0_get          (refhat0_t *, hatrack_hash_t *, bool *);
-void    *refhat0_base_put     (refhat0_t *, hatrack_hash_t *, void *, bool,
-			       bool *);
 void    *refhat0_put          (refhat0_t *, hatrack_hash_t *, void *, bool *);
 bool     refhat0_put_if_empty (refhat0_t *, hatrack_hash_t *, void *);
 void    *refhat0_remove       (refhat0_t *, hatrack_hash_t *, bool *);

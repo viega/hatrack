@@ -78,25 +78,24 @@ lohat1_get(lohat1_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-lohat1_put(lohat1_t       *self,
-           hatrack_hash_t *hv,
-           void           *item,
-           bool            ifempty,
-           bool           *found)
+lohat1_put(lohat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
+
 {
     void *ret;
-    bool  bool_ret;
 
     mmm_start_basic_op();
-    if (ifempty) {
-        bool_ret
-            = lohat1_store_put_if_empty(self->store_current, self, hv, item);
-        mmm_end_op();
-
-        return (void *)bool_ret;
-    }
-
     ret = lohat1_store_put(self->store_current, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+bool
+lohat1_put_if_empty(lohat1_t *self, hatrack_hash_t *hv, void *item)
+{
+    bool ret;
+    mmm_start_basic_op();
+    ret = lohat1_store_put_if_empty(self->store_current, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -576,7 +575,7 @@ found_history_bucket:
 
     // There's already something in this bucket, and the request was
     // to put only if the bucket is empty.
-    if (hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+    if (head && head->next && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
         return false;
     }
 
