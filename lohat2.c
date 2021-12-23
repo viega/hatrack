@@ -3,7 +3,8 @@
 // clang-format off
 
 static lohat2_store_t *lohat2_store_new(uint64_t);
-static void             lohat2_delete_store(lohat2_store_t *);
+static void             lohat2_retire_store(lohat2_store_t *);
+static void             lohat2_retire_unused_store(lohat2_store_t *);
 static void            *lohat2_store_get(lohat2_store_t *, lohat2_t *,
 					  hatrack_hash_t *, bool *);
 static void            *lohat2_store_put(lohat2_store_t *, lohat2_t *,
@@ -112,7 +113,7 @@ lohat2_delete(lohat2_t *self)
         p++;
     }
 
-    lohat2_delete_store(store);
+    lohat2_retire_store(store);
     free(self);
 }
 
@@ -148,29 +149,26 @@ lohat2_view(lohat2_t *self, uint64_t *num_items)
 static lohat2_store_t *
 lohat2_store_new(uint64_t size)
 {
-    lohat2_store_t *store = (lohat2_store_t *)mmm_alloc(sizeof(lohat2_store_t));
+    lohat2_store_t *store
+        = (lohat2_store_t *)mmm_alloc_committed(sizeof(lohat2_store_t));
 
-    store->last_slot = size - 1;
-    store->threshold = hatrack_compute_table_threshold(size);
-    store->del_count = ATOMIC_VAR_INIT(0);
-    store->hist_buckets
-        = (lohat2_history_t *)mmm_alloc(sizeof(lohat2_history_t) * size);
-    store->store_next = ATOMIC_VAR_INIT(NULL);
-    store->ptr_buckets
-        = (lohat2_indirect_t *)mmm_alloc(sizeof(lohat2_indirect_t) * size);
+    store->last_slot    = size - 1;
+    store->threshold    = hatrack_compute_table_threshold(size);
+    store->del_count    = ATOMIC_VAR_INIT(0);
+    store->hist_buckets = (lohat2_history_t *)mmm_alloc_committed(
+        sizeof(lohat2_history_t) * size);
+    store->store_next  = ATOMIC_VAR_INIT(NULL);
+    store->ptr_buckets = (lohat2_indirect_t *)mmm_alloc_committed(
+        sizeof(lohat2_indirect_t) * size);
     store->hist_end
         = store->hist_buckets + hatrack_compute_table_threshold(size);
     store->hist_next = store->hist_buckets;
-
-    mmm_commit_write(store);
-    mmm_commit_write(store->hist_buckets);
-    mmm_commit_write(store->ptr_buckets);
 
     return store;
 }
 
 static void
-lohat2_delete_store(lohat2_store_t *self)
+lohat2_retire_unused_store(lohat2_store_t *self)
 {
     mmm_retire_unused(self->ptr_buckets);
     mmm_retire_unused(self->hist_buckets);
@@ -749,13 +747,12 @@ lohat2_store_migrate(lohat2_store_t *self, lohat2_t *top)
     if (!new_store) {
         new_size  = hatrack_new_size(self->last_slot, new_used);
         candidate = lohat2_store_new(new_size);
-        mmm_commit_write(candidate);
 
         if (!LCAS(&self->store_next,
                   &new_store,
                   candidate,
                   LOHAT2_CTR_NEW_STORE)) {
-            lohat2_delete_store(candidate);
+            lohat2_retire_unused_store(candidate);
         }
         else {
             new_store = candidate;

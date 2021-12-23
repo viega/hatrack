@@ -3,7 +3,8 @@
 // clang-format off
 
 static lohat1_store_t *lohat1_store_new(uint64_t);
-static void             lohat1_delete_store(lohat1_store_t *);
+static void             lohat1_retire_store(lohat1_store_t *);
+static void             lohat1_retire_unused_store(lohat1_store_t *);
 static void            *lohat1_store_get(lohat1_store_t *, lohat1_t *,
 					  hatrack_hash_t *, bool *);
 static void            *lohat1_store_put(lohat1_store_t *, lohat1_t *,
@@ -108,7 +109,7 @@ lohat1_delete(lohat1_t *self)
         p++;
     }
 
-    lohat1_delete_store(store);
+    lohat1_retire_store(store);
     free(self);
 }
 
@@ -144,32 +145,23 @@ lohat1_view(lohat1_t *self, uint64_t *num_items)
 static lohat1_store_t *
 lohat1_store_new(uint64_t size)
 {
-    lohat1_store_t *store = (lohat1_store_t *)mmm_alloc(sizeof(lohat1_store_t));
-    store->last_slot      = size - 1;
-    store->threshold      = hatrack_compute_table_threshold(size);
-    store->del_count      = ATOMIC_VAR_INIT(0);
-    store->hist_buckets
-        = (lohat1_history_t *)mmm_alloc(sizeof(lohat1_history_t) * size);
-    store->store_next = ATOMIC_VAR_INIT(NULL);
-    store->ptr_buckets
-        = (lohat1_indirect_t *)mmm_alloc(sizeof(lohat1_indirect_t) * size);
+    lohat1_store_t *store;
+
+    store = (lohat1_store_t *)mmm_alloc_committed(sizeof(lohat1_store_t));
+
+    store->last_slot    = size - 1;
+    store->threshold    = hatrack_compute_table_threshold(size);
+    store->del_count    = ATOMIC_VAR_INIT(0);
+    store->hist_buckets = (lohat1_history_t *)mmm_alloc_committed(
+        sizeof(lohat1_history_t) * size);
+    store->store_next  = ATOMIC_VAR_INIT(NULL);
+    store->ptr_buckets = (lohat1_indirect_t *)mmm_alloc_committed(
+        sizeof(lohat1_indirect_t) * size);
     store->hist_end
         = store->hist_buckets + hatrack_compute_table_threshold(size);
     store->hist_next = store->hist_buckets;
 
-    mmm_commit_write(store);
-    mmm_commit_write(store->hist_buckets);
-    mmm_commit_write(store->ptr_buckets);
-
     return store;
-}
-
-static void
-lohat1_delete_store(lohat1_store_t *self)
-{
-    mmm_retire_unused(self->ptr_buckets);
-    mmm_retire_unused(self->hist_buckets);
-    mmm_retire_unused(self);
 }
 
 static void
@@ -178,6 +170,14 @@ lohat1_retire_store(lohat1_store_t *self)
     mmm_retire(self->ptr_buckets);
     mmm_retire(self->hist_buckets);
     mmm_retire(self);
+}
+
+static void
+lohat1_retire_unused_store(lohat1_store_t *self)
+{
+    mmm_retire_unused(self->ptr_buckets);
+    mmm_retire_unused(self->hist_buckets);
+    mmm_retire_unused(self);
 }
 
 static void *
@@ -674,7 +674,7 @@ lohat1_store_migrate(lohat1_store_t *self, lohat1_t *top)
                   &new_store,
                   candidate,
                   LOHAT1_CTR_NEW_STORE)) {
-            lohat1_delete_store(candidate);
+            lohat1_retire_unused_store(candidate);
         }
         else {
             new_store = candidate;

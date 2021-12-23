@@ -1,6 +1,6 @@
 ENV      := /usr/bin/env
 CC       := cc
-#OPT      :=  
+OPT      :=  
 #OPT      := -Ofast -flto 
 LIBS     := 
 # Needed for linux.

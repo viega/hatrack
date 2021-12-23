@@ -112,14 +112,13 @@ hihat1_store_new(uint64_t size)
     uint64_t        alloc_len;
 
     alloc_len = sizeof(hihat1_store_t) + sizeof(hihat1_bucket_t) * size;
-    store     = (hihat1_store_t *)mmm_alloc(alloc_len);
+    store     = (hihat1_store_t *)mmm_alloc_committed(alloc_len);
 
     store->last_slot  = size - 1;
     store->threshold  = hatrack_compute_table_threshold(size);
     store->used_count = ATOMIC_VAR_INIT(0);
     store->del_count  = ATOMIC_VAR_INIT(0);
     store->store_next = ATOMIC_VAR_INIT(NULL);
-    mmm_commit_write(store);
 
     return store;
 }

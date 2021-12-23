@@ -3,7 +3,7 @@
 // clang-format off
 
 static lohat0_store_t  *lohat0_store_new(uint64_t);
-static void              lohat0_delete_store(lohat0_store_t *);
+static void              lohat0_retire_store(lohat0_store_t *);
 static void             *lohat0_store_get(lohat0_store_t *, lohat0_t *,
 					   hatrack_hash_t *, bool *);
 static void             *lohat0_store_put(lohat0_store_t *, lohat0_t *,
@@ -104,7 +104,7 @@ lohat0_delete(lohat0_t *self)
         p++;
     }
 
-    lohat0_delete_store(store);
+    lohat0_retire_store(store);
     free(self);
 }
 
@@ -130,24 +130,22 @@ lohat0_view(lohat0_t *self, uint64_t *num_items)
 static lohat0_store_t *
 lohat0_store_new(uint64_t size)
 {
-    lohat0_store_t *store = (lohat0_store_t *)mmm_alloc(sizeof(lohat0_store_t));
+    lohat0_store_t *store;
 
-    store->last_slot  = size - 1;
-    store->threshold  = hatrack_compute_table_threshold(size);
-    store->used_count = ATOMIC_VAR_INIT(0);
-    store->del_count  = ATOMIC_VAR_INIT(0);
-    store->store_next = ATOMIC_VAR_INIT(NULL);
-    store->hist_buckets
-        = (lohat0_history_t *)mmm_alloc(sizeof(lohat0_history_t) * size);
+    store = (lohat0_store_t *)mmm_alloc_committed(sizeof(lohat0_store_t));
 
-    mmm_commit_write(store);
-    mmm_commit_write(store->hist_buckets);
-
+    store->last_slot    = size - 1;
+    store->threshold    = hatrack_compute_table_threshold(size);
+    store->used_count   = ATOMIC_VAR_INIT(0);
+    store->del_count    = ATOMIC_VAR_INIT(0);
+    store->store_next   = ATOMIC_VAR_INIT(NULL);
+    store->hist_buckets = (lohat0_history_t *)mmm_alloc_committed(
+        sizeof(lohat0_history_t) * size);
     return store;
 }
 
 static void
-lohat0_delete_store(lohat0_store_t *self)
+lohat0_retire_unused_store(lohat0_store_t *self)
 {
     mmm_retire_unused(self->hist_buckets);
     mmm_retire_unused(self);
@@ -582,12 +580,12 @@ lohat0_store_migrate(lohat0_store_t *self, lohat0_t *top)
         // someone could drain the table after resize, having
         // us swap in the wrong length.
         atomic_store(&candidate_store->used_count, ~0);
-        mmm_commit_write(candidate_store);
+
         if (!LCAS(&self->store_next,
                   &new_store,
                   candidate_store,
                   LOHAT0_CTR_NEW_STORE)) {
-            lohat0_delete_store(candidate_store);
+            lohat0_retire_unused_store(candidate_store);
         }
         else {
             new_store = candidate_store;

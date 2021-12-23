@@ -31,6 +31,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #ifndef HATRACK_MAX_HATS
 #define HATRACK_MAX_HATS 1024

@@ -45,14 +45,14 @@ enum : uint64_t
 //   way there are with lohat).
 
 typedef struct {
-    alignas(32) _Atomic hatrack_hash_t hv;
+    _Atomic hatrack_hash_t  hv;
     _Atomic hihat1_record_t record;
 } hihat1_bucket_t;
 
 typedef struct hihat1_store_st hihat1_store_t;
 
 struct hihat1_store_st {
-    alignas(32) uint64_t last_slot;
+    alignas(8) uint64_t last_slot;
     uint64_t                  threshold;
     _Atomic uint64_t          used_count;
     _Atomic uint64_t          del_count;
