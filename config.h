@@ -98,6 +98,10 @@
 #undef HATRACK_MIN_SIZE
 #define HATRACK_MIN_SIZE (1 << HATRACK_MIN_SIZE_LOG)
 
+#ifndef HIHAT1a_MIGRATE_SLEEP_TIME_NS
+#define HIHAT1a_MIGRATE_SLEEP_TIME_NS 500000
+#endif
+
 // Off by default. Uncommment, or turn them on via the compiler.
 // #define HATRACK_ALLOW_TID_GIVEBACKS
 // #define HATRACK_DEBUG
@@ -128,29 +132,4 @@
     && !defined(HATRACK_ALWAYS_USE_QSORT) && !defined(HATRACK_QSORT_THRESHOLD)
 // A reasonable default.
 #define HATRACK_QSORT_THRESHOLD 256
-#endif
-
-// Note that the default is optimized code, giving you 25% and 75%.
-#if defined(HATRACK_EXPAND_PERCENTAGE) && HATRACK_EXPAND_PERCENTAGE <= 50
-#error "HATRACK_EXPAND_PERCENTAGE must be greater than 50"
-#endif
-
-#if defined(HATRACK_EXPAND_PERCENTAGE) && HATRACK_EXPAND_PERCENTAGE > 100
-#error "HATRACK_EXPAND_PERCENTAGE must be a percentage (51-100)"
-#endif
-
-#if defined(HATRACK_CONTRACT_PERCENTAGE) && HATRACK_CONTRACT_PERCENTAGE >= 35
-#error "HATRACK_CONTRACT_PERCENTAGE must be less than 35%"
-#endif
-
-#if defined(HATRACK_CONTRACT_PERCENTAGE) && HATRACK_CONTRACT_PERCENTAGE < 0
-#error "HATRACK_CONTRACT_PERCENTAGE must be a percentage (0-34)"
-#endif
-
-#if HATRACK_EXPAND_PERCENTAGE == 75
-#undef HATRACK_EXPAND_PERCENTAGE
-#endif
-
-#if HATRACK_CONTRACT_PERCENTAGE == 25
-#undef HATRACK_CONTRACT_PERCENTAGE
 #endif

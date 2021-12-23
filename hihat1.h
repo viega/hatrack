@@ -90,4 +90,15 @@ void            hihat1_delete      (hihat1_t *);
 uint64_t        hihat1_len         (hihat1_t *);
 hatrack_view_t *hihat1_view        (hihat1_t *, uint64_t *);
 
+
+void            hihat1a_init        (hihat1_t *);
+void           *hihat1a_get         (hihat1_t *, hatrack_hash_t *, bool *);
+void           *hihat1a_put         (hihat1_t *, hatrack_hash_t *, void *,
+				    bool *);
+bool            hihat1a_put_if_empty(hihat1_t *, hatrack_hash_t *, void *);
+void           *hihat1a_remove      (hihat1_t *, hatrack_hash_t *, bool *);
+void            hihat1a_delete      (hihat1_t *);
+uint64_t        hihat1a_len         (hihat1_t *);
+hatrack_view_t *hihat1a_view        (hihat1_t *, uint64_t *);
+
 #endif

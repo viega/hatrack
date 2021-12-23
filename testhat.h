@@ -31,14 +31,14 @@
 // Pull in the various implementations.
 
 #include "refhat0.h"
+#include "swimcap.h"
+#include "swimcap2.h"
+#include "newshat.h"
 #include "hihat1.h"
 #include "hihat64.h"
 #include "lohat0.h"
 #include "lohat1.h"
 #include "lohat2.h"
-#include "swimcap.h"
-#include "swimcap2.h"
-#include "newshat.h"
 
 /* For testing, we keep vtables of the operations to make it easier to
  * switch between different algorithms for testing. These types are

@@ -159,6 +159,16 @@ hatrack_vtable_t hihat1_vtable = {
     .view    = (hatrack_view_func)hihat1_view
 };
 
+hatrack_vtable_t hihat1a_vtable = {
+    .init    = (hatrack_init_func)hihat1a_init,
+    .get     = (hatrack_get_func)hihat1a_get,
+    .put     = (hatrack_put_func)hihat1a_put,
+    .putcond = (hatrack_putcond_func)hihat1a_put_if_empty,
+    .remove  = (hatrack_remove_func)hihat1a_remove,
+    .delete  = (hatrack_delete_func)hihat1a_delete,
+    .len     = (hatrack_len_func)hihat1a_len,
+    .view    = (hatrack_view_func)hihat1a_view
+};
 
 hatrack_vtable_t hihat64_vtable = {
     .init    = (hatrack_init_func)hihat64_init,
@@ -216,6 +226,7 @@ testhat_init_default_algorithms()
                                sizeof(swimcap2_t));
     testhat_register_algorithm("newshat", &newshat_vtable, sizeof(newshat_t));
     testhat_register_algorithm("hihat1", &hihat1_vtable, sizeof(hihat1_t));
+    testhat_register_algorithm("hihat1a", &hihat1a_vtable, sizeof(hihat1_t));
     testhat_register_algorithm("hihat64", &hihat64_vtable, sizeof(hihat64_t));
     testhat_register_algorithm("lohat0", &lohat0_vtable, sizeof(lohat0_t));
     testhat_register_algorithm("lohat1", &lohat1_vtable, sizeof(lohat1_t));

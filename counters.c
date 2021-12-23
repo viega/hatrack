@@ -37,7 +37,15 @@ char *hatrack_counter_names[HATRACK_COUNTERS_NUM] = {
     "mmm alloc calls",
     "mmm used retires",
     "mmm unused retires",
-    "stores shrunk"
+    "stores shrunk",
+    "hi1a msleep 1a success",
+    "hi1a msleep 1a fail",
+    "hi1a msleep 1b success",
+    "hi1a msleep 1b fail",
+    "hi1a msleep 2a success",
+    "hi1a msleep 2a fail",
+    "hi1a msleep 2b success",
+    "hi1a msleep 2b fail"
 };
 
 char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
@@ -129,7 +137,7 @@ counters_output_delta(void)
 
     fprintf(stderr, "----------- Counter Deltas --------------\n");
     for (i = 0; i < HATRACK_COUNTERS_NUM; i++) {
-        if (!hatrack_counters[i]) {
+        if (hatrack_counters[i] == hatrack_last_counters[i]) {
             continue;
         }
         fprintf(stderr,

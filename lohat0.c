@@ -509,7 +509,7 @@ found_history_bucket:
 
         mmm_commit_write(candidate);
 
-        if (head->next) {
+        if (head) {
             mmm_retire(head);
         }
     }
