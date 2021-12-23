@@ -79,11 +79,11 @@ hatrack_new_size(uint64_t last_bucket, uint64_t size)
     uint64_t table_size = last_bucket + 1;
 
     if (size >= table_size >> 1) {
-	return table_size << 1;
+        return table_size << 1;
     }
     if (size <= (table_size >> 2)) {
-	HATRACK_CTR(HATRACK_CTR_STORE_SHRINK);	
-	return table_size >> 1;
+        HATRACK_CTR(HATRACK_CTR_STORE_SHRINK);
+        return table_size >> 1;
     }
 
     return table_size;

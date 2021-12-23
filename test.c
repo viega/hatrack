@@ -4,7 +4,7 @@
  * See LICENSE.txt for licensing info.
  *
  *  Name:           test.c
- *  Description:    Lowhat tests and code to support tests.
+ *  Description:    Lohat tests and code to support tests.
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -570,6 +570,25 @@ test_ordering(test_info_t *info)
     return true;
 }
 
+// Validate this by looking at counters.
+bool
+test_shrinking(test_info_t *info)
+{
+    uint64_t i;
+
+    for (i = 0; i < 380; i++) {
+        test_put(info->dict, i + 1, i + 1);
+    }
+    for (i = 0; i < 380; i++) {
+        test_remove(info->dict, i + 1);
+    }
+
+    for (i = 381; i < 500; i++) {
+        test_put(info->dict, i + 1, i + 1);
+    }
+    return true;
+}
+
 // [ parallel ]
 // [ ||-large ]
 //
@@ -760,13 +779,15 @@ uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 
 char *threadsafe_dicts[] = {
-    "hihat1", "hihat64", "swimcap", "swimcap2", "newshat", "lowhat0", "lowhat1", /*"lowhat2",*/ NULL
+    "swimcap", "swimcap2", "newshat", "hihat1", "hihat64", "lohat0", "lohat1",
+    "lohat2", NULL
 };
 char *all_dicts[]     = {
-    "refhat0",  "hihat1", "hihat64", "swimcap", "swimcap2","newshat", "lowhat0", "lowhat1",/* "lowhat2",*/  NULL
+    "refhat0", "swimcap", "swimcap2", "newshat", "hihat1", "hihat64", "lohat0", "lohat1",
+     "lohat2",  NULL
 };
 char *st_dicts[]      = {
-    /*    "refhat0",*/ NULL
+    "refhat0", NULL
 };
 
 //  clang-format on
@@ -794,6 +815,14 @@ main(int argc, char *argv[], char *envp[])
                   one_thread,
                   0);
     counters_output_delta();        
+    run_func_test("shrinking",
+		  test_shrinking,
+		  1,
+		  all_dicts,
+		  shrug_sizes,
+		  one_thread,
+		  0);
+    counters_output_delta();
     run_func_test("parallel",
                   test_parallel,
                   10,

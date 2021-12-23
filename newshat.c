@@ -448,9 +448,9 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
         if (pthread_mutex_lock(&cur->write_mutex)) {
             abort();
         }
-	if (cur->hv.w1 && cur->hv.w2 && !cur->deleted) {
-	    items_to_migrate++;
-	}
+        if (cur->hv.w1 && cur->hv.w2 && !cur->deleted) {
+            items_to_migrate++;
+        }
     }
 
     new_size      = hatrack_new_size(cur_last_slot, items_to_migrate + 1);

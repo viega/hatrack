@@ -16,8 +16,6 @@ static void            *hihat1_store_remove(hihat1_store_t *, hihat1_t *,
 static hihat1_store_t *hihat1_store_migrate(hihat1_store_t *, hihat1_t *);
 static hatrack_view_t   *hihat1_store_view(hihat1_store_t *, hihat1_t *,
 					   uint64_t *);
-static inline void      hihat1_do_migration(hihat1_store_t *,
-					    hihat1_store_t *);
 
 // clang-format on
 
@@ -373,63 +371,17 @@ found_bucket:
     return NULL;
 }
 
-#include <stdio.h>
 static hihat1_store_t *
 hihat1_store_migrate(hihat1_store_t *self, hihat1_t *top)
 {
-    hihat1_store_t *new_store = atomic_load(&self->store_next);
-    hihat1_store_t *candidate;
-    uint64_t        approx_len;
-    uint64_t        new_size;
-
-    // If we couldn't acquire a store, try to install one. If we fail, free it.
-
-    if (!new_store) {
-        approx_len = self->used_count - self->del_count;
-
-        // The new size start off the same as the old size.
-        new_size = self->last_slot + 1;
-
-        // If the current table seems to be more than 50% full for
-        // real, then double the table size.
-        if (approx_len > new_size / 2) {
-            new_size <<= 1;
-        }
-
-        candidate = hihat1_store_new(new_size);
-        // This helps address a potential race condition, where
-        // someone could drain the table after resize, having
-        // us swap in the wrong length.
-        atomic_store(&candidate->used_count, ~0);
-
-        if (!LCAS(&self->store_next,
-                  &new_store,
-                  candidate,
-                  HIHAT1_CTR_NEW_STORE)) {
-            mmm_retire_unused(candidate);
-        }
-        else {
-            new_store = candidate;
-        }
-    }
-
-    hihat1_do_migration(self, new_store);
-
-    if (LCAS(&top->store_current, &self, new_store, HIHAT1_CTR_STORE_INSTALL)) {
-        mmm_retire(self);
-    }
-
-    return new_store;
-}
-
-static inline void
-hihat1_do_migration(hihat1_store_t *old, hihat1_store_t *new)
-{
+    hihat1_store_t  *new_store;
+    hihat1_store_t  *candidate_store;
+    uint64_t         new_size;
     hihat1_bucket_t *bucket;
     hihat1_bucket_t *new_bucket;
     hihat1_record_t  record;
-    hihat1_record_t  candidate;
-    hihat1_record_t  expected_rec;
+    hihat1_record_t  candidate_record;
+    hihat1_record_t  expected_record;
     hatrack_hash_t   expected_hv;
     hatrack_hash_t   hv;
     uint64_t         i, j;
@@ -441,48 +393,76 @@ hihat1_do_migration(hihat1_store_t *old, hihat1_store_t *new)
     // that doesn't already have F_MOVING set.  Note that the CAS
     // could fail due to some other updater, so we keep CASing until
     // we know it was successful.
-    for (i = 0; i <= old->last_slot; i++) {
-        bucket         = &old->buckets[i];
-        record         = atomic_load(&bucket->record);
-        candidate.info = record.info | HIHAT_F_MOVING;
-        candidate.item = record.item;
+    for (i = 0; i <= self->last_slot; i++) {
+        bucket                = &self->buckets[i];
+        record                = atomic_load(&bucket->record);
+        candidate_record.info = record.info | HIHAT_F_MOVING;
+        candidate_record.item = record.item;
 
         do {
             if (record.info & HIHAT_F_MOVING) {
                 break;
             }
-        } while (
-            !LCAS(&bucket->record, &record, candidate, HIHAT1_CTR_F_MOVING));
+        } while (!LCAS(&bucket->record,
+                       &record,
+                       candidate_record,
+                       HIHAT1_CTR_F_MOVING));
+
+        if (record.info & HIHAT_F_USED) {
+            new_used++;
+        }
+    }
+
+    new_store = atomic_load(&self->store_next);
+
+    // If we couldn't acquire a store, try to install one. If we fail, free it.
+    if (!new_store) {
+        new_size        = hatrack_new_size(self->last_slot, new_used);
+        candidate_store = hihat1_store_new(new_size);
+        // This helps address a potential race condition, where
+        // someone could drain the table after resize, having
+        // us swap in the wrong length.
+        atomic_store(&candidate_store->used_count, ~0);
+
+        if (!LCAS(&self->store_next,
+                  &new_store,
+                  candidate_store,
+                  HIHAT1_CTR_NEW_STORE)) {
+            mmm_retire_unused(candidate_store);
+        }
+        else {
+            new_store = candidate_store;
+        }
     }
 
     // At this point, we're sure that any late writers will help us
     // with the migration. Therefore, we can go through each item,
     // and, if it's not fully migrated, we can attempt to migrate it.
 
-    for (i = 0; i <= old->last_slot; i++) {
-        bucket = &old->buckets[i];
+    for (i = 0; i <= self->last_slot; i++) {
+        bucket = &self->buckets[i];
         record = atomic_load(&bucket->record);
 
-        if (record.info & HIHAT_F_USED) {
-            new_used++;
-        }
         if (record.info & HIHAT_F_MOVED) {
             continue;
         }
 
         // If the bucket has been rm'd, or has never been used...
         if ((record.info & HIHAT_F_RMD) || !(record.info & HIHAT_F_USED)) {
-            candidate.info = record.info | HIHAT_F_MOVED;
-            candidate.item = record.item;
-            LCAS(&bucket->record, &record, candidate, HIHAT1_CTR_F_MOVED1);
+            candidate_record.info = record.info | HIHAT_F_MOVED;
+            candidate_record.item = record.item;
+            LCAS(&bucket->record,
+                 &record,
+                 candidate_record,
+                 HIHAT1_CTR_F_MOVED1);
             continue;
         }
 
         hv  = atomic_load(&bucket->hv);
-        bix = hatrack_bucket_index(&hv, new->last_slot);
+        bix = hatrack_bucket_index(&hv, new_store->last_slot);
 
-        for (j = 0; j <= new->last_slot; j++) {
-            new_bucket     = &new->buckets[bix];
+        for (j = 0; j <= new_store->last_slot; j++) {
+            new_bucket     = &new_store->buckets[bix];
             expected_hv.w1 = 0;
             expected_hv.w2 = 0;
             if (!LCAS(&new_bucket->hv,
@@ -490,24 +470,36 @@ hihat1_do_migration(hihat1_store_t *old, hihat1_store_t *new)
                       hv,
                       HIHAT1_CTR_MIGRATE_HV)) {
                 if (!hatrack_hashes_eq(&expected_hv, &hv)) {
-                    bix = (bix + 1) & new->last_slot;
+                    bix = (bix + 1) & new_store->last_slot;
                     continue;
                 }
             }
             break;
         }
 
-        candidate.info    = record.info & HIHAT_F_MASK;
-        candidate.item    = record.item;
-        expected_rec.info = 0;
-        expected_rec.item = NULL;
+        candidate_record.info = record.info & HIHAT_F_MASK;
+        candidate_record.item = record.item;
+        expected_record.info  = 0;
+        expected_record.item  = NULL;
 
-        LCAS(&new_bucket->record, &expected_rec, candidate, HIHAT1_CTR_MIG_REC);
-        candidate.info = record.info | HIHAT_F_MOVED;
-        LCAS(&bucket->record, &record, candidate, HIHAT1_CTR_F_MOVED2);
+        LCAS(&new_bucket->record,
+             &expected_record,
+             candidate_record,
+             HIHAT1_CTR_MIG_REC);
+        candidate_record.info = record.info | HIHAT_F_MOVED;
+        LCAS(&bucket->record, &record, candidate_record, HIHAT1_CTR_F_MOVED2);
     }
 
-    LCAS(&new->used_count, &expected_used, new_used, HIHAT1_CTR_LEN_INSTALL);
+    LCAS(&new_store->used_count,
+         &expected_used,
+         new_used,
+         HIHAT1_CTR_LEN_INSTALL);
+
+    if (LCAS(&top->store_current, &self, new_store, HIHAT1_CTR_STORE_INSTALL)) {
+        mmm_retire(self);
+    }
+
+    return new_store;
 }
 
 static hatrack_view_t *

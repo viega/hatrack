@@ -23,7 +23,7 @@
 //
 // - The rest is currently an structure-specific epoch counter // to
 //   help with sorting (note there are no consistency guarantees the
-//   way there are with lowhat).
+//   way there are with lohat).
 
 typedef struct {
     void    *item;
@@ -42,7 +42,7 @@ enum : uint64_t
 //
 // - The rest is currently an structure-specific epoch counter // to
 //   help with sorting (note there are no consistency guarantees the
-//   way there are with lowhat).
+//   way there are with lohat).
 
 typedef struct {
     alignas(32) _Atomic hatrack_hash_t hv;

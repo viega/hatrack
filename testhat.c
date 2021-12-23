@@ -31,7 +31,6 @@
 
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
 
 #ifndef HATRACK_MAX_HATS
 #define HATRACK_MAX_HATS 1024
@@ -135,34 +134,34 @@ hatrack_vtable_t hihat64_vtable = {
     .view   = (hatrack_view_func)hihat64_view
 };
 
-hatrack_vtable_t lowhat0_vtable = {
-    .init   = (hatrack_init_func)lowhat0_init,
-    .get    = (hatrack_get_func)lowhat0_get,
-    .put    = (hatrack_put_func)lowhat0_put,
-    .remove = (hatrack_remove_func)lowhat0_remove,
-    .delete = (hatrack_delete_func)lowhat0_delete,
-    .len    = (hatrack_len_func)lowhat0_len,
-    .view   = (hatrack_view_func)lowhat0_view
+hatrack_vtable_t lohat0_vtable = {
+    .init   = (hatrack_init_func)lohat0_init,
+    .get    = (hatrack_get_func)lohat0_get,
+    .put    = (hatrack_put_func)lohat0_put,
+    .remove = (hatrack_remove_func)lohat0_remove,
+    .delete = (hatrack_delete_func)lohat0_delete,
+    .len    = (hatrack_len_func)lohat0_len,
+    .view   = (hatrack_view_func)lohat0_view
 };
 
-hatrack_vtable_t lowhat1_vtable = {
-    .init   = (hatrack_init_func)lowhat1_init,
-    .get    = (hatrack_get_func)lowhat1_get,
-    .put    = (hatrack_put_func)lowhat1_put,
-    .remove = (hatrack_remove_func)lowhat1_remove,
-    .delete = (hatrack_delete_func)lowhat1_delete,
-    .len    = (hatrack_len_func)lowhat1_len,
-    .view   = (hatrack_view_func)lowhat1_view
+hatrack_vtable_t lohat1_vtable = {
+    .init   = (hatrack_init_func)lohat1_init,
+    .get    = (hatrack_get_func)lohat1_get,
+    .put    = (hatrack_put_func)lohat1_put,
+    .remove = (hatrack_remove_func)lohat1_remove,
+    .delete = (hatrack_delete_func)lohat1_delete,
+    .len    = (hatrack_len_func)lohat1_len,
+    .view   = (hatrack_view_func)lohat1_view
 };
 
-hatrack_vtable_t lowhat2_vtable = {
-    .init   = (hatrack_init_func)lowhat2_init,
-    .get    = (hatrack_get_func)lowhat2_get,
-    .put    = (hatrack_put_func)lowhat2_put,
-    .remove = (hatrack_remove_func)lowhat2_remove,
-    .delete = (hatrack_delete_func)lowhat2_delete,
-    .len    = (hatrack_len_func)lowhat2_len,
-    .view   = (hatrack_view_func)lowhat2_view
+hatrack_vtable_t lohat2_vtable = {
+    .init   = (hatrack_init_func)lohat2_init,
+    .get    = (hatrack_get_func)lohat2_get,
+    .put    = (hatrack_put_func)lohat2_put,
+    .remove = (hatrack_remove_func)lohat2_remove,
+    .delete = (hatrack_delete_func)lohat2_delete,
+    .len    = (hatrack_len_func)lohat2_len,
+    .view   = (hatrack_view_func)lohat2_view
 };
 
 hatrack_vtable_t swimcap_vtable = {
@@ -203,9 +202,9 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("refhat0", &refhat0_vtable, sizeof(refhat0_t));
     testhat_register_algorithm("hihat1", &hihat1_vtable, sizeof(hihat1_t));
     testhat_register_algorithm("hihat64", &hihat64_vtable, sizeof(hihat64_t));
-    testhat_register_algorithm("lowhat0", &lowhat0_vtable, sizeof(lowhat0_t));
-    testhat_register_algorithm("lowhat1", &lowhat1_vtable, sizeof(lowhat1_t));
-    testhat_register_algorithm("lowhat2", &lowhat2_vtable, sizeof(lowhat2_t));
+    testhat_register_algorithm("lohat0", &lohat0_vtable, sizeof(lohat0_t));
+    testhat_register_algorithm("lohat1", &lohat1_vtable, sizeof(lohat1_t));
+    testhat_register_algorithm("lohat2", &lohat2_vtable, sizeof(lohat2_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
     testhat_register_algorithm("swimcap2",
                                &swimcap2_vtable,

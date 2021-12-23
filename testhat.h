@@ -3,8 +3,8 @@
  *
  * See LICENSE.txt for licensing info.
  *
- *  Name:           lowhat.h
- *  Description:    Linearizeable, Ordered, Wait-free HAsh Table (LOWHAT)
+ *  Name:           testhat.h
+ *  Description:    Linearized, Ordered HAsh Table (LOHAT)
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -17,9 +17,9 @@
 #include "refhat0.h"
 #include "hihat1.h"
 #include "hihat64.h"
-#include "lowhat0.h"
-#include "lowhat1.h"
-#include "lowhat2.h"
+#include "lohat0.h"
+#include "lohat1.h"
+#include "lohat2.h"
 #include "swimcap.h"
 #include "swimcap2.h"
 #include "newshat.h"

@@ -422,7 +422,6 @@ swimcap_migrate(swimcap_t *self)
 
     new_size = hatrack_new_size(cur_store->last_slot, swimcap_len(self) + 1);
 
-
     new_last_slot = new_size - 1;
     new_store     = swimcap_new_store(new_size);
 

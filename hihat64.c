@@ -1,7 +1,6 @@
 #include "hihat64.h"
 
 // clang-format off
-
 static hihat64_store_t  *hihat64_store_new(uint64_t);
 static void            *hihat64_store_get(hihat64_store_t *, hihat64_t *,
 					 hatrack_hash_t *, bool *);
@@ -16,9 +15,6 @@ static void            *hihat64_store_remove(hihat64_store_t *, hihat64_t *,
 static hihat64_store_t *hihat64_store_migrate(hihat64_store_t *, hihat64_t *);
 static hatrack_view_t   *hihat64_store_view(hihat64_store_t *, hihat64_t *,
 					   uint64_t *);
-static inline void      hihat64_do_migration(hihat64_store_t *,
-					    hihat64_store_t *);
-
 // clang-format on
 
 void
@@ -470,63 +466,15 @@ found_bucket:
 static hihat64_store_t *
 hihat64_store_migrate(hihat64_store_t *self, hihat64_t *top)
 {
-    hihat64_store_t *new_store = atomic_load(&self->store_next);
-    hihat64_store_t *candidate;
-    uint64_t         approx_len;
-    uint64_t         new_size;
-
-    // If we couldn't acquire a store, try to install one. If we fail, free it.
-
-    if (!new_store) {
-        approx_len = self->used_count - self->del_count;
-
-        // The new size start off the same as the old size.
-        new_size = self->last_slot + 1;
-
-        // If the current table seems to be more than 50% full for
-        // real, then double the table size.
-        if (approx_len > new_size / 2) {
-            new_size <<= 1;
-        }
-
-        candidate = hihat64_store_new(new_size);
-        // This helps address a potential race condition, where
-        // someone could drain the table after resize, having
-        // us swap in the wrong length.
-        atomic_store(&candidate->used_count, ~0);
-
-        if (!LCAS(&self->store_next,
-                  &new_store,
-                  candidate,
-                  HIHAT64_CTR_NEW_STORE)) {
-            mmm_retire_unused(candidate);
-        }
-        else {
-            new_store = candidate;
-        }
-    }
-
-    hihat64_do_migration(self, new_store);
-
-    if (LCAS(&top->store_current,
-             &self,
-             new_store,
-             HIHAT64_CTR_STORE_INSTALL)) {
-        mmm_retire(self);
-    }
-
-    return new_store;
-}
-
-static inline void
-hihat64_do_migration(hihat64_store_t *old, hihat64_store_t *new)
-{
+    hihat64_store_t  *new_store;
+    hihat64_store_t  *candidate_store;
+    uint64_t          new_size;
     hihat64_bucket_t *bucket;
     hihat64_bucket_t *new_bucket;
     hihat64_record_t *record;
     hihat64_record_t *deflagged;
-    hihat64_record_t *candidate;
-    hihat64_record_t *expected_rec;
+    hihat64_record_t *candidate_record;
+    hihat64_record_t *expected_record;
     uint64_t          expected_hv;
     uint64_t          hv;
     uint64_t          i, j;
@@ -538,40 +486,67 @@ hihat64_do_migration(hihat64_store_t *old, hihat64_store_t *new)
     // doesn't already have F_MOVING set.  Note that the CAS could
     // fail due to some other updater, so we keep CASing until we know
     // it was successful.
-    for (i = 0; i <= old->last_slot; i++) {
-        bucket = &old->buckets[i];
+    for (i = 0; i <= self->last_slot; i++) {
+        bucket = &self->buckets[i];
         record = atomic_load(&bucket->record);
 
         do {
             if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
                 break;
             }
-            candidate = hatrack_pflag_set(record, HIHAT64_F_MOVING);
-        } while (
-            !LCAS(&bucket->record, &record, candidate, HIHAT64_CTR_F_MOVING));
-    }
-
-    // At this point, we're sure that any late writers will help us
-    // with the migration. Therefore, we can go through each item,
-    // and, if it's not fully migrated, we can attempt to migrate it.
-
-    for (i = 0; i <= old->last_slot; i++) {
-        bucket    = &old->buckets[i];
-        record    = atomic_load(&bucket->record);
+            candidate_record = hatrack_pflag_set(record, HIHAT64_F_MOVING);
+        } while (!LCAS(&bucket->record,
+                       &record,
+                       candidate_record,
+                       HIHAT64_CTR_F_MOVING));
         deflagged = hatrack_pflag_clear(record,
                                         HIHAT64_F_USED | HIHAT64_F_MOVED
                                             | HIHAT64_F_MOVING);
         if (hatrack_pflag_test(record, HIHAT64_F_USED)) {
             new_used++;
         }
+    }
+
+    new_store = atomic_load(&self->store_next);
+
+    // If we couldn't acquire a store, try to install one. If we fail, free it.
+    if (!new_store) {
+        new_size        = hatrack_new_size(self->last_slot, new_used);
+        candidate_store = hihat64_store_new(new_size);
+        // This helps address a potential race condition, where
+        // someone could drain the table after resize, having
+        // us swap in the wrong length.
+        atomic_store(&candidate_store->used_count, ~0);
+
+        if (!LCAS(&self->store_next,
+                  &new_store,
+                  candidate_store,
+                  HIHAT64_CTR_NEW_STORE)) {
+            mmm_retire_unused(candidate_store);
+        }
         else {
-            if (hatrack_pflag_test(record, HIHAT64_F_MOVED)) {
-                continue;
-            }
-            candidate = hatrack_pflag_set(record, HIHAT64_F_MOVED);
+            new_store = candidate_store;
+        }
+    }
+
+    // At this point, we're sure that any late writers will help us
+    // with the migration. Therefore, we can go through each item,
+    // and, if it's not fully migrated, we can attempt to migrate it.
+
+    for (i = 0; i <= self->last_slot; i++) {
+        bucket    = &self->buckets[i];
+        record    = atomic_load(&bucket->record);
+        deflagged = hatrack_pflag_clear(record,
+                                        HIHAT64_F_USED | HIHAT64_F_MOVED
+                                            | HIHAT64_F_MOVING);
+        if (hatrack_pflag_test(record, HIHAT64_F_MOVED)) {
+            continue;
+        }
+        if (!hatrack_pflag_test(record, HIHAT64_F_USED)) {
+            candidate_record = hatrack_pflag_set(record, HIHAT64_F_MOVED);
             if (LCAS(&bucket->record,
                      &record,
-                     candidate,
+                     candidate_record,
                      HIHAT64_CTR_F_MOVED1)) {
                 if (deflagged) {
                     mmm_retire(deflagged);
@@ -581,17 +556,17 @@ hihat64_do_migration(hihat64_store_t *old, hihat64_store_t *new)
         }
 
         hv  = atomic_load(&bucket->h1);
-        bix = hv & new->last_slot;
+        bix = hv & new_store->last_slot;
 
-        for (j = 0; j <= new->last_slot; j++) {
-            new_bucket  = &new->buckets[bix];
+        for (j = 0; j <= new_store->last_slot; j++) {
+            new_bucket  = &new_store->buckets[bix];
             expected_hv = 0;
             if (!LCAS(&new_bucket->h1,
                       &expected_hv,
                       hv,
                       HIHAT64_CTR_MIGRATE_HV)) {
                 if (expected_hv != hv) {
-                    bix = (bix + 1) & new->last_slot;
+                    bix = (bix + 1) & new_store->last_slot;
                     continue;
                 }
             }
@@ -603,7 +578,7 @@ hihat64_do_migration(hihat64_store_t *old, hihat64_store_t *new)
                       hv,
                       HIHAT64_CTR_MIGRATE_HV2)) {
                 if (__builtin_expect((expected_hv != hv), 0)) {
-                    bix = (bix + 1) & new->last_slot;
+                    bix = (bix + 1) & new_store->last_slot;
                     continue;
                 }
             }
@@ -612,17 +587,29 @@ hihat64_do_migration(hihat64_store_t *old, hihat64_store_t *new)
             break;
         }
 
-        candidate    = hatrack_pflag_set(deflagged, HIHAT64_F_USED);
-        expected_rec = NULL;
+        candidate_record = hatrack_pflag_set(deflagged, HIHAT64_F_USED);
+        expected_record  = NULL;
         LCAS(&new_bucket->record,
-             &expected_rec,
-             candidate,
+             &expected_record,
+             candidate_record,
              HIHAT64_CTR_MIG_REC);
-        candidate = hatrack_pflag_set(record, HIHAT64_F_MOVED);
-        LCAS(&bucket->record, &record, candidate, HIHAT64_CTR_F_MOVED2);
+        candidate_record = hatrack_pflag_set(record, HIHAT64_F_MOVED);
+        LCAS(&bucket->record, &record, candidate_record, HIHAT64_CTR_F_MOVED2);
     }
 
-    LCAS(&new->used_count, &expected_used, new_used, HIHAT64_CTR_LEN_INSTALL);
+    LCAS(&new_store->used_count,
+         &expected_used,
+         new_used,
+         HIHAT64_CTR_LEN_INSTALL);
+
+    if (LCAS(&top->store_current,
+             &self,
+             new_store,
+             HIHAT64_CTR_STORE_INSTALL)) {
+        mmm_retire(self);
+    }
+
+    return new_store;
 }
 
 static hatrack_view_t *
