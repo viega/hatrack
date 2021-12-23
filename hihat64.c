@@ -1,3 +1,28 @@
+/*
+ * Copyright © 2021 John Viega
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *  Name:           hihat64.c
+ *  Description:    Half-Interesting HAsh Table w/ single-word CAS only.
+ *                  This is much like hihat1, with the exception that
+ *                  we do not use a double-word Compare-And-Swap, as
+ *                  it is not available on all architectures.
+ *
+ *  Author:         John Viega, john@zork.org
+ *
+ */
+
 #include "hihat64.h"
 
 // clang-format off
@@ -482,10 +507,11 @@ hihat64_store_migrate(hihat64_store_t *self, hihat64_t *top)
     uint64_t          new_used      = 0;
     uint64_t          expected_used = ~0;
 
-    // Quickly run through every bucket, and mark any bucket that
-    // doesn't already have F_MOVING set.  Note that the CAS could
-    // fail due to some other updater, so we keep CASing until we know
-    // it was successful.
+    /* Quickly run through every bucket, and mark any bucket that
+     * doesn't already have F_MOVING set.  Note that the CAS could
+     * fail due to some other updater, so we keep CASing until we know
+     * it was successful.
+     */
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[i];
         record = atomic_load(&bucket->record);

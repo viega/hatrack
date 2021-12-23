@@ -1,10 +1,25 @@
 /*
  * Copyright © 2021 John Viega
  *
- * See LICENSE.txt for licensing info.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  *  Name:           hihat1.h
- *  Description:
+ *  Description:    Half-Interesting HAsh Table.
+ *                  This is a lock-free hash table, with wait-free
+ *                  read operations. This table allows for you to
+ *                  recover the approximate order when getting a view,
+ *                  but does not guarantee the consistency of that view.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -14,17 +29,17 @@
 
 #include "hatrack_common.h"
 
-// The info field consists of the following:
-//
-// - The high bit signals whether this is a used item or not.
-// - The next big signals whether we're migrating.
-// - The third most significant bit signals that migration is done.
-// - The fourth signals that the bucket is not only empty, but deleted.
-//
-// - The rest is currently an structure-specific epoch counter // to
-//   help with sorting (note there are no consistency guarantees the
-//   way there are with lohat).
-
+/* The info field consists of the following:
+ *
+ * - The high bit signals whether this is a used item or not.
+ * - The next big signals whether we're migrating.
+ * - The third most significant bit signals that migration is done.
+ * - The fourth signals that the bucket is not only empty, but deleted.
+ *
+ * - The rest is currently an structure-specific epoch counter // to
+ *   help with sorting (note there are no consistency guarantees the
+ *   way there are with lohat).
+ */
 typedef struct {
     void    *item;
     uint64_t info;
@@ -38,11 +53,6 @@ enum : uint64_t
     HIHAT_F_RMD    = 0x1000000000000000,
     HIHAT_F_MASK   = 0x8fffffffffffffff
 };
-
-//
-// - The rest is currently an structure-specific epoch counter // to
-//   help with sorting (note there are no consistency guarantees the
-//   way there are with lohat).
 
 typedef struct {
     _Atomic hatrack_hash_t  hv;

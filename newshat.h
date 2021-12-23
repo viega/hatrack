@@ -1,11 +1,27 @@
 /*
  * Copyright © 2021 John Viega
  *
- * See LICENSE.txt for licensing info.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  Name:           newshat.c
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *  Name:           newshat.h
  *  Description:    Now Everyone Writes Simultaneously (HAsh Table)
+ *
+ *                  Uses pthread locks on a per-bucket basis, and
+ *                  allows multiple simultaneous writers, except when
+ *                  performing table migration.
+ *
  *  Author:         John Viega, john@zork.org
+ *
  */
 
 #ifndef __NEWSHAT_H__

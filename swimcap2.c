@@ -1,14 +1,36 @@
 /*
  * Copyright © 2021 John Viega
  *
- * See LICENSE.txt for licensing info.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  *  Name:           swimcap2.c
- *  Description:    Single WrIter, Multiple-read, Crappy, Albeit Parallel.
+ *  Description:    Single WrIter, Multiple-read, Crappy, Albeit Parallel, v2.
+ *
+ *                  This uses a per-data structure lock that writers hold
+ *                  for their entire operation.
+ *
+ *                  In this version, readers do NOT use the lock;
+ *                  in fact, they are fully wait free.
+ *
+ *                  Instead, we use an epoch-based memory management
+ *                  scheme on our current data store, to make sure that
+ *                  a store cannot be deleted while we are reading it,
+ *                  even if a resize has completed.
  *
  *  Author:         John Viega, john@zork.org
  *
  */
+
 #include "swimcap2.h"
 
 // clang-format off

@@ -1,7 +1,17 @@
 /*
  * Copyright © 2021 John Viega
  *
- * See LICENSE.txt for licensing info.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  *  Name:           counters.h
  *  Description:    In-memory counters for performance monitoring,
@@ -18,11 +28,11 @@
 #include <stdatomic.h>
 #include <stdalign.h>
 
-// It's perhaps a bit odd to have this live in counters.h, b/c on the
-// surface it doesn't have anything to do with counters. But, when
-// counters are turned on, we provide an API for counting the results
-// of CASs, and we use that most everywhere.
-
+/* It's perhaps a bit odd to have this live in counters.h, b/c on the
+ * surface it doesn't have anything to do with counters. But, when
+ * counters are turned on, we provide an API for counting the results
+ * of CASs, and we use that most everywhere.
+ */
 #define CAS(target, expected, desired)                                         \
     atomic_compare_exchange_weak(target, expected, desired)
 

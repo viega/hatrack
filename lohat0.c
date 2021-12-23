@@ -1,21 +1,43 @@
+/*
+ * Copyright © 2021 John Viega
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *  Name:           lohat0.c
+ *  Description:    Linearizeable, Ordered, Wait-free HAsh Table (LOHAT)
+ *                  This version never orders, it just sorts when needed.
+ *                  Views are fully consistent.
+ *
+ *  Author:         John Viega, john@zork.org
+ */
+
 #include "lohat0.h"
 
 // clang-format off
-
 static lohat0_store_t  *lohat0_store_new(uint64_t);
-static void              lohat0_retire_store(lohat0_store_t *);
-static void             *lohat0_store_get(lohat0_store_t *, lohat0_t *,
-					   hatrack_hash_t *, bool *);
-static void             *lohat0_store_put(lohat0_store_t *, lohat0_t *,
-					   hatrack_hash_t *, void *, bool *);
-static bool              lohat0_store_put_if_empty(lohat0_store_t *,
-						    lohat0_t *,
-						    hatrack_hash_t *,
-						    void *);
-static void             *lohat0_store_remove(lohat0_store_t *, lohat0_t *,
-					      hatrack_hash_t *, bool *);
+static void             lohat0_retire_store(lohat0_store_t *);
+static void            *lohat0_store_get(lohat0_store_t *, lohat0_t *,
+					 hatrack_hash_t *, bool *);
+static void            *lohat0_store_put(lohat0_store_t *, lohat0_t *,
+					 hatrack_hash_t *, void *, bool *);
+static bool             lohat0_store_put_if_empty(lohat0_store_t *,
+						  lohat0_t *,
+						  hatrack_hash_t *,
+						  void *);
+static void            *lohat0_store_remove(lohat0_store_t *, lohat0_t *,
+					    hatrack_hash_t *, bool *);
 static lohat0_store_t  *lohat0_store_migrate(lohat0_store_t *, lohat0_t *);
-static hatrack_view_t   *lohat0_store_view(lohat0_store_t *, lohat0_t *,
+static hatrack_view_t  *lohat0_store_view(lohat0_store_t *, lohat0_t *,
 					    uint64_t, uint64_t *);
 // clang-format on
 
@@ -27,16 +49,16 @@ lohat0_init(lohat0_t *self)
     atomic_store(&self->store_current, store);
 }
 
-// lohat0_get() returns whatever is stored in the item field.
-// Generally, we expect this to be two pointers, a key and a value.
-// Meaning, when the object is NOT in the table, the return value
-// will be the null pointer.
-//
-// When not using values (i.e., a set), it would be reasonable to
-// store values directly, instead of pointers. Thus, the extra
-// optional parameter to get() can tell us whether the item was
-// found or not.  Set it to NULL if you're not interested.
-
+/* lohat0_get() returns whatever is stored in the item field.
+ * Generally, we expect this to be two pointers, a key and a value.
+ * Meaning, when the object is NOT in the table, the return value
+ * will be the null pointer.
+ *
+ * When not using values (i.e., a set), it would be reasonable to
+ * store values directly, instead of pointers. Thus, the extra
+ * optional parameter to get() can tell us whether the item was
+ * found or not.  Set it to NULL if you're not interested.
+ */
 void *
 lohat0_get(lohat0_t *self, hatrack_hash_t *hv, bool *found)
 {
@@ -248,14 +270,14 @@ found_history_bucket:
     candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
     candidate->item = item;
 
-    // Even if we're the winner, we need still to make sure that the
-    // previous thread's write epoch got committed (since ours has to
-    // be later than theirs). Then, we need to commit our write, and
-    // return whatever value was there before, if any.
-    //
-    // Do this first, so we can attempt to set our create epoch
-    // properly before we move our record into place.
-
+    /* Even if we're the winner, we need still to make sure that the
+     * previous thread's write epoch got committed (since ours has to
+     * be later than theirs). Then, we need to commit our write, and
+     * return whatever value was there before, if any.
+     *
+     * Do this first, so we can attempt to set our create epoch
+     * properly before we move our record into place.
+     */
     if (head) {
         mmm_help_commit(head);
         if (hatrack_pflag_test(head->next, LOHAT_F_USED)) {
@@ -274,13 +296,14 @@ found_history_bucket:
     }
 
     if (!LCAS(&bucket->head, &head, candidate, LOHAT0_CTR_REC_INSTALL)) {
-        // CAS failed. This is either because a flag got updated
-        // (because of a table migration), or because a new record got
-        // added first.  In the later case, we act like our write
-        // happened, and that we got immediately overwritten, before
-        // any read was possible.  We want the caller to delete the
-        // item if appropriate, so when found is passed, we return
-        // *found = true, and return the item passed in as a result.
+        /* CAS failed. This is either because a flag got updated
+         * (because of a table migration), or because a new record got
+         * added first.  In the later case, we act like our write
+         * happened, and that we got immediately overwritten, before
+         * any read was possible.  We want the caller to delete the
+         * item if appropriate, so when found is passed, we return
+         * *found = true, and return the item passed in as a result.
+         */
         mmm_retire_unused(candidate);
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
@@ -386,12 +409,12 @@ found_history_bucket:
         }
     }
 
-    // Right now there's nothing in the bucket, but there might be
-    // something in the bucket before we add our item, in which case
-    // the CAS will fail. Or, the CAS may fail if the migrating flag
-    // got set.  If there is an item there, we return false; if we see
-    // a migration in progress, we go off and do that instead.
-
+    /* Right now there's nothing in the bucket, but there might be
+     * something in the bucket before we add our item, in which case
+     * the CAS will fail. Or, the CAS may fail if the migrating flag
+     * got set.  If there is an item there, we return false; if we see
+     * a migration in progress, we go off and do that instead.
+     */
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
     candidate->item = item;
@@ -481,15 +504,15 @@ found_history_bucket:
         goto empty_bucket;
     }
 
-    // At this moment, there's an item there to delete. Create a
-    // deletion record, and try to add it on. If we "fail", we look at
-    // the record that won. If it is itself a deletion, then that
-    // record did the delete, and we act like we came in after it.  If
-    // it's an overwrite, then the overwrite was responsible for
-    // returning the old item for memory management purposes, so we
-    // return NULL and set *found to false (if requested), to indicate
-    // that there's no memory management work to do.
-
+    /* At this moment, there's an item there to delete. Create a
+     * deletion record, and try to add it on. If we "fail", we look at
+     * the record that won. If it is itself a deletion, then that
+     * record did the delete, and we act like we came in after it.  If
+     * it's an overwrite, then the overwrite was responsible for
+     * returning the old item for memory management purposes, so we
+     * return NULL and set *found to false (if requested), to indicate
+     * that there's no memory management work to do.
+     */
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = NULL;
     candidate->item = NULL;
@@ -548,10 +571,11 @@ lohat0_store_migrate(lohat0_store_t *self, lohat0_t *top)
     uint64_t          new_used      = 0;
     uint64_t          expected_used = ~0;
 
-    // Quickly run through every history bucket, and mark any bucket
-    // that doesn't already have F_MOVING set.  Note that the CAS
-    // could fail due to some other updater, so we keep CASing until
-    // we know it was successful.
+    /* Quickly run through every history bucket, and mark any bucket
+     * that doesn't already have F_MOVING set.  Note that the CAS
+     * could fail due to some other updater, so we keep CASing until
+     * we know it was successful.
+     */
     for (i = 0; i <= self->last_slot; i++) {
         cur  = &self->hist_buckets[i];
         head = atomic_load(&cur->head);
@@ -595,7 +619,6 @@ lohat0_store_migrate(lohat0_store_t *self, lohat0_t *top)
     // At this point, we're sure that any late writers will help us
     // with the migration. Therefore, we can go through each item,
     // and, if it's not fully migrated, we can attempt to migrate it.
-
     for (i = 0; i <= self->last_slot; i++) {
         cur      = &self->hist_buckets[i];
         old_head = atomic_load(&cur->head);
@@ -690,11 +713,11 @@ lohat0_store_view(lohat0_store_t *self,
         // before we proceed.
         mmm_help_commit(rec);
 
-        // First, we find the top-most record that's older than (or
-        // equal to) the linearization epoch.  At this point, we
-        // happily will look under deletions; our goal is to just go
-        // back in time until we find the right record.
-
+        /* First, we find the top-most record that's older than (or
+         * equal to) the linearization epoch.  At this point, we
+         * happily will look under deletions; our goal is to just go
+         * back in time until we find the right record.
+         */
         while (rec) {
             sort_epoch = mmm_get_write_epoch(rec);
             if (sort_epoch <= epoch) {
@@ -703,10 +726,11 @@ lohat0_store_view(lohat0_store_t *self,
             rec = hatrack_pflag_clear(rec->next, LOHAT_F_USED);
         }
 
-        // If the sort_epoch is larger than the epoch, then no records
-        // in this bucket are old enough to be part of the linearization.
-        // Similarly, if the top record is a delete record, then the
-        // bucket was empty at the linearization point.
+        /* If the sort_epoch is larger than the epoch, then no records
+         * in this bucket are old enough to be part of the linearization.
+         * Similarly, if the top record is a delete record, then the
+         * bucket was empty at the linearization point.
+         */
         if (!rec || sort_epoch > epoch
             || !hatrack_pflag_test(rec->next, LOHAT_F_USED)) {
             cur++;

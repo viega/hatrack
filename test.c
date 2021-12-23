@@ -1,10 +1,21 @@
 /*
  * Copyright © 2021 John Viega
  *
- * See LICENSE.txt for licensing info.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  *  Name:           test.c
- *  Description:    Lohat tests and code to support tests.
+ *  Description:    Lohat test cases, and code to support tests.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -73,21 +84,21 @@ test_precompute_hashes()
     }
 }
 
-// RNG support. We use a lot of random numbers in our testing, and
-// would like to avoid several things:
-//
-// 1) Calling into the kernel more than we need to.
-//
-// 2) Any locks around RNG APIs.  For instance, I'm pretty sure
-//    arc4random() has such a lock on my machine.
-//
-// 3) Holding on to too much memory.
-//
-// Our basic approach is to implement ARC4 ourselves, and keep the
-// state on a per-thread basis, with the seed xor'd with the bottom
-// byte of the thread's pthread id (just to get some variance in the
-// number streams).  We read the seed once from /dev/urandom.
-
+/* RNG support. We use a lot of random numbers in our testing, and
+ * would like to avoid several things:
+ *
+ * 1) Calling into the kernel more than we need to.
+ *
+ * 2) Any locks around RNG APIs.  For instance, I'm pretty sure
+ *    arc4random() has such a lock on my machine.
+ *
+ * 3) Holding on to too much memory.
+ *
+ * Our basic approach is to implement ARC4 ourselves, and keep the
+ * state on a per-thread basis, with the seed xor'd with the bottom
+ * byte of the thread's pthread id (just to get some variance in the
+ * number streams).  We read the seed once from /dev/urandom.
+ */
 #ifndef HATRACK_RAND_SEED_SIZE
 #define HATRACK_RAND_SEED_SIZE 32
 #endif
@@ -487,15 +498,15 @@ run_func_test(char       *name,
     } while (extra && extra[++extra_ix]);
 }
 
-// Actual tests below here.
-
-// [ basic ]
-// 1) Have one thread add all the key / value pairs (where key = value).
-// 2) delete the top half.
-// 3) Run get on all items, to make sure only the expected items
-//    are there.
-// Ignores the # of iterations, only the range.
-
+/* Actual tests below here.
+ *
+ * [ basic ]
+ * 1) Have one thread add all the key / value pairs (where key = value).
+ * 2) delete the top half.
+ * 3) Run get on all items, to make sure only the expected items
+ *    are there.
+ * Ignores the # of iterations, only the range.
+ */
 bool
 test_basic(test_info_t *info)
 {
@@ -522,12 +533,12 @@ test_basic(test_info_t *info)
     return true;
 }
 
-// [ ordering ]
-//
-// Add n items in numerical order, delete the first half, reinsert all
-// the items, and then make sure the ordering is right in our
-// iterator.
-
+/* [ ordering ]
+ *
+ * Add n items in numerical order, delete the first half, reinsert all
+ * the items, and then make sure the ordering is right in our
+ * iterator.
+ */
 bool
 test_ordering(test_info_t *info)
 {
@@ -589,11 +600,12 @@ test_shrinking(test_info_t *info)
     return true;
 }
 
-// [ parallel ]
-// [ ||-large ]
-//
-// Have each thread attempt to set every value in the range,
-// then check to make sure the items are all correct.
+/* [ parallel ]
+ * [ ||-large ]
+ *
+ * Have each thread attempt to set every value in the range,
+ * then check to make sure the items are all correct.
+ */
 bool
 test_parallel(test_info_t *info)
 {
@@ -617,7 +629,6 @@ test_parallel(test_info_t *info)
 // [ rand() ]
 //
 // Calculate a baseline for calls to rand().
-
 bool
 test_rand_speed(test_info_t *info)
 {

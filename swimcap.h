@@ -1,11 +1,32 @@
 /*
  * Copyright © 2021 John Viega
  *
- * See LICENSE.txt for licensing info.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *  Name:           swimcap.c
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *  Name:           swimcap.h
  *  Description:    Single WrIter, Multiple-read, Crappy, Albeit Parallel.
+ *
+ *                  This uses a per-data structure lock that writers hold
+ *                  for their entire operation.
+ *
+ *                  Readers also use the lock, but only for a minimal
+ *                  amount of time-- enough time to grab a pointer to
+ *                  the current store, and to increment a reference
+ *                  count in that store.  The lock does not need to
+ *                  be held when readers exit.
+ *
  *  Author:         John Viega, john@zork.org
+ *
  */
 
 #ifndef __SWIMCAP_H__
@@ -49,13 +70,15 @@ swimcap_reader_enter(swimcap_t *self)
 {
     swimcap_store_t *ret;
 
-    // We could use a read-write mutex, but that would unnecessarily
-    // block both reads and writes.  The store won't be retired until
-    // there are definitely no readers, so as long as we can
-    // atomically read the pointer to the store and register our
-    // reference to the store, we are fine. As an alternative, we
-    // could do this without locks using a 128-bit CAS that holds the
-    // pointer, or use mmm_alloc() for the stores.
+    /* We could use a read-write mutex, but that would unnecessarily
+     * block both reads and writes.  The store won't be retired until
+     * there are definitely no readers, so as long as we can
+     * atomically read the pointer to the store and register our
+     * reference to the store, we are fine. As an alternative, we
+     * could do this without locks using a 128-bit CAS that holds the
+     * pointer, or use mmm_alloc() for the stores (which we do in
+     * the swimcap2 implementation).
+     */
     pthread_mutex_lock(&self->write_mutex);
     ret = self->store;
     atomic_fetch_add(&ret->readers, 1);

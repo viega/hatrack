@@ -1,14 +1,34 @@
 /*
  * Copyright © 2021 John Viega
  *
- * See LICENSE.txt for licensing info.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  *  Name:           swimcap.c
  *  Description:    Single WrIter, Multiple-read, Crappy, Albeit Parallel.
  *
+ *                  This uses a per-data structure lock that writers hold
+ *                  for their entire operation.
+ *
+ *                  Readers also use the lock, but only for a minimal
+ *                  amount of time-- enough time to grab a pointer to
+ *                  the current store, and to increment a reference
+ *                  count in that store.  The lock does not need to
+ *                  be held when readers exit.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */
+
 #include "swimcap.h"
 
 // clang-format off
@@ -16,13 +36,13 @@ static swimcap_store_t * swimcap_new_store(uint64_t);
 static void              swimcap_migrate(swimcap_t *);
 // clang-format on
 
-// These macros clean up swimcap_view() to make it more readable.  It
-// uses the configuration variable SWIMCAP_INCONSISTENT_VIEW_IS_OKAY
-// to select whether the function should act as a reader or a writer.
-//
-// By default, we register as a reader, and live with potential
-// inconsistency.
-
+/* These macros clean up swimcap_view() to make it more readable.  It
+ * uses the configuration variable SWIMCAP_INCONSISTENT_VIEW_IS_OKAY
+ * to select whether the function should act as a reader or a writer.
+ *
+ * By default, we register as a reader, and live with potential
+ * inconsistency.
+ */
 #ifdef SWIMCAP_INCONSISTENT_VIEW_IS_OKAY
 #define swimcap_viewer_enter(self)       swimcap_reader_enter(self)
 #define swimcap_viewer_exit(self, store) swimcap_reader_exit(store)

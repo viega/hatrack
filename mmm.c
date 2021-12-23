@@ -1,3 +1,26 @@
+/*
+ * Copyright © 2021 John Viega
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *  Name:           mmm.c
+ *  Description:    Miniature memory manager: a malloc wrapper to support
+ *                  linearization and safe reclaimation for my hash tables.
+ *
+ *  Author:         John Viega, john@zork.org
+ *
+ */
+
 #include "mmm.h"
 #include "hatrack_common.h" // for hatrack_pflag_*
 
@@ -142,16 +165,16 @@ mmm_retire(void *ptr)
     }
 }
 
-// The basic gist of this algorithm is that we're going to look at
-// every reservation we can find, identifying the oldest reservation
-// in the list.
-//
-// Then, we can then safely free anything in the list with an earlier
-// retirement epoch than the reservation time. Since the items in the
-// stack were pushed on in order of their retirement epoch, it
-// suffices to find the first item that is lower than the target,
-// and free everything else.
-
+/* The basic gist of this algorithm is that we're going to look at
+ * every reservation we can find, identifying the oldest reservation
+ * in the list.
+ *
+ * Then, we can then safely free anything in the list with an earlier
+ * retirement epoch than the reservation time. Since the items in the
+ * stack were pushed on in order of their retirement epoch, it
+ * suffices to find the first item that is lower than the target,
+ * and free everything else.
+ */
 static void
 mmm_empty(void)
 {
@@ -162,21 +185,22 @@ mmm_empty(void)
     uint64_t      lasttid;
     uint64_t      i;
 
-    // We don't have to search the whole array, just the items assigned
-    // to active threads. Even if a new thread comes along, it will
-    // not be able to reserve something that's already been retired
-    // by the time we call this.
+    /* We don't have to search the whole array, just the items assigned
+     * to active threads. Even if a new thread comes along, it will
+     * not be able to reserve something that's already been retired
+     * by the time we call this.
+     */
     lasttid = atomic_load(&mmm_nexttid);
     
     if (lasttid > HATRACK_THREADS_MAX) {
 	lasttid = HATRACK_THREADS_MAX;
     }
 
-    // We start out w/ the "lowest" reservation we've seen as
-    // HATRACK_EPOCH_MAX.  If this value never changes, then it
-    // means no epochs were reserved, and we can safely
-    // free every record in our stack.
-    
+    /* We start out w/ the "lowest" reservation we've seen as
+     * HATRACK_EPOCH_MAX.  If this value never changes, then it
+     * means no epochs were reserved, and we can safely
+     * free every record in our stack.
+     */    
     lowest = HATRACK_EPOCH_MAX;
 
     for (i = 0; i < lasttid; i++) {
@@ -186,18 +210,18 @@ mmm_empty(void)
 	}
     }
     
-    // The list here is ordered by retire epoch, with most recent on
-    // top.  Go down the list until the NEXT cell is the first item we
-    // should delete.
-    // 
-    // Then, set the current cell's next pointer to NULL (since
-    // it's the new end of the list), and then place the pointer at
-    // the top of the list of cells to delete.
-    //
-    // Note that this function is only called if there's something
-    // something on the retire list, so cell will never start out
-    // empty.
-
+    /* The list here is ordered by retire epoch, with most recent on
+     * top.  Go down the list until the NEXT cell is the first item we
+     * should delete.
+     * 
+     * Then, set the current cell's next pointer to NULL (since
+     * it's the new end of the list), and then place the pointer at
+     * the top of the list of cells to delete.
+     *
+     * Note that this function is only called if there's something
+     * something on the retire list, so cell will never start out
+     * empty.
+     */
     cell = mmm_retire_list;
 
     // Special-case this, in case we have to delete the head cell,

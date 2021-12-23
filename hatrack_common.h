@@ -1,11 +1,24 @@
 /*
  * Copyright © 2021 John Viega
  *
- * See LICENSE.txt for licensing info.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  *  Name:           hatrack_common.h
- *  Description:    Items shared across hash tables.
+ *  Description:    Data structures and utility functions used across all
+ *                  our default hash tables.
+ *
  *  Author:         John Viega, john@zork.org
+ *
  */
 
 #ifndef __HATRACK_COMMON_H__
@@ -13,13 +26,13 @@
 
 #include "mmm.h"
 
-// The below type represents a hash value.
-//
-// We use 128-bit hash values and a universal hash function to make
-// accidental collisions so improbable, we can use hash equality as a
-// standin for identity, so that we never have to worry about
-// comparing keys.
-
+/* The below type represents a hash value.
+ *
+ * We use 128-bit hash values and a universal hash function to make
+ * accidental collisions so improbable, we can use hash equality as a
+ * standin for identity, so that we never have to worry about
+ * comparing keys.
+ */
 typedef struct {
     uint64_t w1;
     uint64_t w2;
@@ -33,12 +46,13 @@ typedef struct {
     uint64_t       sort_epoch;
 } hatrack_view_t;
 
-// By default, we keep vtables of the operations to make it easier to
-// switch between different algorithms for testing. These types are
-// aliases for the methods that we expect to see.
-//
-// We use void * in the first parameter to all of these methods to
-// stand in for an arbitrary pointer to a hash table.
+/* By default, we keep vtables of the operations to make it easier to
+ * switch between different algorithms for testing. These types are
+ * aliases for the methods that we expect to see.
+ *
+ * We use void * in the first parameter to all of these methods to
+ * stand in for an arbitrary pointer to a hash table.
+ */
 
 // clang-format off
 
@@ -84,7 +98,7 @@ hatrack_new_size(uint64_t last_bucket, uint64_t size)
     // We will never bother to size back down to the smallest few
     // table sizes.
     if (size <= (HATRACK_MIN_SIZE << 2)) {
-	return HATRACK_MIN_SIZE << 3;
+        return HATRACK_MIN_SIZE << 3;
     }
     if (size <= (table_size >> 2)) {
         HATRACK_CTR(HATRACK_CTR_STORE_SHRINK);
