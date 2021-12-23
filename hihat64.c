@@ -20,7 +20,7 @@ static hatrack_view_t   *hihat64_store_view(hihat64_store_t *, hihat64_t *,
 void
 hihat64_init(hihat64_t *self)
 {
-    hihat64_store_t *store = hihat64_store_new(1 << HATRACK_MIN_SIZE_LOG);
+    hihat64_store_t *store = hihat64_store_new(HATRACK_MIN_SIZE);
 
     atomic_store(&self->store_current, store);
 }

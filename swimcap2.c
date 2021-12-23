@@ -19,7 +19,7 @@ static void              swimcap2_migrate(swimcap2_t *);
 void
 swimcap2_init(swimcap2_t *self)
 {
-    swimcap2_store_t *store = swimcap2_new_store(1 << HATRACK_MIN_SIZE_LOG);
+    swimcap2_store_t *store = swimcap2_new_store(HATRACK_MIN_SIZE);
     self->item_count        = 0;
     self->store             = store;
     pthread_mutex_init(&self->write_mutex, NULL);

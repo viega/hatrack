@@ -88,9 +88,9 @@ debug_grep(char *s)
     int64_t i;
 
     start = atomic_load(&__hatrack_debug_sequence);
-    start &= ((1 << HATRACK_DEBUG_RING_LOG) - 1);
+    start &= HATRACK_DEBUG_RING_LAST_SLOT;
 
-    for (i = start; i < ((1 << HATRACK_DEBUG_RING_LOG) - 1); i++) {
+    for (i = start; i < HATRACK_DEBUG_RING_SIZE; i++) {
         if (strstr(__hatrack_debug[i].msg, s)) {
             printf("%06llu: (tid %ld) %s\n",
                    __hatrack_debug[i].sequence,

@@ -22,7 +22,7 @@ static hatrack_view_t   *lohat0_store_view(lohat0_store_t *, lohat0_t *,
 void
 lohat0_init(lohat0_t *self)
 {
-    lohat0_store_t *store = lohat0_store_new(1 << HATRACK_MIN_SIZE_LOG);
+    lohat0_store_t *store = lohat0_store_new(HATRACK_MIN_SIZE);
 
     atomic_store(&self->store_current, store);
 }

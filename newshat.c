@@ -40,7 +40,7 @@ static newshat_store_t *newshat_store_migrate     (newshat_store_t *,
 void
 newshat_init(newshat_t *self)
 {
-    newshat_store_t *store = newshat_store_new(1 << HATRACK_MIN_SIZE_LOG);
+    newshat_store_t *store = newshat_store_new(HATRACK_MIN_SIZE);
     self->item_count       = 0;
     self->store            = store;
     pthread_mutex_init(&self->migrate_mutex, NULL);

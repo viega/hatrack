@@ -27,7 +27,7 @@ static void             lohat2_insertion_sort(hatrack_view_t *, uint64_t);
 void
 lohat2_init(lohat2_t *self)
 {
-    lohat2_store_t *store = lohat2_store_new(1 << HATRACK_MIN_SIZE_LOG);
+    lohat2_store_t *store = lohat2_store_new(HATRACK_MIN_SIZE);
 
     atomic_store(&self->store_current, store);
 }

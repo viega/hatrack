@@ -22,7 +22,7 @@ static hatrack_view_t   *hihat1_store_view(hihat1_store_t *, hihat1_t *,
 void
 hihat1_init(hihat1_t *self)
 {
-    hihat1_store_t *store = hihat1_store_new(1 << HATRACK_MIN_SIZE_LOG);
+    hihat1_store_t *store = hihat1_store_new(HATRACK_MIN_SIZE);
 
     self->epoch = 0;
     atomic_store(&self->store_current, store);
