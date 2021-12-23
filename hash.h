@@ -1,9 +1,14 @@
 #include "xxhash.h"
 #include "hatrack_common.h"
+
 #include <string.h>
 
 #ifndef __HATRACK_HASH_H__
 #define __HATRACK_HASH_H__
+
+// These hash functions are not used by the core algorithms. Instead,
+// they are used in the wrapper in testhat.c, which we use for our
+// test harness that dispatches to the algorithm.
 
 typedef union {
     hatrack_hash_t lhv;

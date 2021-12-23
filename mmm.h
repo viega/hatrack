@@ -27,16 +27,35 @@
 #ifndef __MMM_H__
 #define __MMM_H__
 
+#include "config.h"
+#include "debug.h"
+#include "counters.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>
 #include <stdalign.h>
 
-#include "debug.h"
+// This type represents a callback to de-allocate sub-objects before
+// the final free for an object allocated via MMM.
+typedef void (*mmm_cleanup_func)(void *);
 
-typedef struct mmm_header_st mmm_header_t;
-static inline mmm_header_t  *mmm_get_header(void *);
-static inline void           hatrack_debug_mmm(void *, char *);
+typedef struct mmm_header_st    mmm_header_t;
+typedef struct mmm_free_tids_st mmm_free_tids_t;
+
+// We don't want to keep reservation space for threads that don't need
+// it, so we issue a threadid for each thread to keep locally, which
+// is an index into that array.
+//
+// If desired (at compile time), threads can decide to "give back"
+// their thread IDs, so that they can be re-used, for instance, if the
+// thread exits, or decides to switch roles to something that won't
+// require it.  That's controlled with the HATRACK_ALLOW_TID_GIVEBACKS
+// preprocessor variable.
+
+extern __thread int64_t        mmm_mytid;
+extern __thread pthread_once_t mmm_inited;
+extern _Atomic uint64_t        mmm_epoch;
+extern uint64_t                mmm_reservations[HATRACK_THREADS_MAX];
 
 // The header data structure. Note that we keep a linked list of
 // "retired" records, which is the purpose of the field 'next'.  The
@@ -47,85 +66,51 @@ static inline void           hatrack_debug_mmm(void *, char *);
 // ordering, we need to know the original create time. Since we want
 // to be able to free the old records from the original creation,
 // we need to cache that time in the create_epoch field.
+//
+// clang-format off
 
 struct mmm_header_st {
-    alignas(32) mmm_header_t *next;
-    void (*cleanup)(void *);
-    _Atomic uint64_t create_epoch;
-    _Atomic uint64_t write_epoch;
-    uint64_t         retire_epoch;
-    alignas(32) uint8_t data[];
+    alignas(16) mmm_header_t    *next;
+    _Atomic     uint64_t         create_epoch;
+    _Atomic     uint64_t         write_epoch;
+                uint64_t         retire_epoch;
+                mmm_cleanup_func cleanup;
+    alignas(16) uint8_t          data[];
 };
 
-// This algorithm keeps an array of thread reader epochs that's shared
-// across threads. The basic idea is that each reader writes the
-// current epoch into their slot in the array in order to declare the
-// current epoch as the one they're reading in.  Readers will ignore
-// any writes that are from after the epoch, as well as any objects
-// that were retired before or duing this epoch (retirements are
-// essentially deletions, and write operations are always expected to
-// logically happen at the beginning of an epoch).
-//
-// When we go to clean up a record that has been "retired", we
-// essentially need to check whether there are any readers still
-// active in an epoch after the record was created, and before the
-// record was retired. If there is, then we continue to defer
-// deletion.
-//
-// To do this, we have to scan the reservation for every single
-// thread.  It'd be bad to have to resize the reservations, so we'll
-// keep them in static memory, and only allow a fixed number of
-// threads (MMM_THREADS_MAX).
-
-#ifndef MMM_THREADS_MAX
-#define MMM_THREADS_MAX 8192
+#ifdef HATRACK_ALLOW_TID_GIVEBACKS
+struct mmm_free_tids_st {
+    alignas(32) mmm_free_tids_t *next;
+                uint64_t         tid;
+};
 #endif
 
-// Each thread goes through its list of retired objects periodically,
-// and deletes anything that can never again be accessed. We basically
-// look every N times we go through the list, where N is a power of
-// two.  I believe this number can stay very low.
 
-#ifndef MMM_RETIRE_FREQ_LOG
-#define MMM_RETIRE_FREQ_LOG 5
-#undef MMM_RETIRE_FREQ
+void           mmm_register_thread(void);
+void           mmm_reset_tids(void);
+void           mmm_retire(void *);
+void           mmm_clean_up_before_exit(void);
+
+#ifdef HATRACK_DEBUG
+static inline void           hatrack_debug_mmm(void *, char *);
+
+#define DEBUG_MMM(x, y)      hatrack_debug_mmm((void *)(x), y)
+#else
+#define DEBUG_MMM(x, y)
 #endif
 
-#define MMM_RETIRE_FREQ (1 << MMM_RETIRE_FREQ_LOG)
-
-extern _Atomic uint64_t mmm_epoch; // Holds the current epoch.
-extern uint64_t         mmm_reservations[MMM_THREADS_MAX];
-
-// We don't want to keep reservation space for threads that don't need
-// it, so we issue a threadid for each thread to keep locally, which
-// is an index into that array.
-//
-// If desired (at compile time), threads can decide to "give back"
-// their thread IDs, so that they can be re-used, for instance, if the
-// thread exits, or decides to switch roles to something that won't
-// require it.  That's controlled with the MMM_ALLOW_TID_GIVEBACKS
-// preprocessor variable.
-
-extern __thread int64_t        mmm_mytid;
-extern __thread pthread_once_t mmm_inited;
-
-#define MMM_DEBUG
-#ifdef MMM_DEBUG
-#include <stdio.h>
-#endif
-
-#include "counters.h"
-#include "debug.h"
 
 #ifdef HATRACK_MMMALLOC_CTRS
-#define HATRACK_MALLOC_CTR()        HATRACK_CTR(MMM_CTR_MALLOCS)
-#define HATRACK_FREE_CTR()          HATRACK_CTR(MMM_CTR_FREES)
-#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(MMM_CTR_RETIRE_UNUSED)
+#define HATRACK_MALLOC_CTR()        HATRACK_CTR(HATRACK_CTR_MALLOCS)
+#define HATRACK_FREE_CTR()          HATRACK_CTR(HATRACK_CTR_FREES)
+#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(HATRACK_CTR_RETIRE_UNUSED)
 #else
 #define HATRACK_MALLOC_CTR()
 #define HATRACK_FREE_CTR()
-#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(MMM_CTR_RETIRE_UNUSED)
+#define HATRACK_RETIRE_UNUSED_CTR() HATRACK_CTR(HATRACK_CTR_RETIRE_UNUSED)
 #endif
+
+// clang-format on
 
 // This epoch system was inspired by my research into what was out
 // there that would be faster and easier to use than hazard
@@ -339,32 +324,18 @@ extern __thread pthread_once_t mmm_inited;
 
 enum : uint64_t
 {
-    MMM_EPOCH_UNRESERVED   = 0xffffffffffffffff,
-    MMM_EPOCH_FIRST        = 0x0000000000000001,
-    MMM_F_RESERVATION_HELP = 0x8000000000000000,
-    MMM_EPOCH_MAX          = 0xffffffffffffffff
+    HATRACK_EPOCH_UNRESERVED   = 0xffffffffffffffff,
+    HATRACK_EPOCH_FIRST        = 0x0000000000000001,
+    HATRACK_F_RESERVATION_HELP = 0x8000000000000000,
+    HATRACK_EPOCH_MAX          = 0xffffffffffffffff
 };
 
-typedef struct mmm_free_tids_st mmm_free_tids_t;
-
-struct mmm_free_tids_st {
-    alignas(32) mmm_free_tids_t *next;
-    uint64_t tid;
-};
-
-void mmm_register_thread(void);
-void mmm_retire(void *);
-void mmm_clean_up_before_exit(void);
-
-#ifdef HATRACK_DEBUG
-#define DEBUG_MMM(x, y) hatrack_debug_mmm((void *)(x), y)
-#else
-#define DEBUG_MMM(x, y)
-#endif
-
-#ifdef MMM_ALLOW_TID_GIVEBACKS
-void mmm_tid_giveback(void);
-#endif
+// Access the hidden header.
+static inline mmm_header_t *
+mmm_get_header(void *ptr)
+{
+    return (mmm_header_t *)(((uint8_t *)ptr) - sizeof(mmm_header_t));
+}
 
 // We stick our read reservation in mmm_reservations[mmm_mytid].  By
 // doing this, we are guaranteeing that we will only read data alive
@@ -374,163 +345,7 @@ void mmm_tid_giveback(void);
 // reserved epoch, and does not ensure linearization (instead, use
 // mmm_start_linearized_op).
 
-static inline void
-mmm_start_basic_op(void)
-{
-    pthread_once(&mmm_inited, mmm_register_thread);
-    if (mmm_mytid < 0 || mmm_mytid > 8192)
-        abort();
-    mmm_reservations[mmm_mytid] = atomic_load(&mmm_epoch);
-}
-
-// To ensure we don't end up missing a delete, we need to ensure that
-// our epoch commits in the reservations array BEFORE the epoch
-// switches. Otherwise, things alive in the epoch we read out here can
-// potentially be reclaimed by the time we read them.
-
-static inline uint64_t
-mmm_start_linearized_op(void)
-{
-    uint64_t read_epoch;
-
-    pthread_once(&mmm_inited, mmm_register_thread);
-    read_epoch = atomic_load(&mmm_epoch);
-    do {
-        mmm_reservations[mmm_mytid] = read_epoch;
-        read_epoch                  = atomic_load(&mmm_epoch);
-    } while (HATRACK_YN_CTR(read_epoch != mmm_reservations[mmm_mytid],
-                            HATRACK_CTR_LINEARIZE_RETRIES));
-
-    return read_epoch;
-}
-
-static inline void
-mmm_end_op(void)
-{
-    if (mmm_mytid < 0 || mmm_mytid > 8192)
-        abort();
-    mmm_reservations[mmm_mytid] = MMM_EPOCH_UNRESERVED;
-}
-
-static inline mmm_header_t *
-mmm_get_header(void *ptr)
-{
-    return (mmm_header_t *)(((uint8_t *)ptr) - sizeof(mmm_header_t));
-}
-
-static inline void
-mmm_commit_write(void *ptr)
-{
-    uint64_t      cur_epoch;
-    uint64_t      expected_value = 0;
-    mmm_header_t *item           = mmm_get_header(ptr);
-
-    cur_epoch = atomic_fetch_add(&mmm_epoch, 1) + 1;
-    // If this CAS operation fails, it can only be because:
-    //
-    //   1) We stalled in our write commit, some other thread noticed,
-    //       and helped us out.
-    //
-    //   2) We were trying to help, but either the original thread, or
-    //      some other helper got there first.
-    //
-    // Either way, we're safe to ignore the return value.
-
-    LCAS(&item->write_epoch, &expected_value, cur_epoch, HATRACK_CTR_COMMIT);
-}
-
-static inline void
-mmm_help_commit(void *ptr)
-{
-    mmm_header_t *item;
-    uint64_t      found_epoch;
-    uint64_t      cur_epoch;
-
-    if (!ptr) {
-        return;
-    }
-
-    item        = mmm_get_header(ptr);
-    found_epoch = item->write_epoch;
-
-    if (!found_epoch) {
-        cur_epoch = atomic_fetch_add(&mmm_epoch, 1) + 1;
-        LCAS(&item->write_epoch,
-             &found_epoch,
-             cur_epoch,
-             HATRACK_CTR_COMMIT_HELPS);
-    }
-}
-
-static inline void *
-mmm_alloc(uint64_t size)
-{
-    uint64_t      actual_size = sizeof(mmm_header_t) + size;
-    mmm_header_t *item        = (mmm_header_t *)calloc(1, actual_size);
-
-    HATRACK_MALLOC_CTR();
-    DEBUG_MMM(item->data, "mmm_alloc");
-    return (void *)item->data;
-}
-
-static inline void *
-mmm_alloc_committed(uint64_t size)
-{
-    uint64_t      actual_size = sizeof(mmm_header_t) + size;
-    mmm_header_t *item        = (mmm_header_t *)calloc(1, actual_size);
-
-    atomic_store(&item->write_epoch, atomic_fetch_add(&mmm_epoch, 1) + 1);
-    HATRACK_MALLOC_CTR();
-    DEBUG_MMM(item->data, "mmm_alloc_committed");
-    return (void *)item->data;
-}
-
-static inline void
-mmm_add_cleanup_handler(void *ptr, void (*handler)(void *))
-{
-    mmm_header_t *header = mmm_get_header(ptr);
-
-    header->cleanup = handler;
-}
-
-// Call this when we know no other thread ever could have seen the
-// data in question, as it can be freed immediately.
-
-static inline void
-mmm_retire_unused(void *ptr)
-{
-    DEBUG_MMM(ptr, "mmm_retire_unused");
-    free(mmm_get_header(ptr));
-    HATRACK_RETIRE_UNUSED_CTR();
-}
-
-static inline uint64_t
-mmm_get_write_epoch(void *ptr)
-{
-    return mmm_get_header(ptr)->write_epoch;
-}
-
-static inline void
-mmm_set_create_epoch(void *ptr, uint64_t epoch)
-{
-    mmm_get_header(ptr)->create_epoch = epoch;
-}
-
-static inline uint64_t
-mmm_get_create_epoch(void *ptr)
-{
-    mmm_header_t *header = mmm_get_header(ptr);
-    return header->create_epoch ? header->create_epoch : header->write_epoch;
-}
-
-void mmm_reset_tids(void);
-
 #ifdef HATRACK_DEBUG
-
-// Epochs are truncated to this many hex digits for brevity.
-#ifndef HATRACK_EPOCH_DEBUG_LEN
-#define HATRACK_EPOCH_DEBUG_LEN 8
-#endif
 
 static inline void
 hatrack_debug_mmm(void *addr, char *msg)
@@ -594,5 +409,144 @@ hatrack_debug_mmm(void *addr, char *msg)
     hatrack_debug(p);
 }
 #endif
+
+static inline void
+mmm_start_basic_op(void)
+{
+    pthread_once(&mmm_inited, mmm_register_thread);
+    mmm_reservations[mmm_mytid] = atomic_load(&mmm_epoch);
+}
+
+// To ensure we don't end up missing a delete, we need to ensure that
+// our epoch commits in the reservations array BEFORE the epoch
+// switches. Otherwise, things alive in the epoch we read out here can
+// potentially be reclaimed by the time we read them.
+
+static inline uint64_t
+mmm_start_linearized_op(void)
+{
+    uint64_t read_epoch;
+
+    pthread_once(&mmm_inited, mmm_register_thread);
+    read_epoch = atomic_load(&mmm_epoch);
+    do {
+        mmm_reservations[mmm_mytid] = read_epoch;
+        read_epoch                  = atomic_load(&mmm_epoch);
+    } while (HATRACK_YN_CTR(read_epoch != mmm_reservations[mmm_mytid],
+                            HATRACK_CTR_LINEARIZE_RETRIES));
+
+    return read_epoch;
+}
+
+static inline void
+mmm_end_op(void)
+{
+    mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;
+}
+
+static inline void *
+mmm_alloc(uint64_t size)
+{
+    uint64_t      actual_size = sizeof(mmm_header_t) + size;
+    mmm_header_t *item        = (mmm_header_t *)calloc(1, actual_size);
+
+    HATRACK_MALLOC_CTR();
+    DEBUG_MMM(item->data, "mmm_alloc");
+    return (void *)item->data;
+}
+
+static inline void *
+mmm_alloc_committed(uint64_t size)
+{
+    uint64_t      actual_size = sizeof(mmm_header_t) + size;
+    mmm_header_t *item        = (mmm_header_t *)calloc(1, actual_size);
+
+    atomic_store(&item->write_epoch, atomic_fetch_add(&mmm_epoch, 1) + 1);
+    HATRACK_MALLOC_CTR();
+    DEBUG_MMM(item->data, "mmm_alloc_committed");
+    return (void *)item->data;
+}
+
+static inline void
+mmm_add_cleanup_handler(void *ptr, void (*handler)(void *))
+{
+    mmm_header_t *header = mmm_get_header(ptr);
+
+    header->cleanup = handler;
+}
+
+static inline void
+mmm_commit_write(void *ptr)
+{
+    uint64_t      cur_epoch;
+    uint64_t      expected_value = 0;
+    mmm_header_t *item           = mmm_get_header(ptr);
+
+    cur_epoch = atomic_fetch_add(&mmm_epoch, 1) + 1;
+    // If this CAS operation fails, it can only be because:
+    //
+    //   1) We stalled in our write commit, some other thread noticed,
+    //       and helped us out.
+    //
+    //   2) We were trying to help, but either the original thread, or
+    //      some other helper got there first.
+    //
+    // Either way, we're safe to ignore the return value.
+
+    LCAS(&item->write_epoch, &expected_value, cur_epoch, HATRACK_CTR_COMMIT);
+}
+
+static inline void
+mmm_help_commit(void *ptr)
+{
+    mmm_header_t *item;
+    uint64_t      found_epoch;
+    uint64_t      cur_epoch;
+
+    if (!ptr) {
+        return;
+    }
+
+    item        = mmm_get_header(ptr);
+    found_epoch = item->write_epoch;
+
+    if (!found_epoch) {
+        cur_epoch = atomic_fetch_add(&mmm_epoch, 1) + 1;
+        LCAS(&item->write_epoch,
+             &found_epoch,
+             cur_epoch,
+             HATRACK_CTR_COMMIT_HELPS);
+    }
+}
+
+// Call this when we know no other thread ever could have seen the
+// data in question, as it can be freed immediately.
+
+static inline void
+mmm_retire_unused(void *ptr)
+{
+    DEBUG_MMM(ptr, "mmm_retire_unused");
+    free(mmm_get_header(ptr));
+    HATRACK_RETIRE_UNUSED_CTR();
+}
+
+static inline uint64_t
+mmm_get_write_epoch(void *ptr)
+{
+    return mmm_get_header(ptr)->write_epoch;
+}
+
+static inline void
+mmm_set_create_epoch(void *ptr, uint64_t epoch)
+{
+    mmm_get_header(ptr)->create_epoch = epoch;
+}
+
+static inline uint64_t
+mmm_get_create_epoch(void *ptr)
+{
+    mmm_header_t *header = mmm_get_header(ptr);
+    return header->create_epoch ? header->create_epoch : header->write_epoch;
+}
 
 #endif

@@ -18,6 +18,11 @@
 #include <stdatomic.h>
 #include <stdalign.h>
 
+// It's perhaps a bit odd to have this live in counters.h, b/c on the
+// surface it doesn't have anything to do with counters. But, when
+// counters are turned on, we provide an API for counting the results
+// of CASs, and we use that most everywhere.
+
 #define CAS(target, expected, desired)                                         \
     atomic_compare_exchange_weak(target, expected, desired)
 
@@ -30,9 +35,10 @@ extern char            *hatrack_yn_counter_names[];
 
 enum : uint64_t
 {
-    MMM_CTR_MALLOCS,
-    MMM_CTR_FREES,
-    MMM_CTR_RETIRE_UNUSED,
+    HATRACK_CTR_MALLOCS,
+    HATRACK_CTR_FREES,
+    HATRACK_CTR_RETIRE_UNUSED,
+    HATRACK_CTR_STORE_SHRINK,	
     HATRACK_COUNTERS_NUM
 };
 

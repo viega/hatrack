@@ -4,19 +4,18 @@
 
 #include <stdio.h>
 
-_Atomic alignas(8) uint64_t hatrack_counters[HATRACK_COUNTERS_NUM] = {};
+// clang-format off
+_Atomic uint64_t hatrack_counters[HATRACK_COUNTERS_NUM]            = {};
 uint64_t hatrack_last_counters[HATRACK_COUNTERS_NUM]               = {};
 
-_Atomic alignas(8) uint64_t hatrack_yn_counters[HATRACK_YN_COUNTERS_NUM][2]
-    = {};
-uint64_t hatrack_last_yn_counters[HATRACK_YN_COUNTERS_NUM][2] = {};
-
-// clang-format off
+_Atomic uint64_t hatrack_yn_counters[HATRACK_YN_COUNTERS_NUM][2]   = {};
+uint64_t hatrack_last_yn_counters[HATRACK_YN_COUNTERS_NUM][2]      = {};
 
 char *hatrack_counter_names[HATRACK_COUNTERS_NUM] = {
     "mmm alloc calls",
     "mmm used retires",
-    "mmm unused retires"
+    "mmm unused retires",
+    "stores shrunk"
 };
 
 char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {

@@ -11,22 +11,14 @@
  */
 #include "refhat0.h"
 
-// clang-format off
-
-static void  refhat0_migrate(refhat0_t *);
-
-#ifndef HATRACK_DONT_SORT
-int refhat0_quicksort_cmp(const void *, const void *);
-#endif
-
-// clang-format on
+static void refhat0_migrate(refhat0_t *);
 
 void
 refhat0_init(refhat0_t *self)
 {
     uint64_t size;
 
-    size             = 1 << HATRACK_MIN_SIZE_LOG;
+    size             = HATRACK_MIN_SIZE;
     self->last_slot  = size - 1;
     self->threshold  = hatrack_compute_table_threshold(size);
     self->used_count = 0;
@@ -68,6 +60,24 @@ refhat0_get(refhat0_t *self, hatrack_hash_t *hv, bool *found)
         bix = (bix + 1) & self->last_slot;
     }
     __builtin_unreachable();
+}
+
+void *
+refhat0_base_put(refhat0_t      *self,
+                 hatrack_hash_t *hv,
+                 void           *item,
+                 bool            ifempty,
+                 bool           *found)
+{
+    bool bool_ret;
+
+    if (ifempty) {
+        bool_ret = refhat0_put_if_empty(self, hv, item);
+
+        return (void *)bool_ret;
+    }
+
+    return refhat0_put(self, hv, item, found);
 }
 
 void *
@@ -256,7 +266,7 @@ refhat0_view(refhat0_t *self, uint64_t *num)
     qsort(view,
           self->item_count,
           sizeof(hatrack_view_t),
-          refhat0_quicksort_cmp);
+          hatrack_quicksort_cmp);
 #endif
 
     return view;
@@ -272,15 +282,12 @@ refhat0_migrate(refhat0_t *self)
     uint64_t          new_last_slot;
     uint64_t          i, n, bix;
 
-    new_size = (self->last_slot + 1) << 2;
-    if (self->item_count > new_size / 2) {
-        new_size <<= 1;
-    }
-
+    new_size      = hatrack_new_size(self->last_slot, self->item_count + 1);
     new_last_slot = new_size - 1;
 
     new_buckets
         = (refhat0_bucket_t *)calloc(new_size, sizeof(refhat0_bucket_t));
+    
     for (n = 0; n <= self->last_slot; n++) {
         cur = &self->buckets[n];
         if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
@@ -305,33 +312,3 @@ refhat0_migrate(refhat0_t *self)
     self->last_slot  = new_size - 1;
     self->threshold  = hatrack_compute_table_threshold(new_size);
 }
-
-void *
-refhat0_base_put(refhat0_t      *self,
-                 hatrack_hash_t *hv,
-                 void           *item,
-                 bool            ifempty,
-                 bool           *found)
-{
-    bool bool_ret;
-
-    if (ifempty) {
-        bool_ret = refhat0_put_if_empty(self, hv, item);
-
-        return (void *)bool_ret;
-    }
-
-    return refhat0_put(self, hv, item, found);
-}
-
-#ifndef HATRACK_DONT_SORT
-int
-refhat0_quicksort_cmp(const void *bucket1, const void *bucket2)
-{
-    hatrack_view_t *item1 = (hatrack_view_t *)bucket1;
-    hatrack_view_t *item2 = (hatrack_view_t *)bucket2;
-
-    return item1->sort_epoch - item2->sort_epoch;
-}
-
-#endif

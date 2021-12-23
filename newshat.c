@@ -13,34 +13,41 @@
 
 // clang-format off
 
-static void  newshat_store_migrate(newshat_store_t *, newshat_t *);
-static void  newshat_store_delete(newshat_store_t *);
+static newshat_store_t *newshat_store_new         (uint64_t);
+static void             newshat_store_delete      (newshat_store_t *);
+static void             newshat_store_migrate(newshat_store_t *store, newshat_t *top);
+#if 0
+static void            *newshat_store_get         (newshat_store_t *,
+						   newshat_t *,
+						   hatrack_hash_t *,
+						   bool *);
+static void            *newshat_store_put         (newshat_store_t *,
+						   newshat_t *,
+						   hatrack_hash_t *,
+						   void *,
+						   bool *);
+static bool             newshat_store_put_if_empty(newshat_store_t *,
+						   newshat_t *,
+						   hatrack_hash_t *,
+						   void *);
+static void            *newshat_store_remove      (newshat_store_t *,
+						   newshat_t *,
+						   hatrack_hash_t *,
+						   bool *);
+static newshat_store_t *newshat_store_migrate     (newshat_store_t *,
+						   newshat_t *);
+static hatrack_view_t  *newshat_store_view        (newshat_store_t *,
+						   newshat_t *,
+						   uint64_t,
+						   uint64_t *);
+#endif
 
 // clang-format on
-
-static newshat_store_t *
-newshat_new_store(uint64_t size)
-{
-    newshat_store_t *ret;
-    uint64_t         i;
-
-    ret = (newshat_store_t *)mmm_alloc_committed(
-        sizeof(newshat_store_t) + size * sizeof(newshat_bucket_t));
-    mmm_add_cleanup_handler(ret, (void (*)(void *))newshat_store_delete);
-    ret->last_slot = size - 1;
-    ret->threshold = hatrack_compute_table_threshold(size);
-
-    for (i = 0; i <= ret->last_slot; i++) {
-        pthread_mutex_init(&ret->buckets[i].write_mutex, NULL);
-    }
-
-    return ret;
-}
 
 void
 newshat_init(newshat_t *self)
 {
-    newshat_store_t *store = newshat_new_store(1 << HATRACK_MIN_SIZE_LOG);
+    newshat_store_t *store = newshat_store_new(1 << HATRACK_MIN_SIZE_LOG);
     self->item_count       = 0;
     self->store            = store;
     pthread_mutex_init(&self->migrate_mutex, NULL);
@@ -88,6 +95,24 @@ newshat_get(newshat_t *self, hatrack_hash_t *hv, bool *found)
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
+}
+
+void *
+newshat_base_put(newshat_t      *self,
+                 hatrack_hash_t *hv,
+                 void           *item,
+                 bool            ifempty,
+                 bool           *found)
+{
+    bool bool_ret;
+
+    if (ifempty) {
+        bool_ret = newshat_put_if_empty(self, hv, item);
+
+        return (void *)bool_ret;
+    }
+
+    return newshat_put(self, hv, item, found);
 }
 
 void *
@@ -150,7 +175,7 @@ check_bucket_again:
                 pthread_mutex_unlock(&cur->write_mutex);
                 goto check_bucket_again;
             }
-            if (store->used_count + 1 == store->threshold) {
+            if (store->used_count == store->threshold) {
                 pthread_mutex_unlock(&cur->write_mutex);
                 newshat_store_migrate(store, self);
                 goto again_after_migration;
@@ -216,7 +241,7 @@ again_after_migration:
                 pthread_mutex_unlock(&cur->write_mutex);
                 goto again_after_migration;
             }
-            if (store->used_count + 1 == store->threshold) {
+            if (store->used_count == store->threshold) {
                 pthread_mutex_unlock(&cur->write_mutex);
                 newshat_store_migrate(store, self);
                 goto again_after_migration;
@@ -293,16 +318,6 @@ again_after_migration:
     __builtin_unreachable();
 }
 
-static void
-newshat_store_delete(newshat_store_t *self)
-{
-    uint64_t i;
-
-    for (i = 0; i <= self->last_slot; i++) {
-        pthread_mutex_destroy(&self->buckets[i].write_mutex);
-    }
-}
-
 void
 newshat_delete(newshat_t *self)
 {
@@ -332,12 +347,13 @@ newshat_view(newshat_t *self, uint64_t *num)
     newshat_bucket_t *end;
     uint64_t          count;
     uint64_t          last_slot;
+    uint64_t          alloc_len;
 
     mmm_start_basic_op();
     store     = self->store;
     last_slot = store->last_slot;
-    view      = (hatrack_view_t *)malloc(sizeof(hatrack_view_t)
-                                    * (store->last_slot + 1));
+    alloc_len = sizeof(hatrack_view_t) * (last_slot + 1);
+    view      = (hatrack_view_t *)malloc(alloc_len);
     p         = view;
     cur       = store->buckets;
     end       = cur + (last_slot + 1);
@@ -375,6 +391,35 @@ newshat_view(newshat_t *self, uint64_t *num)
     return view;
 }
 
+static newshat_store_t *
+newshat_store_new(uint64_t size)
+{
+    newshat_store_t *ret;
+    uint64_t         i;
+
+    ret = (newshat_store_t *)mmm_alloc_committed(
+        sizeof(newshat_store_t) + size * sizeof(newshat_bucket_t));
+    mmm_add_cleanup_handler(ret, (void (*)(void *))newshat_store_delete);
+    ret->last_slot = size - 1;
+    ret->threshold = hatrack_compute_table_threshold(size);
+
+    for (i = 0; i <= ret->last_slot; i++) {
+        pthread_mutex_init(&ret->buckets[i].write_mutex, NULL);
+    }
+
+    return ret;
+}
+
+static void
+newshat_store_delete(newshat_store_t *self)
+{
+    uint64_t i;
+
+    for (i = 0; i <= self->last_slot; i++) {
+        pthread_mutex_destroy(&self->buckets[i].write_mutex);
+    }
+}
+
 static void
 newshat_store_migrate(newshat_store_t *store, newshat_t *top)
 {
@@ -385,6 +430,7 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
     uint64_t          cur_last_slot;
     uint64_t          new_last_slot;
     uint64_t          i, n, bix;
+    uint64_t          items_to_migrate = 0;
 
     if (pthread_mutex_lock(&top->migrate_mutex)) {
         abort();
@@ -397,20 +443,19 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
     }
     cur_last_slot = store->last_slot;
 
-    new_size = (cur_last_slot + 1) << 2;
-    if (top->item_count > new_size / 2) {
-        new_size <<= 1;
-    }
-
-    new_last_slot = new_size - 1;
-    new_store     = newshat_new_store(new_size);
-
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];
         if (pthread_mutex_lock(&cur->write_mutex)) {
             abort();
         }
+	if (cur->hv.w1 && cur->hv.w2 && !cur->deleted) {
+	    items_to_migrate++;
+	}
     }
+
+    new_size      = hatrack_new_size(cur_last_slot, items_to_migrate + 1);
+    new_last_slot = new_size - 1;
+    new_store     = newshat_store_new(new_size);
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];
@@ -443,22 +488,4 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
     pthread_mutex_unlock(&top->migrate_mutex);
 
     return;
-}
-
-void *
-newshat_base_put(newshat_t      *self,
-                 hatrack_hash_t *hv,
-                 void           *item,
-                 bool            ifempty,
-                 bool           *found)
-{
-    bool bool_ret;
-
-    if (ifempty) {
-        bool_ret = newshat_put_if_empty(self, hv, item);
-
-        return (void *)bool_ret;
-    }
-
-    return newshat_put(self, hv, item, found);
 }

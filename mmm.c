@@ -1,38 +1,24 @@
 #include "mmm.h"
-#include "hatrack_common.h"
+#include "hatrack_common.h" // for hatrack_pflag_*
 
 // clang-format off
 __thread mmm_header_t  *mmm_retire_list  = NULL;
 __thread pthread_once_t mmm_inited       = PTHREAD_ONCE_INIT;
-_Atomic  uint64_t       mmm_epoch        = ATOMIC_VAR_INIT(MMM_EPOCH_FIRST);
+_Atomic  uint64_t       mmm_epoch        = ATOMIC_VAR_INIT(HATRACK_EPOCH_FIRST);
 _Atomic  uint64_t       mmm_nexttid      = ATOMIC_VAR_INIT(0);
 __thread int64_t        mmm_mytid        = -1; 
 __thread uint64_t       mmm_retire_ctr   = 0;
 
-         uint64_t       mmm_reservations[MMM_THREADS_MAX] = { 0, };
+         uint64_t       mmm_reservations[HATRACK_THREADS_MAX] = { 0, };
 
 //clang-format on
 
-static void mmm_empty(void);
 
-#ifndef MMM_ALLOW_TID_GIVEBACKS
+static void    mmm_empty(void);
 
-void
-mmm_register_thread(void)
-{
-    mmm_mytid = atomic_fetch_add(&mmm_nexttid, 1);
-    if (mmm_mytid >= MMM_THREADS_MAX) {
-	abort();
-    }
 
-    DEBUG("registered thread");
-    
-    mmm_reservations[mmm_mytid] = MMM_EPOCH_UNRESERVED;
-}
-
-#else /* MMM_ALLOW_TID_GIVEBACKS */
-
-_Atomic (epoch_free_tids_t *) mmm_free_tids;
+#ifdef HATRACK_ALLOW_TID_GIVEBACKS
+_Atomic (mmm_free_tids_t *) mmm_free_tids;
 
 void
 mmm_register_thread(void)
@@ -43,8 +29,8 @@ mmm_register_thread(void)
 	return;
     }
     mmm_mytid = atomic_fetch_add(&mmm_nexttid, 1);
-    if (mmm_mytid >= MMM_THREADS_MAX) {
-	head = atomic_load(mmm_free_tids);
+    if (mmm_mytid >= HATRACK_THREADS_MAX) {
+	head = atomic_load(&mmm_free_tids);
 	do {
 	    if (!head) {
 		abort();
@@ -53,11 +39,11 @@ mmm_register_thread(void)
 	mmm_mytid = head->tid;
 	mmm_retire(head);
     }
-
-    mmm_reservations[mmm_mytid] = MMM_EPOCH_UNRESERVED;    
+    
+    mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;    
 }
 
-void
+static void
 mmm_tid_giveback(void)
 {
     mmm_free_tids_t *new_head;
@@ -65,47 +51,34 @@ mmm_tid_giveback(void)
 
     new_head       = mmm_alloc(sizeof(mmm_free_tids_t));
     new_head->tid  = mmm_mytid;
-    old_head       = atomic_load(mmm_free_tids);
+    old_head       = atomic_load(&mmm_free_tids);
 
     do {
 	new_head->next = old_head;
-    } while (!CAS(&free_tids, &old_head, new_head));
+    } while (!CAS(&mmm_free_tids, &old_head, new_head));
     
 }
-#endif /* MMM_ALLOW_TID_GIVEBACKS */
+
+#else /* HATRACK_ALLOW_TID_GIVEBACKS */
+
 
 void
-mmm_retire(void *ptr)
+mmm_register_thread(void)
 {
-    mmm_header_t *cell = mmm_get_header(ptr);
-
-#ifdef HATRACK_DEBUG
-    if (hatrack_pflag_test(ptr, 0x07)) {
-	DEBUG_MMM(ptr, "Bad alignment on retired pointer.");
+    mmm_mytid = atomic_fetch_add(&mmm_nexttid, 1);
+    if (mmm_mytid >= HATRACK_THREADS_MAX) {
 	abort();
     }
-#endif
-    
-    // Avoid multiple threads adding this to their retire list.
-    // Since retire_epoch is meant to only be accessed by a single
-    // thread at once, we really should make this atomic.
-    if (cell->retire_epoch) {
-#ifdef HATRACK_DEBUG
-	DEBUG_MMM(ptr, "Double free");
-	abort();
-#endif	
-	return;
-    }
-    cell->retire_epoch = atomic_load(&mmm_epoch);
-    cell->next         = mmm_retire_list;
-    mmm_retire_list    = cell;
 
-    DEBUG_MMM(cell->data, "mmm_retire");
-    
-    if (++mmm_retire_ctr & MMM_RETIRE_FREQ) {
-	mmm_retire_ctr = 0;
-	mmm_empty();
-    }
+    mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;
+}
+
+#endif /* HATRACK_ALLOW_TID_GIVEBACKS */
+
+
+void mmm_reset_tids(void)
+{
+    atomic_store(&mmm_nexttid, 0);
 }
 
 // For now, our cleanup function spins until it is able to retire
@@ -121,6 +94,50 @@ mmm_clean_up_before_exit(void)
     mmm_end_op();
     
     while (mmm_retire_list) {
+	mmm_empty();
+    }
+    
+#ifdef HATRACK_ALLOW_TID_GIVEBACKS
+    mmm_tid_giveback();
+#endif
+    
+}
+
+void
+mmm_retire(void *ptr)
+{
+    mmm_header_t *cell = mmm_get_header(ptr);
+
+#ifdef HATRACK_DEBUG
+// Algorithms that steal bits from pointers might steal up to
+// three bits, thus the mask of 0x07.
+    if (hatrack_pflag_test(ptr, 0x07)) {
+	DEBUG_MMM(ptr, "Bad alignment on retired pointer.");
+	abort();
+    }
+    
+    // Detect multiple threads adding this to their retire list.
+    // Generally, you should be able to avoid this, but with
+    // HATRACK_DEBUG on we explicitly check for it.
+    if (cell->retire_epoch) {
+	DEBUG_MMM(ptr, "Double free");
+	abort();
+	return;
+    }
+
+    if (cell == mmm_retire_list) {
+	abort();
+    }
+
+    DEBUG_MMM(cell->data, "mmm_retire");
+#endif	
+    
+    cell->retire_epoch = atomic_load(&mmm_epoch);
+    cell->next         = mmm_retire_list;
+    mmm_retire_list    = cell;
+
+    if (++mmm_retire_ctr & HATRACK_RETIRE_FREQ) {
+	mmm_retire_ctr = 0;
 	mmm_empty();
     }
 }
@@ -143,6 +160,7 @@ mmm_empty(void)
     uint64_t      lowest;
     uint64_t      reservation;
     uint64_t      lasttid;
+    uint64_t      i;
 
     // We don't have to search the whole array, just the items assigned
     // to active threads. Even if a new thread comes along, it will
@@ -150,18 +168,18 @@ mmm_empty(void)
     // by the time we call this.
     lasttid = atomic_load(&mmm_nexttid);
     
-    if (lasttid > MMM_THREADS_MAX) {
-	lasttid = MMM_THREADS_MAX;
+    if (lasttid > HATRACK_THREADS_MAX) {
+	lasttid = HATRACK_THREADS_MAX;
     }
 
     // We start out w/ the "lowest" reservation we've seen as
-    // MMM_EPOCH_MAX.  If this value never changes, then it
+    // HATRACK_EPOCH_MAX.  If this value never changes, then it
     // means no epochs were reserved, and we can safely
     // free every record in our stack.
     
-    lowest = MMM_EPOCH_MAX;
+    lowest = HATRACK_EPOCH_MAX;
 
-    for (uint64_t i = 0; i < lasttid; i++) {
+    for (i = 0; i < lasttid; i++) {
 	reservation = mmm_reservations[i];
 	if (reservation < lowest) {
 	    lowest = reservation;
@@ -214,9 +232,4 @@ mmm_empty(void)
 	}
 	free(tmp);
     }
-}
-
-void mmm_reset_tids(void)
-{
-    atomic_store(&mmm_nexttid, 0);
 }

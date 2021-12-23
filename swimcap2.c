@@ -12,22 +12,9 @@
 #include "swimcap2.h"
 
 // clang-format off
-
-static void  swimcap2_migrate(swimcap2_t *);
-
+static swimcap2_store_t *swimcap2_new_store(uint64_t);
+static void              swimcap2_migrate(swimcap2_t *);
 // clang-format on
-
-static swimcap2_store_t *
-swimcap2_new_store(uint64_t size)
-{
-    swimcap2_store_t *ret;
-
-    ret = (swimcap2_store_t *)mmm_alloc_committed(
-        sizeof(swimcap2_store_t) + size * sizeof(swimcap2_bucket_t));
-    ret->last_slot = size - 1;
-    ret->threshold = hatrack_compute_table_threshold(size);
-    return ret;
-}
 
 void
 swimcap2_init(swimcap2_t *self)
@@ -80,6 +67,24 @@ swimcap2_get(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
+}
+
+void *
+swimcap2_base_put(swimcap2_t     *self,
+                  hatrack_hash_t *hv,
+                  void           *item,
+                  bool            ifempty,
+                  bool           *found)
+{
+    bool bool_ret;
+
+    if (ifempty) {
+        bool_ret = swimcap2_put_if_empty(self, hv, item);
+
+        return (void *)bool_ret;
+    }
+
+    return swimcap2_put(self, hv, item, found);
 }
 
 void *
@@ -298,12 +303,13 @@ swimcap2_view(swimcap2_t *self, uint64_t *num)
     swimcap2_bucket_t *end;
     uint64_t           count;
     uint64_t           last_slot;
+    uint64_t           alloc_len;
 
     mmm_start_basic_op();
     store     = self->store;
     last_slot = store->last_slot;
-    view      = (hatrack_view_t *)malloc(sizeof(hatrack_view_t)
-                                    * (store->last_slot + 1));
+    alloc_len = sizeof(hatrack_view_t) * (last_slot + 1);
+    view      = (hatrack_view_t *)malloc(alloc_len);
     p         = view;
     cur       = store->buckets;
     end       = cur + (last_slot + 1);
@@ -339,6 +345,21 @@ swimcap2_view(swimcap2_t *self, uint64_t *num)
     return view;
 }
 
+static swimcap2_store_t *
+swimcap2_new_store(uint64_t size)
+{
+    swimcap2_store_t *ret;
+    uint64_t          alloc_len;
+
+    alloc_len = sizeof(swimcap2_store_t);
+    alloc_len += size * sizeof(swimcap2_bucket_t);
+    ret            = (swimcap2_store_t *)mmm_alloc_committed(alloc_len);
+    ret->last_slot = size - 1;
+    ret->threshold = hatrack_compute_table_threshold(size);
+
+    return ret;
+}
+
 static void
 swimcap2_migrate(swimcap2_t *self)
 {
@@ -353,12 +374,7 @@ swimcap2_migrate(swimcap2_t *self)
 
     cur_store     = self->store;
     cur_last_slot = cur_store->last_slot;
-
-    new_size = (cur_last_slot + 1) << 2;
-    if (self->item_count > new_size / 2) {
-        new_size <<= 1;
-    }
-
+    new_size      = hatrack_new_size(cur_last_slot, swimcap2_len(self) + 1);
     new_last_slot = new_size - 1;
     new_store     = swimcap2_new_store(new_size);
 
@@ -386,22 +402,4 @@ swimcap2_migrate(swimcap2_t *self)
     mmm_retire(cur_store);
 
     return;
-}
-
-void *
-swimcap2_base_put(swimcap2_t     *self,
-                  hatrack_hash_t *hv,
-                  void           *item,
-                  bool            ifempty,
-                  bool           *found)
-{
-    bool bool_ret;
-
-    if (ifempty) {
-        bool_ret = swimcap2_put_if_empty(self, hv, item);
-
-        return (void *)bool_ret;
-    }
-
-    return swimcap2_put(self, hv, item, found);
 }

@@ -520,17 +520,17 @@ hihat1_store_view(hihat1_store_t *self, hihat1_t *top, uint64_t *num)
     hihat1_bucket_t *end;
     hihat1_record_t  record;
     uint64_t         num_items;
+    uint64_t         alloc_len;
 
-    view = (hatrack_view_t *)malloc(sizeof(hatrack_view_t)
-                                    * (self->last_slot + 1));
-    p    = view;
-    cur  = self->buckets;
-    end  = cur + (self->last_slot + 1);
+    alloc_len = sizeof(hatrack_view_t) * (self->last_slot + 1);
+    view      = (hatrack_view_t *)malloc(alloc_len);
+    p         = view;
+    cur       = self->buckets;
+    end       = cur + (self->last_slot + 1);
 
     while (cur < end) {
-        hv     = atomic_load(&cur->hv);
-        record = atomic_load(&cur->record);
-
+        hv            = atomic_load(&cur->hv);
+        record        = atomic_load(&cur->record);
         p->hv         = hv;
         p->item       = record.item;
         p->sort_epoch = record.info & HIHAT_F_MASK;

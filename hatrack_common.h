@@ -13,15 +13,6 @@
 
 #include "mmm.h"
 
-// Doing the macro this way forces you to pick a power-of-two boundary
-// for the hash table size, which is best for alignment, and allows us
-// to use an & to calculate bucket indicies, instead of the more
-// expensive mod operator.
-
-#ifndef HATRACK_MIN_SIZE_LOG
-#define HATRACK_MIN_SIZE_LOG 3
-#endif
-
 // The below type represents a hash value.
 //
 // We use 128-bit hash values and a universal hash function to make
@@ -77,9 +68,25 @@ typedef struct {
 // implementations.
 
 static inline uint64_t
-hatrack_compute_table_threshold(uint64_t num_slots)
+hatrack_compute_table_threshold(uint64_t size)
 {
-    return num_slots - (num_slots >> 2);
+    return size - (size >> 2);
+}
+
+static inline uint64_t
+hatrack_new_size(uint64_t last_bucket, uint64_t size)
+{
+    uint64_t table_size = last_bucket + 1;
+
+    if (size >= table_size >> 1) {
+	return table_size << 1;
+    }
+    if (size <= (table_size >> 2)) {
+	HATRACK_CTR(HATRACK_CTR_STORE_SHRINK);	
+	return table_size >> 1;
+    }
+
+    return table_size;
 }
 
 static inline bool
