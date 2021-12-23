@@ -32,11 +32,13 @@ typedef struct {
     void *item;
 } hihat64_record_t;
 
+// clang-format off
 typedef struct {
-    alignas(32) _Atomic(hihat64_record_t *) record;
-    _Atomic uint64_t h1;
+    alignas(8)
+    _Atomic(hihat64_record_t *) record;
+    _Atomic uint64_t            h1;
 #ifdef HIHAT64_USE_FULL_HASH
-    _Atomic uint64_t h2;
+    _Atomic uint64_t            h2;
 #endif
 } hihat64_bucket_t;
 
@@ -51,7 +53,8 @@ enum : uint64_t
 typedef struct hihat64_store_st hihat64_store_t;
 
 struct hihat64_store_st {
-    alignas(32) uint64_t last_slot;
+    alignas(8)
+    uint64_t                   last_slot;
     uint64_t                   threshold;
     _Atomic uint64_t           used_count;
     _Atomic uint64_t           del_count;
@@ -60,19 +63,18 @@ struct hihat64_store_st {
 };
 
 typedef struct {
-    alignas(32) _Atomic(hihat64_store_t *) store_current;
+    alignas(8)
+    _Atomic(hihat64_store_t *) store_current;
 } hihat64_t;
 
-// clang-format off
-
-void            hihat64_init(hihat64_t *);
-void           *hihat64_get(hihat64_t *, hatrack_hash_t *, bool *);
-void           *hihat64_put(hihat64_t *, hatrack_hash_t *, void *, bool,
-			    bool *);
+void            hihat64_init  (hihat64_t *);
+void           *hihat64_get   (hihat64_t *, hatrack_hash_t *, bool *);
+void           *hihat64_put   (hihat64_t *, hatrack_hash_t *, void *, bool,
+			       bool *);
 void           *hihat64_remove(hihat64_t *, hatrack_hash_t *, bool *);
 void            hihat64_delete(hihat64_t *);
-uint64_t        hihat64_len(hihat64_t *);
-hatrack_view_t *hihat64_view(hihat64_t *, uint64_t *);
+uint64_t        hihat64_len   (hihat64_t *);
+hatrack_view_t *hihat64_view  (hihat64_t *, uint64_t *);
 
 // clang-format on
 

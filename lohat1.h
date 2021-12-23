@@ -141,12 +141,17 @@
  * wrapper API to handle this, since such a thing is also needed for
  * applying the actual hash function.
  */
+
+// clang-format off
+
 typedef struct {
-    alignas(32) _Atomic hatrack_hash_t hv;
+    alignas(16)
+    _Atomic hatrack_hash_t    hv;
     _Atomic(lohat_record_t *) head;
 } lohat1_history_t;
 
-/* We're using a second array to improve our sorting costs. These are
+/*
+ * We're using a second array to improve our sorting costs. These are
  * the buckets that the hash function points to... their contents just
  * point us to where the actual records are. Note that contents of
  * this bucket do not indicate whether an item is actually in the hash
@@ -155,7 +160,8 @@ typedef struct {
  * a particular location in the other array.
  */
 typedef struct {
-    alignas(32) _Atomic hatrack_hash_t hv;
+    alignas(16)
+    _Atomic hatrack_hash_t      hv;
     _Atomic(lohat1_history_t *) ptr;
 } lohat1_indirect_t;
 
@@ -217,32 +223,31 @@ typedef struct {
  */
 typedef struct lohat1_store_st lohat1_store_t;
 
+// clang-format off
 struct lohat1_store_st {
-    alignas(32) uint64_t last_slot;
+    alignas(8)
+    uint64_t                    last_slot;
     uint64_t                    threshold;
     _Atomic uint64_t            del_count;
-    lohat1_indirect_t          *ptr_buckets;
-    lohat1_history_t           *hist_buckets;
     lohat1_history_t           *hist_end;
     _Atomic(lohat1_history_t *) hist_next;
     _Atomic(lohat1_store_t *)   store_next;
+    lohat1_history_t           *hist_buckets;
+    lohat1_indirect_t           ptr_buckets[];
 };
 
 typedef struct {
-    alignas(32) _Atomic(lohat1_store_t *) store_current;
+    alignas(8)
+    _Atomic(lohat1_store_t *) store_current;
 } lohat1_t;
 
-// clang-format off
-
-void            lohat1_init(lohat1_t *);
-void           *lohat1_get(lohat1_t *, hatrack_hash_t *, bool *);
-void           *lohat1_put(lohat1_t *, hatrack_hash_t *, void *, bool,
-			    bool *);
+void            lohat1_init  (lohat1_t *);
+void           *lohat1_get   (lohat1_t *, hatrack_hash_t *, bool *);
+void           *lohat1_put   (lohat1_t *, hatrack_hash_t *, void *, bool,
+			      bool *);
 void           *lohat1_remove(lohat1_t *, hatrack_hash_t *, bool *);
 void            lohat1_delete(lohat1_t *);
-uint64_t        lohat1_len(lohat1_t *);
-hatrack_view_t *lohat1_view(lohat1_t *, uint64_t *);
-
-// clang-format on
+uint64_t        lohat1_len   (lohat1_t *);
+hatrack_view_t *lohat1_view  (lohat1_t *, uint64_t *);
 
 #endif

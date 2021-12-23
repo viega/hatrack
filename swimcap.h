@@ -38,16 +38,16 @@
 
 // clang-format off
 typedef struct {
-    hatrack_hash_t hv;
-    void          *item;
-    bool           deleted;
+    hatrack_hash_t      hv;
+    void               *item;
+    bool                deleted;
 #ifndef HATRACK_DONT_SORT
-    uint64_t       epoch;
+    uint64_t            epoch;
 #endif
 } swimcap_bucket_t;
 
 typedef struct {
-    alignas(8) uint64_t last_slot;
+    uint64_t            last_slot;
     uint64_t            threshold;
     uint64_t            used_count;
     _Atomic uint64_t    readers;
@@ -55,7 +55,7 @@ typedef struct {
 } swimcap_store_t;
 
 typedef struct {
-    alignas(8) uint64_t item_count;
+    uint64_t            item_count;
     swimcap_store_t    *store;
     pthread_mutex_t     write_mutex;
 
@@ -96,15 +96,16 @@ swimcap_reader_exit(swimcap_store_t *store)
 }
 
 // clang-format off
-void            swimcap_init(swimcap_t *);
-void           *swimcap_get(swimcap_t *, hatrack_hash_t *, bool *);
-void           *swimcap_base_put(swimcap_t *, hatrack_hash_t *, void *, bool,
-				 bool *);
-void           *swimcap_put(swimcap_t *, hatrack_hash_t *, void *, bool *);
+void            swimcap_init        (swimcap_t *);
+void           *swimcap_get         (swimcap_t *, hatrack_hash_t *, bool *);
+void           *swimcap_base_put    (swimcap_t *, hatrack_hash_t *, void *,
+				     bool, bool *);
+void           *swimcap_put         (swimcap_t *, hatrack_hash_t *, void *,
+				     bool *);
 bool            swimcap_put_if_empty(swimcap_t *, hatrack_hash_t *, void *);
-void           *swimcap_remove(swimcap_t *, hatrack_hash_t *, bool *);
-void            swimcap_delete(swimcap_t *);
-uint64_t        swimcap_len(swimcap_t *);
-hatrack_view_t *swimcap_view(swimcap_t *, uint64_t *);
-//clang-format on
+void           *swimcap_remove      (swimcap_t *, hatrack_hash_t *, bool *);
+void            swimcap_delete      (swimcap_t *);
+uint64_t        swimcap_len         (swimcap_t *);
+hatrack_view_t *swimcap_view        (swimcap_t *, uint64_t *);
+
 #endif

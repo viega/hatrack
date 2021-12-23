@@ -25,24 +25,24 @@
 
 // clang-format off
 
-static lohat1_store_t *lohat1_store_new(uint64_t);
-static void             lohat1_retire_store(lohat1_store_t *);
+static lohat1_store_t  *lohat1_store_new          (uint64_t);
+static void             lohat1_retire_store       (lohat1_store_t *);
 static void             lohat1_retire_unused_store(lohat1_store_t *);
-static void            *lohat1_store_get(lohat1_store_t *, lohat1_t *,
-					  hatrack_hash_t *, bool *);
-static void            *lohat1_store_put(lohat1_store_t *, lohat1_t *,
-					  hatrack_hash_t *, void *, bool *);
-static bool             lohat1_store_put_if_empty(lohat1_store_t *,
+static void            *lohat1_store_get          (lohat1_store_t *, lohat1_t *,
+						   hatrack_hash_t *, bool *);
+static void            *lohat1_store_put          (lohat1_store_t *, lohat1_t *,
+						   hatrack_hash_t *, void *,
+						   bool *);
+static bool             lohat1_store_put_if_empty (lohat1_store_t *,
 						   lohat1_t *,
 						   hatrack_hash_t *, void *);
-static void            *lohat1_store_remove(lohat1_store_t *, lohat1_t *,
-					     hatrack_hash_t *, bool *);
-static lohat1_store_t *lohat1_store_migrate(lohat1_store_t *, lohat1_t *);
-static hatrack_view_t  *lohat1_store_view(lohat1_store_t *, lohat1_t *,
-					   uint64_t, uint64_t *);
+static void            *lohat1_store_remove       (lohat1_store_t *, lohat1_t *,
+						   hatrack_hash_t *, bool *);
+static lohat1_store_t *lohat1_store_migrate       (lohat1_store_t *,
+						   lohat1_t *);
 
 #if !defined(HATRACK_DONT_SORT) && !defined(HATRACK_ALWAYS_USE_QSORT)
-static void             lohat1_insertion_sort(hatrack_view_t *, uint64_t);
+static void             lohat1_insertion_sort     (hatrack_view_t *, uint64_t);
 #endif
 
 // clang-format on
@@ -154,36 +154,123 @@ lohat1_len(lohat1_t *self)
 }
 
 hatrack_view_t *
-lohat1_view(lohat1_t *self, uint64_t *num_items)
+lohat1_view(lohat1_t *self, uint64_t *out_num)
 {
-    hatrack_view_t *ret;
-    uint64_t        epoch;
+    lohat1_history_t *cur;
+    lohat1_history_t *end;
+    lohat1_store_t   *store;
+    hatrack_view_t   *view;
+    hatrack_view_t   *p;
+    hatrack_hash_t    hv;
+    lohat_record_t   *rec;
+    uint64_t          epoch;
+    uint64_t          sort_epoch;
+    uint64_t          num_items;
 
     epoch = mmm_start_linearized_op();
-    ret   = lohat1_store_view(self->store_current, self, epoch, num_items);
+    store = self->store_current;
+    cur   = store->hist_buckets;
+    end   = atomic_load(&store->hist_next);
+
+    if (store->hist_end < end) {
+        end = store->hist_end;
+    }
+
+    view = (hatrack_view_t *)malloc(sizeof(hatrack_view_t) * (end - cur));
+    p    = view;
+
+    while (cur < end) {
+        hv  = atomic_load(&cur->hv);
+        rec = hatrack_pflag_clear(atomic_load(&cur->head),
+                                  LOHAT_F_MOVING | LOHAT_F_MOVED);
+
+        // If there's a record, we need to ensure its epoch is updated
+        // before we proceed.
+        mmm_help_commit(rec);
+
+        /* First, we find the top-most record that's older than (or
+         * equal to) the linearization epoch.  At this point, we
+         * happily will look under deletions; our goal is to just go
+         * back in time until we find the right record.
+         */
+        while (rec) {
+            sort_epoch = mmm_get_write_epoch(rec);
+            if (sort_epoch <= epoch) {
+                break;
+            }
+            rec = hatrack_pflag_clear(rec->next, LOHAT_F_USED);
+        }
+
+        /* If the sort_epoch is larger than the epoch, then no records
+         * in this bucket are old enough to be part of the linearization.
+         * Similarly, if the top record is a delete record, then the
+         * bucket was empty at the linearization point.
+         */
+        if (!rec || sort_epoch > epoch
+            || !hatrack_pflag_test(rec->next, LOHAT_F_USED)) {
+            cur++;
+            continue;
+        }
+
+        p->hv         = hv;
+        p->item       = rec->item;
+        p->sort_epoch = mmm_get_create_epoch(rec);
+
+        p++;
+        cur++;
+    }
+
+    num_items = p - view;
+    *out_num  = num_items;
+
+    if (!num_items) {
+        free(view);
+        mmm_end_op();
+        return NULL;
+    }
+
+    view = realloc(view, num_items * sizeof(hatrack_view_t));
+
+    // Unordered buckets should be in random order, so quicksort is a
+    // good option.  Otherwise, we should use an insertion sort.
+#ifdef HATRACK_QSORT_THRESHOLD
+    if (num_items >= HATRACK_QSORT_THRESHOLD) {
+        qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
+    else {
+        lohat1_insertion_sort(view, num_items);
+    }
+#elif defined(HATRACK_ALWAYS_USE_QSORT)
+    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+#elif !defined(HATRACK_DONT_SORT)
+    lohat1_insertion_sort(view, num_items);
+#endif
+
     mmm_end_op();
 
-    return ret;
+    return view;
 }
 
 static lohat1_store_t *
 lohat1_store_new(uint64_t size)
 {
     lohat1_store_t *store;
+    uint64_t        sz;
 
-    store = (lohat1_store_t *)mmm_alloc_committed(sizeof(lohat1_store_t));
+    sz    = sizeof(lohat1_store_t) + sizeof(lohat1_indirect_t) * size;
+    store = (lohat1_store_t *)mmm_alloc_committed(sz);
 
-    store->last_slot    = size - 1;
-    store->threshold    = hatrack_compute_table_threshold(size);
-    store->del_count    = ATOMIC_VAR_INIT(0);
-    store->hist_buckets = (lohat1_history_t *)mmm_alloc_committed(
-        sizeof(lohat1_history_t) * size);
-    store->store_next  = ATOMIC_VAR_INIT(NULL);
-    store->ptr_buckets = (lohat1_indirect_t *)mmm_alloc_committed(
-        sizeof(lohat1_indirect_t) * size);
+    store->last_slot  = size - 1;
+    store->threshold  = hatrack_compute_table_threshold(size);
+    store->del_count  = ATOMIC_VAR_INIT(0);
+    store->store_next = ATOMIC_VAR_INIT(NULL);
+
+    sz                  = sizeof(lohat1_history_t) * size;
+    store->hist_buckets = (lohat1_history_t *)mmm_alloc_committed(sz);
+    store->hist_next    = store->hist_buckets;
+
     store->hist_end
         = store->hist_buckets + hatrack_compute_table_threshold(size);
-    store->hist_next = store->hist_buckets;
 
     return store;
 }
@@ -191,7 +278,6 @@ lohat1_store_new(uint64_t size)
 static void
 lohat1_retire_store(lohat1_store_t *self)
 {
-    mmm_retire(self->ptr_buckets);
     mmm_retire(self->hist_buckets);
     mmm_retire(self);
 }
@@ -199,7 +285,6 @@ lohat1_retire_store(lohat1_store_t *self)
 static void
 lohat1_retire_unused_store(lohat1_store_t *self)
 {
-    mmm_retire_unused(self->ptr_buckets);
     mmm_retire_unused(self->hist_buckets);
     mmm_retire_unused(self);
 }
@@ -828,99 +913,6 @@ lohat1_store_migrate(lohat1_store_t *self, lohat1_t *top)
     }
 
     return new_store;
-}
-
-static hatrack_view_t *
-lohat1_store_view(lohat1_store_t *self,
-                  lohat1_t       *top,
-                  uint64_t        epoch,
-                  uint64_t       *num)
-{
-    lohat1_history_t *cur = self->hist_buckets;
-    lohat1_history_t *end;
-    hatrack_view_t   *view;
-    hatrack_view_t   *p;
-    hatrack_hash_t    hv;
-    lohat_record_t   *rec;
-    uint64_t          sort_epoch;
-    uint64_t          num_items;
-
-    end = atomic_load(&self->hist_next);
-
-    if (self->hist_end < end) {
-        end = self->hist_end;
-    }
-
-    view = (hatrack_view_t *)malloc(sizeof(hatrack_view_t) * (end - cur));
-    p    = view;
-
-    while (cur < end) {
-        hv  = atomic_load(&cur->hv);
-        rec = hatrack_pflag_clear(atomic_load(&cur->head),
-                                  LOHAT_F_MOVING | LOHAT_F_MOVED);
-
-        // If there's a record, we need to ensure its epoch is updated
-        // before we proceed.
-        mmm_help_commit(rec);
-
-        /* First, we find the top-most record that's older than (or
-         * equal to) the linearization epoch.  At this point, we
-         * happily will look under deletions; our goal is to just go
-         * back in time until we find the right record.
-         */
-        while (rec) {
-            sort_epoch = mmm_get_write_epoch(rec);
-            if (sort_epoch <= epoch) {
-                break;
-            }
-            rec = hatrack_pflag_clear(rec->next, LOHAT_F_USED);
-        }
-
-        /* If the sort_epoch is larger than the epoch, then no records
-         * in this bucket are old enough to be part of the linearization.
-         * Similarly, if the top record is a delete record, then the
-         * bucket was empty at the linearization point.
-         */
-        if (!rec || sort_epoch > epoch
-            || !hatrack_pflag_test(rec->next, LOHAT_F_USED)) {
-            cur++;
-            continue;
-        }
-
-        p->hv         = hv;
-        p->item       = rec->item;
-        p->sort_epoch = mmm_get_create_epoch(rec);
-
-        p++;
-        cur++;
-    }
-
-    num_items = p - view;
-    *num      = num_items;
-
-    if (!num_items) {
-        free(view);
-        return NULL;
-    }
-
-    view = realloc(view, *num * sizeof(hatrack_view_t));
-
-    // Unordered buckets should be in random order, so quicksort is a
-    // good option.  Otherwise, we should use an insertion sort.
-#ifdef HATRACK_QSORT_THRESHOLD
-    if (num_items >= HATRACK_QSORT_THRESHOLD) {
-        qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
-    }
-    else {
-        lohat1_insertion_sort(view, num_items);
-    }
-#elif defined(HATRACK_ALWAYS_USE_QSORT)
-    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
-#elif !defined(HATRACK_DONT_SORT)
-    lohat1_insertion_sort(view, num_items);
-#endif
-
-    return view;
 }
 
 #if !defined(HATRACK_DONT_SORT) && !defined(HATRACK_ALWAYS_USE_QSORT)

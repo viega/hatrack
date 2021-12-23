@@ -146,11 +146,14 @@
  * Currently, we're taking the former approach, and expecting a
  * wrapper API to handle this, since such a thing is also needed for
  * applying the actual hash function.
+ *
  */
 typedef struct lohat2_history_st lohat2_history_t;
 
+// clang-format off
 struct lohat2_history_st {
-    alignas(32) _Atomic hatrack_hash_t hv;
+    alignas(16)
+    _Atomic hatrack_hash_t      hv;
     _Atomic(lohat_record_t *)   head;
     _Atomic(lohat2_history_t *) fwd;
 };
@@ -163,8 +166,11 @@ struct lohat2_history_st {
  * the bucket for the particular hash item, and ptr being set reserves
  * a particular location in the other array.
  */
+
+// clang-format off
 typedef struct {
-    alignas(32) _Atomic hatrack_hash_t hv;
+    alignas(16)
+    _Atomic hatrack_hash_t      hv;
     _Atomic(lohat2_history_t *) ptr;
 } lohat2_indirect_t;
 
@@ -226,32 +232,31 @@ typedef struct {
  */
 typedef struct lohat2_store_st lohat2_store_t;
 
+// clang-format off
 struct lohat2_store_st {
-    alignas(32) uint64_t last_slot;
+    alignas(8)
+    uint64_t                    last_slot;
     uint64_t                    threshold;
     _Atomic uint64_t            del_count;
-    lohat2_indirect_t          *ptr_buckets;
-    lohat2_history_t           *hist_buckets;
     lohat2_history_t           *hist_end;
     _Atomic(lohat2_history_t *) hist_next;
     _Atomic(lohat2_store_t *)   store_next;
+    lohat2_history_t           *hist_buckets;
+    lohat2_indirect_t           ptr_buckets[];
 };
 
 typedef struct {
-    alignas(32) _Atomic(lohat2_store_t *) store_current;
+    alignas(8)
+    _Atomic(lohat2_store_t *)   store_current;
 } lohat2_t;
 
-// clang-format off
-
-void            lohat2_init(lohat2_t *);
-void           *lohat2_get(lohat2_t *, hatrack_hash_t *, bool *);
-void           *lohat2_put(lohat2_t *, hatrack_hash_t *, void *, bool,
-			    bool *);
+void            lohat2_init  (lohat2_t *);
+void           *lohat2_get   (lohat2_t *, hatrack_hash_t *, bool *);
+void           *lohat2_put   (lohat2_t *, hatrack_hash_t *, void *, bool,
+			      bool *);
 void           *lohat2_remove(lohat2_t *, hatrack_hash_t *, bool *);
 void            lohat2_delete(lohat2_t *);
-uint64_t        lohat2_len(lohat2_t *);
-hatrack_view_t *lohat2_view(lohat2_t *, uint64_t *);
-
-// clang-format on
+uint64_t        lohat2_len   (lohat2_t *);
+hatrack_view_t *lohat2_view  (lohat2_t *, uint64_t *);
 
 #endif

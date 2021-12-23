@@ -34,11 +34,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// clang-format off
 typedef struct {
-    _Alignas(32) uint64_t sequence;
-    char    msg[HATRACK_DEBUG_MSG_SIZE];
-    int64_t thread;
-    char    null;
+    uint64_t  sequence;
+    char      msg[HATRACK_DEBUG_MSG_SIZE];
+    int64_t   thread;
+    char      null;
 } hatrack_debug_record_t;
 
 extern hatrack_debug_record_t __hatrack_debug[];
@@ -46,12 +47,12 @@ extern _Atomic uint64_t       __hatrack_debug_sequence;
 extern const char             __hatrack_hex_conversion_table[];
 extern __thread int64_t       mmm_mytid;
 
-// clang-format off
 void debug_dump         (uint64_t);
 void debug_thread       ();
 void debug_other_thread (int64_t);
 void debug_grep         (char *);
 void debug_pgrep        (uintptr_t);
+
 // clang-format on
 
 static inline void

@@ -50,10 +50,11 @@ typedef struct mmm_free_tids_st mmm_free_tids_t;
  * preprocessor variable.
  */
 
+// clang-format off
 extern __thread int64_t        mmm_mytid;
 extern __thread pthread_once_t mmm_inited;
-extern _Atomic uint64_t        mmm_epoch;
-extern uint64_t                mmm_reservations[HATRACK_THREADS_MAX];
+extern _Atomic  uint64_t       mmm_epoch;
+extern          uint64_t       mmm_reservations[HATRACK_THREADS_MAX];
 
 /* The header data structure. Note that we keep a linked list of
  * "retired" records, which is the purpose of the field 'next'.  The
@@ -67,26 +68,28 @@ extern uint64_t                mmm_reservations[HATRACK_THREADS_MAX];
  *
  */
 
-//clang-format off
+// clang-format off
 struct mmm_header_st {
-    alignas(16) mmm_header_t *next;
+    alignas(8)
+    mmm_header_t    *next;
     _Atomic uint64_t create_epoch;
     _Atomic uint64_t write_epoch;
     uint64_t         retire_epoch;
     mmm_cleanup_func cleanup;
-    alignas(16) uint8_t data[];
+    alignas(16)
+    uint8_t          data[];
 };
 
 #ifdef HATRACK_ALLOW_TID_GIVEBACKS
 struct mmm_free_tids_st {
-    alignas(32) mmm_free_tids_t *next;
-    uint64_t tid;
+    mmm_free_tids_t *next;
+    uint64_t         tid;
 };
 #endif
 
-void mmm_register_thread(void);
-void mmm_reset_tids(void);
-void mmm_retire(void *);
+void mmm_register_thread     (void);
+void mmm_reset_tids          (void);
+void mmm_retire              (void *);
 void mmm_clean_up_before_exit(void);
 
 #ifdef HATRACK_DEBUG

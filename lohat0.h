@@ -133,10 +133,16 @@
  * wrapper API to handle this, since such a thing is also needed for
  * applying the actual hash function.
  */
+
+// clang-format off
+
 typedef struct {
-    alignas(32) _Atomic hatrack_hash_t hv;
+    alignas(16)
+    _Atomic hatrack_hash_t    hv;
     _Atomic(lohat_record_t *) head;
 } lohat0_history_t;
+
+// clang-format on
 
 typedef struct lohat0_store_st lohat0_store_t;
 
@@ -204,18 +210,25 @@ typedef struct lohat0_store_st lohat0_store_t;
  * store_next    A pointer to the store to which we are currently
  *               migrating.
  */
+
+// clang-format off
+
 struct lohat0_store_st {
-    alignas(32) uint64_t last_slot;
+    alignas(8)
+    uint64_t                  last_slot;
     uint64_t                  threshold;
     _Atomic uint64_t          used_count;
     _Atomic uint64_t          del_count;
-    lohat0_history_t         *hist_buckets;
     _Atomic(lohat0_store_t *) store_next;
+    lohat0_history_t          hist_buckets[];
 };
 
 typedef struct lohat0_st {
-    alignas(32) _Atomic(lohat0_store_t *) store_current;
+    alignas(8)
+    _Atomic(lohat0_store_t *) store_current;
 } lohat0_t;
+
+// clang-format on
 
 /* This API requires that you deal with hashing the key external to
  * the API.  You might want to cache hash values, use different
@@ -229,14 +242,14 @@ typedef struct lohat0_st {
 
 // clang-format off
 
-void            lohat0_init(lohat0_t *);
-void           *lohat0_get(lohat0_t *, hatrack_hash_t *, bool *);
-void           *lohat0_put(lohat0_t *, hatrack_hash_t *, void *, bool,
-			    bool *);
+void            lohat0_init  (lohat0_t *);
+void           *lohat0_get   (lohat0_t *, hatrack_hash_t *, bool *);
+void           *lohat0_put   (lohat0_t *, hatrack_hash_t *, void *, bool,
+			      bool *);
 void           *lohat0_remove(lohat0_t *, hatrack_hash_t *, bool *);
 void            lohat0_delete(lohat0_t *);
-uint64_t        lohat0_len(lohat0_t *);
-hatrack_view_t *lohat0_view(lohat0_t *, uint64_t *);
+uint64_t        lohat0_len   (lohat0_t *);
+hatrack_view_t *lohat0_view  (lohat0_t *, uint64_t *);
 
 // clang-format on
 

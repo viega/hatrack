@@ -61,30 +61,32 @@ typedef struct {
 
 typedef struct hihat1_store_st hihat1_store_t;
 
+// clang-format off
 struct hihat1_store_st {
-    alignas(8) uint64_t last_slot;
-    uint64_t                  threshold;
-    _Atomic uint64_t          used_count;
-    _Atomic uint64_t          del_count;
-    _Atomic(hihat1_store_t *) store_next;
-    hihat1_bucket_t           buckets[];
+    alignas(8)
+    uint64_t                   last_slot;
+    uint64_t                   threshold;
+    _Atomic uint64_t           used_count;
+    _Atomic uint64_t           del_count;
+    _Atomic(hihat1_store_t *)  store_next;
+    alignas(16)
+    hihat1_bucket_t            buckets[];
 };
 
 typedef struct {
-    alignas(32) _Atomic(hihat1_store_t *) store_current;
-    uint64_t epoch;
+    alignas(8)
+    _Atomic(hihat1_store_t *) store_current;
+    uint64_t                  epoch;
 } hihat1_t;
 
-// clang-format off
 
-void            hihat1_init(hihat1_t *);
-void           *hihat1_get(hihat1_t *, hatrack_hash_t *, bool *);
-void           *hihat1_put(hihat1_t *, hatrack_hash_t *, void *, bool, bool *);
+void            hihat1_init  (hihat1_t *);
+void           *hihat1_get   (hihat1_t *, hatrack_hash_t *, bool *);
+void           *hihat1_put   (hihat1_t *, hatrack_hash_t *, void *, bool,
+			      bool *);
 void           *hihat1_remove(hihat1_t *, hatrack_hash_t *, bool *);
 void            hihat1_delete(hihat1_t *);
-uint64_t        hihat1_len(hihat1_t *);
-hatrack_view_t *hihat1_view(hihat1_t *, uint64_t *);
-
-// clang-format on
+uint64_t        hihat1_len   (hihat1_t *);
+hatrack_view_t *hihat1_view  (hihat1_t *, uint64_t *);
 
 #endif

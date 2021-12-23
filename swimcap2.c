@@ -34,14 +34,29 @@
 #include "swimcap2.h"
 
 // clang-format off
-static swimcap2_store_t *swimcap2_new_store(uint64_t);
-static void              swimcap2_migrate(swimcap2_t *);
+static swimcap2_store_t *swimcap2_store_new         (uint64_t);
+static void             *swimcap2_store_get         (swimcap2_store_t *,
+						     hatrack_hash_t *,
+						     bool *);
+static void             *swimcap2_store_put         (swimcap2_store_t *,
+						     swimcap2_t *,
+						     hatrack_hash_t *,
+						     void *, bool *);
+static bool              swimcap2_store_put_if_empty(swimcap2_store_t *,
+						     swimcap2_t *,
+						     hatrack_hash_t *,
+						     void *);
+static void             *swimcap2_store_remove      (swimcap2_store_t *,
+						     swimcap2_t *,
+						     hatrack_hash_t *,
+						     bool *);
+static void              swimcap2_migrate           (swimcap2_t *);
 // clang-format on
 
 void
 swimcap2_init(swimcap2_t *self)
 {
-    swimcap2_store_t *store = swimcap2_new_store(HATRACK_MIN_SIZE);
+    swimcap2_store_t *store = swimcap2_store_new(HATRACK_MIN_SIZE);
     self->item_count        = 0;
     self->store             = store;
     pthread_mutex_init(&self->write_mutex, NULL);
@@ -52,43 +67,13 @@ swimcap2_init(swimcap2_t *self)
 void *
 swimcap2_get(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
 {
-    swimcap2_store_t  *store;
-    uint64_t           bix;
-    uint64_t           last_slot;
-    uint64_t           i;
-    swimcap2_bucket_t *cur;
+    void *ret;
 
     mmm_start_basic_op();
-    store     = self->store;
-    last_slot = store->last_slot;
+    ret = swimcap2_store_get(self->store, hv, found);
+    mmm_end_op();
 
-    bix = hatrack_bucket_index(hv, last_slot);
-    for (i = 0; i <= last_slot; i++) {
-        cur = &store->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
-                if (found) {
-                    *found = false;
-                }
-                mmm_end_op();
-                return NULL;
-            }
-            if (found) {
-                *found = true;
-            }
-            mmm_end_op();
-            return cur->item;
-        }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
-            if (found) {
-                *found = false;
-            }
-            mmm_end_op();
-            return NULL;
-        }
-        bix = (bix + 1) & last_slot;
-    }
-    __builtin_unreachable();
+    return ret;
 }
 
 void *
@@ -112,192 +97,68 @@ swimcap2_base_put(swimcap2_t     *self,
 void *
 swimcap2_put(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    swimcap2_store_t  *store;
-    void              *ret;
+    void *ret;
 
     mmm_start_basic_op();
     if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
     }
-again_after_migration:
-    store     = self->store;
-    last_slot = store->last_slot;
 
-    bix = hatrack_bucket_index(hv, last_slot);
+    ret = swimcap2_store_put(self->store, self, hv, item, found);
 
-    for (i = 0; i <= last_slot; i++) {
-        cur = &store->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
-                cur->item    = item;
-                cur->deleted = false;
-                self->item_count++;
-                if (found) {
-                    *found = false;
-                }
-                if (pthread_mutex_unlock(&self->write_mutex)) {
-                    abort();
-                }
-                mmm_end_op();
-                return NULL;
-            }
-            ret       = cur->item;
-            cur->item = item;
-            if (found) {
-                *found = true;
-            }
-            if (pthread_mutex_unlock(&self->write_mutex)) {
-                abort();
-            }
-            mmm_end_op();
-            return ret;
-        }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
-            if (store->used_count + 1 == store->threshold) {
-                swimcap2_migrate(self);
-                goto again_after_migration;
-            }
-            store->used_count++;
-            self->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
-            if (found) {
-                *found = false;
-            }
-
-            if (pthread_mutex_unlock(&self->write_mutex)) {
-                abort();
-            }
-            mmm_end_op();
-            return NULL;
-        }
-        bix = (bix + 1) & last_slot;
+    if (pthread_mutex_unlock(&self->write_mutex)) {
+        abort();
     }
-    __builtin_unreachable();
+    mmm_end_op();
+
+    return ret;
 }
 
 bool
 swimcap2_put_if_empty(swimcap2_t *self, hatrack_hash_t *hv, void *item)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    swimcap2_store_t  *store;
+    bool ret;
 
     mmm_start_basic_op();
     if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
     }
 
-again_after_migration:
-    store     = self->store;
-    last_slot = store->last_slot;
-    bix       = hatrack_bucket_index(hv, store->last_slot);
+    ret = swimcap2_store_put_if_empty(self->store, self, hv, item);
 
-    for (i = 0; i <= last_slot; i++) {
-        cur = &store->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
-                cur->item    = item;
-                cur->deleted = false;
-                self->item_count++;
-                if (pthread_mutex_unlock(&self->write_mutex)) {
-                    abort();
-                }
-                mmm_end_op();
-                return true;
-            }
-            if (pthread_mutex_unlock(&self->write_mutex)) {
-                abort();
-            }
-            mmm_end_op();
-            return false;
-        }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
-            if (store->used_count + 1 == store->threshold) {
-                swimcap2_migrate(self);
-                goto again_after_migration;
-            }
-            store->used_count++;
-            self->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
-            if (pthread_mutex_unlock(&self->write_mutex)) {
-                abort();
-            }
-            mmm_end_op();
-            return true;
-        }
-        bix = (bix + 1) & last_slot;
+    if (pthread_mutex_unlock(&self->write_mutex)) {
+        abort();
     }
-    __builtin_unreachable();
+    mmm_end_op();
+
+    return ret;
 }
 
 void *
 swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    swimcap2_store_t  *store;
-    void              *ret;
+    void *ret;
 
     mmm_start_basic_op();
-    if (pthread_mutex_lock(&self->write_mutex))
+    if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
-
-    store     = self->store;
-    last_slot = store->last_slot;
-    bix       = hatrack_bucket_index(hv, last_slot);
-
-    for (i = 0; i <= last_slot; i++) {
-        cur = &store->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
-                if (found) {
-                    *found = false;
-                }
-                if (pthread_mutex_unlock(&self->write_mutex)) {
-                    abort();
-                }
-                mmm_end_op();
-                return NULL;
-            }
-
-            ret          = cur->item;
-            cur->deleted = true;
-            --self->item_count;
-
-            if (found) {
-                *found = true;
-            }
-            if (pthread_mutex_unlock(&self->write_mutex)) {
-                abort();
-            }
-            mmm_end_op();
-            return ret;
-        }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
-            if (found) {
-                *found = false;
-            }
-            if (pthread_mutex_unlock(&self->write_mutex)) {
-                abort();
-            }
-            mmm_end_op();
-            return NULL;
-        }
-        bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    ret = swimcap2_store_remove(self->store, self, hv, found);
+
+    if (pthread_mutex_unlock(&self->write_mutex)) {
+        abort();
+    }
+    mmm_end_op();
+
+    return ret;
 }
 
+/* Make sure there are definitely no more writers before doing this;
+ * the behavior for destroying a mutex that's in use is undefined.
+ * Generally, if anyone is waiting on the mutex, they might hang
+ * indefinitely.
+ */
 void
 swimcap2_delete(swimcap2_t *self)
 {
@@ -368,7 +229,7 @@ swimcap2_view(swimcap2_t *self, uint64_t *num)
 }
 
 static swimcap2_store_t *
-swimcap2_new_store(uint64_t size)
+swimcap2_store_new(uint64_t size)
 {
     swimcap2_store_t *ret;
     uint64_t          alloc_len;
@@ -380,6 +241,183 @@ swimcap2_new_store(uint64_t size)
     ret->threshold = hatrack_compute_table_threshold(size);
 
     return ret;
+}
+
+static void *
+swimcap2_store_get(swimcap2_store_t *self, hatrack_hash_t *hv, bool *found)
+{
+    uint64_t           bix;
+    uint64_t           last_slot;
+    uint64_t           i;
+    swimcap2_bucket_t *cur;
+
+    last_slot = self->last_slot;
+    bix       = hatrack_bucket_index(hv, last_slot);
+
+    for (i = 0; i <= last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (cur->deleted) {
+                if (found) {
+                    *found = false;
+                }
+                return NULL;
+            }
+            if (found) {
+                *found = true;
+            }
+            return cur->item;
+        }
+        if (hatrack_bucket_unreserved(&cur->hv)) {
+            if (found) {
+                *found = false;
+            }
+            return NULL;
+        }
+        bix = (bix + 1) & last_slot;
+    }
+    __builtin_unreachable();
+}
+
+static void *
+swimcap2_store_put(swimcap2_store_t *self,
+                   swimcap2_t       *top,
+                   hatrack_hash_t   *hv,
+                   void             *item,
+                   bool             *found)
+{
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
+    swimcap2_bucket_t *cur;
+    void              *ret;
+
+    last_slot = self->last_slot;
+    bix       = hatrack_bucket_index(hv, last_slot);
+
+    for (i = 0; i <= last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (cur->deleted) {
+                cur->item    = item;
+                cur->deleted = false;
+                top->item_count++;
+                if (found) {
+                    *found = false;
+                }
+                return NULL;
+            }
+            ret       = cur->item;
+            cur->item = item;
+            if (found) {
+                *found = true;
+            }
+            return ret;
+        }
+        if (hatrack_bucket_unreserved(&cur->hv)) {
+            if (self->used_count + 1 == self->threshold) {
+                swimcap2_migrate(top);
+                return swimcap2_store_put(top->store, top, hv, item, found);
+            }
+            self->used_count++;
+            top->item_count++;
+            cur->hv   = *hv;
+            cur->item = item;
+            if (found) {
+                *found = false;
+            }
+
+            return NULL;
+        }
+        bix = (bix + 1) & last_slot;
+    }
+    __builtin_unreachable();
+}
+
+static bool
+swimcap2_store_put_if_empty(swimcap2_store_t *self,
+                            swimcap2_t       *top,
+                            hatrack_hash_t   *hv,
+                            void             *item)
+{
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
+    swimcap2_bucket_t *cur;
+
+    last_slot = self->last_slot;
+    bix       = hatrack_bucket_index(hv, last_slot);
+
+    for (i = 0; i <= last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (cur->deleted) {
+                cur->item    = item;
+                cur->deleted = false;
+                top->item_count++;
+                return true;
+            }
+            return false;
+        }
+        if (hatrack_bucket_unreserved(&cur->hv)) {
+            if (self->used_count + 1 == self->threshold) {
+                swimcap2_migrate(top);
+                return swimcap2_store_put_if_empty(top->store, top, hv, item);
+            }
+            self->used_count++;
+            top->item_count++;
+            cur->hv   = *hv;
+            cur->item = item;
+            return true;
+        }
+        bix = (bix + 1) & last_slot;
+    }
+    __builtin_unreachable();
+}
+
+void *
+swimcap2_store_remove(swimcap2_store_t *self,
+                      swimcap2_t       *top,
+                      hatrack_hash_t   *hv,
+                      bool             *found)
+{
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
+    swimcap2_bucket_t *cur;
+    void              *ret;
+
+    last_slot = self->last_slot;
+    bix       = hatrack_bucket_index(hv, last_slot);
+
+    for (i = 0; i <= last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (cur->deleted) {
+                if (found) {
+                    *found = false;
+                }
+                return NULL;
+            }
+
+            ret          = cur->item;
+            cur->deleted = true;
+            --top->item_count;
+
+            if (found) {
+                *found = true;
+            }
+            return ret;
+        }
+        if (hatrack_bucket_unreserved(&cur->hv)) {
+            if (found) {
+                *found = false;
+            }
+            return NULL;
+        }
+        bix = (bix + 1) & last_slot;
+    }
+    __builtin_unreachable();
 }
 
 static void
@@ -398,7 +436,7 @@ swimcap2_migrate(swimcap2_t *self)
     cur_last_slot = cur_store->last_slot;
     new_size      = hatrack_new_size(cur_last_slot, swimcap2_len(self) + 1);
     new_last_slot = new_size - 1;
-    new_store     = swimcap2_new_store(new_size);
+    new_store     = swimcap2_store_new(new_size);
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &cur_store->buckets[n];

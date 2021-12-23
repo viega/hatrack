@@ -28,20 +28,19 @@
 
 // clang-format off
 
-static hihat1_store_t  *hihat1_store_new(uint64_t);
-static void            *hihat1_store_get(hihat1_store_t *, hihat1_t *,
-					 hatrack_hash_t *, bool *);
-static void            *hihat1_store_put(hihat1_store_t *, hihat1_t *,
-					 hatrack_hash_t *, void *, bool *);
+static hihat1_store_t  *hihat1_store_new         (uint64_t);
+static void            *hihat1_store_get         (hihat1_store_t *, hihat1_t *,
+					          hatrack_hash_t *, bool *);
+static void            *hihat1_store_put         (hihat1_store_t *, hihat1_t *,
+					          hatrack_hash_t *, void *,
+						  bool *);
 static bool             hihat1_store_put_if_empty(hihat1_store_t *,
 						  hihat1_t *,
 						  hatrack_hash_t *,
 						  void *);
-static void            *hihat1_store_remove(hihat1_store_t *, hihat1_t *,
-					    hatrack_hash_t *, bool *);
-static hihat1_store_t *hihat1_store_migrate(hihat1_store_t *, hihat1_t *);
-static hatrack_view_t   *hihat1_store_view(hihat1_store_t *, hihat1_t *,
-					   uint64_t *);
+static void            *hihat1_store_remove      (hihat1_store_t *, hihat1_t *,
+					          hatrack_hash_t *, bool *);
+static hihat1_store_t *hihat1_store_migrate      (hihat1_store_t *, hihat1_t *);
 
 // clang-format on
 
@@ -106,9 +105,7 @@ hihat1_remove(hihat1_t *self, hatrack_hash_t *hv, bool *found)
 void
 hihat1_delete(hihat1_t *self)
 {
-    hihat1_store_t *store = atomic_load(&self->store_current);
-
-    mmm_retire(store);
+    mmm_retire(atomic_load(&self->store_current));
     free(self);
 }
 
@@ -120,15 +117,55 @@ hihat1_len(hihat1_t *self)
 
 // This version cannot be linearized.
 hatrack_view_t *
-hihat1_view(hihat1_t *self, uint64_t *num_items)
+hihat1_view(hihat1_t *self, uint64_t *num)
 {
-    hatrack_view_t *ret;
+    hatrack_view_t  *view;
+    hatrack_view_t  *p;
+    hatrack_hash_t   hv;
+    hihat1_bucket_t *cur;
+    hihat1_bucket_t *end;
+    hihat1_record_t  record;
+    uint64_t         num_items;
+    uint64_t         alloc_len;
+    hihat1_store_t  *store;
 
     mmm_start_basic_op();
-    ret = hihat1_store_view(self->store_current, self, num_items);
-    mmm_end_op();
 
-    return ret;
+    store     = atomic_load(&self->store_current);
+    alloc_len = sizeof(hatrack_view_t) * (store->last_slot + 1);
+    view      = (hatrack_view_t *)malloc(alloc_len);
+    p         = view;
+    cur       = store->buckets;
+    end       = cur + (store->last_slot + 1);
+
+    while (cur < end) {
+        hv            = atomic_load(&cur->hv);
+        record        = atomic_load(&cur->record);
+        p->hv         = hv;
+        p->item       = record.item;
+        p->sort_epoch = record.info & HIHAT_F_MASK;
+
+        p++;
+        cur++;
+    }
+
+    num_items = p - view;
+    *num      = num_items;
+
+    if (!num_items) {
+        free(view);
+        mmm_end_op();
+        return NULL;
+    }
+
+    view = realloc(view, num_items * sizeof(hatrack_view_t));
+
+    // Unordered buckets should be in random order, so quicksort is a
+    // good option.
+    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+
+    mmm_end_op();
+    return view;
 }
 
 static hihat1_store_t *
@@ -525,50 +562,4 @@ hihat1_store_migrate(hihat1_store_t *self, hihat1_t *top)
     }
 
     return new_store;
-}
-
-static hatrack_view_t *
-hihat1_store_view(hihat1_store_t *self, hihat1_t *top, uint64_t *num)
-{
-    hatrack_view_t  *view;
-    hatrack_view_t  *p;
-    hatrack_hash_t   hv;
-    hihat1_bucket_t *cur;
-    hihat1_bucket_t *end;
-    hihat1_record_t  record;
-    uint64_t         num_items;
-    uint64_t         alloc_len;
-
-    alloc_len = sizeof(hatrack_view_t) * (self->last_slot + 1);
-    view      = (hatrack_view_t *)malloc(alloc_len);
-    p         = view;
-    cur       = self->buckets;
-    end       = cur + (self->last_slot + 1);
-
-    while (cur < end) {
-        hv            = atomic_load(&cur->hv);
-        record        = atomic_load(&cur->record);
-        p->hv         = hv;
-        p->item       = record.item;
-        p->sort_epoch = record.info & HIHAT_F_MASK;
-
-        p++;
-        cur++;
-    }
-
-    num_items = p - view;
-    *num      = num_items;
-
-    if (!num_items) {
-        free(view);
-        return NULL;
-    }
-
-    view = realloc(view, num_items * sizeof(hatrack_view_t));
-
-    // Unordered buckets should be in random order, so quicksort is a
-    // good option.
-    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
-
-    return view;
 }

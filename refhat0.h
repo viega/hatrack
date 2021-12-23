@@ -36,13 +36,14 @@ typedef struct {
 } refhat0_bucket_t;
 
 typedef struct {
-    alignas(8) uint64_t last_slot;
-    uint64_t            threshold;
-    uint64_t            used_count;
-    uint64_t            item_count;
-    refhat0_bucket_t   *buckets;
+    alignas(8)
+    uint64_t          last_slot;
+    uint64_t          threshold;
+    uint64_t          used_count;
+    uint64_t          item_count;
+    refhat0_bucket_t *buckets;
 #ifndef HATRACK_DONT_SORT
-    uint64_t            next_epoch;
+    uint64_t          next_epoch;
 #endif
 } refhat0_t;
 
