@@ -45,7 +45,8 @@ char *hatrack_counter_names[HATRACK_COUNTERS_NUM] = {
     "hi1a msleep 2a success",
     "hi1a msleep 2a fail",
     "hi1a msleep 2b success",
-    "hi1a msleep 2b fail"
+    "hi1a msleep 2b fail",
+    "wh help requests"
 };
 
 char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
@@ -122,6 +123,18 @@ char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
     "hi64 migrate record",      // 70
     "hi64 F_MOVE (migrate)",    // 71
     "hi64 len installed",       // 72
+    "wh bucket acquires",       // 73
+    "wh record installs",       // 74
+    "wh record delete",         // 75
+    "wh store creates",         // 76
+    "wh F_MOVING set",          // 77
+    "wh F_MOVED (empty)",       // 78
+    "wh migrate hash",          // 79
+    "wh migrate record",        // 80
+    "wh F_MOVED (migrate)",     // 81
+    "wh len installed",         // 82
+    "wh store installs",        // 83
+    
 };
 
 // clang-format on

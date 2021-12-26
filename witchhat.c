@@ -266,6 +266,7 @@ witchhat_store_put(witchhat_store_t *self,
  migrate_and_retry:
     count = count + 1;
     if (witchhat_help_required(count)) {
+	HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
 	atomic_fetch_add(&top->help_needed, 1);
 	self     = witchhat_store_migrate(self, top);
 	old_item = witchhat_store_put(self, top, hv1, item, found, count);
@@ -359,6 +360,8 @@ witchhat_store_put_if_empty(witchhat_store_t *self,
     count = count + 1;
     if (witchhat_help_required(count)) {
 	bool ret;
+
+	HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);	
 	atomic_fetch_add(&top->help_needed, 1);
 	self = witchhat_store_migrate(self, top);
 	ret  = witchhat_store_put_if_empty(self, top, hv1, item, count);
@@ -438,6 +441,7 @@ found_bucket:
     migrate_and_retry:
 	count = count + 1;
 	if (witchhat_help_required(count)) {
+	    HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
 	    atomic_fetch_add(&top->help_needed, 1);
 	    self     = witchhat_store_migrate(self, top);
 	    old_item = witchhat_store_remove(self, top, hv1, found, count);

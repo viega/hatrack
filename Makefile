@@ -1,11 +1,11 @@
 ENV      := /usr/bin/env
 CC       := cc
-OPT      := -Ofast -flto 
+#OPT      := -Ofast -flto 
 LIBS     := 
 # Needed for linux.
 #LIBS    := -latomic -pthread -lrt
-UNUSED   :=  -DHATRACK_COUNTERS -DHATRACK_DEBUG  -g
-EXTRAS   :=  
+UNUSED   :=  
+EXTRAS   :=  -DHATRACK_COUNTERS -DHATRACK_DEBUG  -g
 CFLAGS   :=  -std=c11 -Wall -Werror ${OPT} -I../include ${EXTRAS}
 PROGNAME := test
 
