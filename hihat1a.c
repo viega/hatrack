@@ -254,29 +254,19 @@ hihat1a_store_put(hihat1_store_t *self,
         }
         else {
             if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
-                return hihat1a_store_put(hihat1a_store_migrate(self, top),
-                                        top,
-                                        hv1,
-                                        item,
-                                        found);
+		goto migrate_and_retry;
             }
         }
         goto found_bucket;
     }
-    return hihat1a_store_put(hihat1a_store_migrate(self, top),
-                            top,
-                            hv1,
-                            item,
-                            found);
+ migrate_and_retry:
+    self = hihat1a_store_migrate(self, top);
+    return hihat1a_store_put(self, top, hv1, item, found);
 
 found_bucket:
     record = atomic_load(&bucket->record);
     if (record.info & HIHAT_F_MOVING) {
-        return hihat1a_store_put(hihat1a_store_migrate(self, top),
-                                top,
-                                hv1,
-                                item,
-                                found);
+	goto migrate_and_retry;
     }
 
     if (found) {
@@ -297,6 +287,9 @@ found_bucket:
             atomic_fetch_sub(&self->del_count, 1);
         }
         return old_item;
+    }
+    if (record.info & HIHAT_F_MOVING) {
+	goto migrate_and_retry;
     }
 
     return item;
@@ -336,18 +329,15 @@ hihat1a_store_put_if_empty(hihat1_store_t *self,
         }
         goto found_bucket;
     }
-    return hihat1a_store_put_if_empty(hihat1a_store_migrate(self, top),
-                                     top,
-                                     hv1,
-                                     item);
+
+ migrate_and_retry:
+    self = hihat1a_store_migrate(self, top);
+    return hihat1a_store_put_if_empty(self, top, hv1, item);
 
 found_bucket:
     record = atomic_load(&bucket->record);
     if (record.info & HIHAT_F_MOVING) {
-        return hihat1a_store_put_if_empty(hihat1a_store_migrate(self, top),
-                                         top,
-                                         hv1,
-                                         item);
+	goto migrate_and_retry;
     }
     if (record.info & HIHAT_F_USED) {
         return false;
@@ -361,6 +351,9 @@ found_bucket:
             atomic_fetch_sub(&self->del_count, 1);
         }
         return true;
+    }
+    if (record.info & HIHAT_F_MOVING) {
+	goto migrate_and_retry;
     }
 
     return false;
@@ -403,10 +396,9 @@ hihat1a_store_remove(hihat1_store_t *self,
 found_bucket:
     record = atomic_load(&bucket->record);
     if (record.info & HIHAT_F_MOVING) {
-        return hihat1a_store_remove(hihat1a_store_migrate(self, top),
-                                   top,
-                                   hv1,
-                                   found);
+    migrate_and_retry:
+	self = hihat1a_store_migrate(self, top);
+        return hihat1a_store_remove(self, top, hv1, found);
     }
     if (!(record.info & HIHAT_F_USED)) {
         if (found) {
@@ -427,6 +419,9 @@ found_bucket:
             *found = true;
         }
         return old_item;
+    }
+    if (record.info & HIHAT_F_MOVING) {
+	goto migrate_and_retry;
     }
 
     if (found) {

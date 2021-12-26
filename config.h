@@ -102,6 +102,10 @@
 #define HIHAT1a_MIGRATE_SLEEP_TIME_NS 500000
 #endif
 
+#ifndef HATRACK_RETRY_THRESHOLD
+#define HATRACK_RETRY_THRESHOLD 3
+#endif
+
 // Off by default. Uncommment, or turn them on via the compiler.
 // #define HATRACK_ALLOW_TID_GIVEBACKS
 // #define HATRACK_DEBUG

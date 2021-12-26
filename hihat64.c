@@ -310,19 +310,15 @@ hihat64_store_put(hihat64_store_t *self,
 #endif
         goto found_bucket;
     }
-    return hihat64_store_put(hihat64_store_migrate(self, top),
-                             top,
-                             hvp,
-                             item,
-                             found);
+
+migrate_and_retry:
+    self = hihat64_store_migrate(self, top);
+    return hihat64_store_put(self, top, hvp, item, found);
+
 found_bucket:
     record = atomic_load(&bucket->record);
     if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
-        return hihat64_store_put(hihat64_store_migrate(self, top),
-                                 top,
-                                 hvp,
-                                 item,
-                                 found);
+        goto migrate_and_retry;
     }
     candidate       = mmm_alloc_committed(sizeof(hihat64_record_t));
     candidate->item = item;
@@ -332,11 +328,7 @@ found_bucket:
     if (!record) {
         if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
             mmm_retire_unused(raw_candidate);
-            return hihat64_store_put(hihat64_store_migrate(self, top),
-                                     top,
-                                     hvp,
-                                     item,
-                                     found);
+            goto migrate_and_retry;
         }
     }
     else {
@@ -345,11 +337,7 @@ found_bucket:
     if (!LCAS(&bucket->record, &record, candidate, HIHAT64_CTR_REC_INSTALL)) {
         mmm_retire_unused(raw_candidate);
         if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
-            return hihat64_store_put(hihat64_store_migrate(self, top),
-                                     top,
-                                     hvp,
-                                     item,
-                                     found);
+            goto migrate_and_retry;
         }
         if (found) {
             *found = true;
@@ -415,17 +403,15 @@ hihat64_store_put_if_empty(hihat64_store_t *self,
 #endif
         goto found_bucket;
     }
-    return hihat64_store_put_if_empty(hihat64_store_migrate(self, top),
-                                      top,
-                                      hvp,
-                                      item);
+
+migrate_and_retry:
+    self = hihat64_store_migrate(self, top);
+    return hihat64_store_put_if_empty(self, top, hvp, item);
+
 found_bucket:
     record = atomic_load(&bucket->record);
     if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
-        return hihat64_store_put_if_empty(hihat64_store_migrate(self, top),
-                                          top,
-                                          hvp,
-                                          item);
+        goto migrate_and_retry;
     }
     if (hatrack_pflag_test(record, HIHAT64_F_USED)) {
         return false;
@@ -439,19 +425,13 @@ found_bucket:
     if (!record) {
         if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
             mmm_retire_unused(raw_candidate);
-            return hihat64_store_put_if_empty(hihat64_store_migrate(self, top),
-                                              top,
-                                              hvp,
-                                              item);
+            goto migrate_and_retry;
         }
     }
     if (!LCAS(&bucket->record, &record, candidate, HIHAT64_CTR_REC_INSTALL)) {
         mmm_retire_unused(raw_candidate);
         if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
-            return hihat64_store_put_if_empty(hihat64_store_migrate(self, top),
-                                              top,
-                                              hvp,
-                                              item);
+            goto migrate_and_retry;
         }
         return true;
     }
@@ -521,10 +501,8 @@ found_bucket:
     candidate = hatrack_pflag_clear(record, HIHAT64_F_USED);
     if (!LCAS(&bucket->record, &record, candidate, HIHAT64_CTR_DEL)) {
         if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
-            return hihat64_store_remove(hihat64_store_migrate(self, top),
-                                        top,
-                                        hvp,
-                                        found);
+            self = hihat64_store_migrate(self, top);
+            return hihat64_store_remove(self, top, hvp, found);
         }
 
         if (!hatrack_pflag_test(record, HIHAT64_F_USED)) {

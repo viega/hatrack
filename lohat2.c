@@ -393,11 +393,7 @@ lohat2_store_put(lohat2_store_t *self,
         if (!bucket) {
             new_bucket = atomic_fetch_add(&self->hist_next, 1);
             if (new_bucket >= self->hist_end) {
-                return lohat2_store_put(lohat2_store_migrate(self, top),
-                                        top,
-                                        hv1,
-                                        item,
-                                        found);
+                goto migrate_and_retry;
             }
             // If someone else installed ptr before we did, then its
             // value will be in bucket.  Otherwise, it will be in
@@ -427,21 +423,16 @@ lohat2_store_put(lohat2_store_t *self,
         }
         goto found_history_bucket;
     }
-    return lohat2_store_put(lohat2_store_migrate(self, top),
-                            top,
-                            hv1,
-                            item,
-                            found);
+
+migrate_and_retry:
+    self = lohat2_store_migrate(self, top);
+    return lohat2_store_put(self, top, hv1, item, found);
 
 found_history_bucket:
     head = atomic_load(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-        return lohat2_store_put(lohat2_store_migrate(self, top),
-                                top,
-                                hv1,
-                                item,
-                                found);
+        goto migrate_and_retry;
     }
 
     // If there's a record at the top, but the USED bit isn't
@@ -449,20 +440,20 @@ found_history_bucket:
     if (head && !hatrack_pflag_test(head->next, LOHAT_F_USED)) {
         new_bucket = atomic_fetch_add(&self->hist_next, 1);
         if (new_bucket >= self->hist_end) {
-            return lohat2_store_put(lohat2_store_migrate(self, top),
-                                    top,
-                                    hv1,
-                                    item,
-                                    found);
+            goto migrate_and_retry;
         }
         fwd = NULL;
         mmm_help_commit(head);
         if (LCAS(&bucket->fwd, &fwd, new_bucket, LOHAT2_CTR_FWD)) {
             mmm_retire(head);
+            bucket = new_bucket;
         }
-        // Could just goto above. For now, let's just make sure it
-        // works.
-        return lohat2_store_put(self, top, hv1, item, found);
+        else {
+            bucket = fwd;
+        }
+        // Now that the forwarder to the new bucket is in place, we
+        // can try again.
+        goto found_history_bucket;
     }
 
     candidate       = mmm_alloc(sizeof(lohat_record_t));
@@ -497,11 +488,7 @@ found_history_bucket:
         mmm_retire_unused(candidate);
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-            return lohat2_store_put(lohat2_store_migrate(self, top),
-                                    top,
-                                    hv1,
-                                    item,
-                                    found);
+            goto migrate_and_retry;
         }
         if (found) {
             *found = true;
@@ -581,11 +568,7 @@ lohat2_store_put_if_empty(lohat2_store_t *self,
         if (!bucket) {
             new_bucket = atomic_fetch_add(&self->hist_next, 1);
             if (new_bucket >= self->hist_end) {
-                return lohat2_store_put_if_empty(
-                    lohat2_store_migrate(self, top),
-                    top,
-                    hv1,
-                    item);
+                goto migrate_and_retry;
             }
             // If someone else installed ptr before we did, then
             // its value will be in bucket.  Otherwise, it will
@@ -612,19 +595,16 @@ lohat2_store_put_if_empty(lohat2_store_t *self,
         }
         goto found_history_bucket;
     }
-    return lohat2_store_put_if_empty(lohat2_store_migrate(self, top),
-                                     top,
-                                     hv1,
-                                     item);
+
+migrate_and_retry:
+    self = lohat2_store_migrate(self, top);
+    return lohat2_store_put_if_empty(self, top, hv1, item);
 
 found_history_bucket:
     head = atomic_load(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-        return lohat2_store_put_if_empty(lohat2_store_migrate(self, top),
-                                         top,
-                                         hv1,
-                                         item);
+        goto migrate_and_retry;
     }
 
     if (head) {
@@ -639,19 +619,18 @@ found_history_bucket:
         // (either via resize or not).
         new_bucket = atomic_fetch_add(&self->hist_next, 1);
         if (new_bucket >= self->hist_end) {
-            return lohat2_store_put_if_empty(lohat2_store_migrate(self, top),
-                                             top,
-                                             hv1,
-                                             item);
+            goto migrate_and_retry;
         }
         fwd = NULL;
         mmm_help_commit(head);
         if (LCAS(&bucket->fwd, &fwd, new_bucket, LOHAT2_CTR_FWD)) {
             mmm_retire(head);
+            bucket = new_bucket;
         }
-        // Could just goto above. For now, let's just make sure it
-        // works.
-        return lohat2_store_put_if_empty(self, top, hv1, item);
+        else {
+            bucket = fwd;
+        }
+        goto found_history_bucket;
     }
 
     /* Right now there's nothing in the bucket, but there might be
@@ -667,10 +646,7 @@ found_history_bucket:
         mmm_retire_unused(candidate);
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-            return lohat2_store_put_if_empty(lohat2_store_migrate(self, top),
-                                             top,
-                                             hv1,
-                                             item);
+            goto migrate_and_retry;
         }
         return false;
     }
@@ -752,10 +728,9 @@ found_history_bucket:
     head = atomic_load(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-        return lohat2_store_remove(lohat2_store_migrate(self, top),
-                                   top,
-                                   hv1,
-                                   found);
+migrate_and_retry:
+        self = lohat2_store_migrate(self, top);
+        return lohat2_store_remove(self, top, hv1, found);
     }
 
     // If !head, then some write hasn't finished.
@@ -780,10 +755,7 @@ found_history_bucket:
 
         // Moving flag got set before our CAS.
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-            return lohat2_store_remove(lohat2_store_migrate(self, top),
-                                       top,
-                                       hv1,
-                                       found);
+            goto migrate_and_retry;
         }
         if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
             // We got beat to the delete;

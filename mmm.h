@@ -440,13 +440,7 @@ mmm_start_basic_op(void)
  *    still use mmm_end_op() to end their operation and give up their
  *    reservation.
  *
- * 2) Currently, we have any linearized reader bump the epoch itself,
- *    ensuring no writer has the same epoch. This isn't strictly
- *    necessary, since writes conceptually happen on the transition
- *    into an epoch, and are in the table already when the epoch is
- *    written.  We may remove this
- *
- * 3) Whenever the reader finds a record w/ no write epoch, it must
+ * 2) Whenever the reader finds a record w/ no write epoch, it must
  *    try to help get the record a definitive epoch before proceeding.
  *    If the stalled thread beats the linearized reader, we will see
  *    an epoch lower than ours, and will then read the

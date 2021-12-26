@@ -318,21 +318,16 @@ lohat0_store_put(lohat0_store_t *self,
         }
         goto found_history_bucket;
     }
-    return lohat0_store_put(lohat0_store_migrate(self, top),
-                            top,
-                            hv1,
-                            item,
-                            found);
+
+migrate_and_retry:
+    self = lohat0_store_migrate(self, top);
+    return lohat0_store_put(self, top, hv1, item, found);
 
 found_history_bucket:
     head = atomic_load(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-        return lohat0_store_put(lohat0_store_migrate(self, top),
-                                top,
-                                hv1,
-                                item,
-                                found);
+        goto migrate_and_retry;
     }
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
@@ -355,11 +350,7 @@ found_history_bucket:
     else {
         if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
             mmm_retire_unused(candidate);
-            return lohat0_store_put(lohat0_store_migrate(self, top),
-                                    top,
-                                    hv1,
-                                    item,
-                                    found);
+            goto migrate_and_retry;
         }
     }
 
@@ -375,11 +366,7 @@ found_history_bucket:
         mmm_retire_unused(candidate);
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-            return lohat0_store_put(lohat0_store_migrate(self, top),
-                                    top,
-                                    hv1,
-                                    item,
-                                    found);
+            goto migrate_and_retry;
         }
         if (found) {
             *found = true;
@@ -446,19 +433,16 @@ lohat0_store_put_if_empty(lohat0_store_t *self,
         }
         goto found_history_bucket;
     }
-    return lohat0_store_put_if_empty(lohat0_store_migrate(self, top),
-                                     top,
-                                     hv1,
-                                     item);
+
+migrate_and_retry:
+    self = lohat0_store_migrate(self, top);
+    return lohat0_store_put_if_empty(self, top, hv1, item);
 
 found_history_bucket:
     head = atomic_load(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-        return lohat0_store_put_if_empty(lohat0_store_migrate(self, top),
-                                         top,
-                                         hv1,
-                                         item);
+        goto migrate_and_retry;
     }
 
     if (head) {
@@ -470,10 +454,7 @@ found_history_bucket:
     }
     else {
         if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
-            return lohat0_store_put_if_empty(lohat0_store_migrate(self, top),
-                                             top,
-                                             hv1,
-                                             item);
+            goto migrate_and_retry;
         }
     }
 
@@ -490,10 +471,7 @@ found_history_bucket:
         mmm_retire_unused(candidate);
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-            return lohat0_store_put_if_empty(lohat0_store_migrate(self, top),
-                                             top,
-                                             hv1,
-                                             item);
+            goto migrate_and_retry;
         }
         return false;
     }
@@ -561,10 +539,9 @@ found_history_bucket:
     head = atomic_load(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-        return lohat0_store_remove(lohat0_store_migrate(self, top),
-                                   top,
-                                   hv1,
-                                   found);
+migrate_and_retry:
+        self = lohat0_store_migrate(self, top);
+        return lohat0_store_remove(self, top, hv1, found);
     }
 
     // If !head, then some write hasn't finished.
@@ -589,10 +566,7 @@ found_history_bucket:
 
         // Moving flag got set before our CAS.
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-            return lohat0_store_remove(lohat0_store_migrate(self, top),
-                                       top,
-                                       hv1,
-                                       found);
+            goto migrate_and_retry;
         }
         if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
             // We got beat to the delete;
