@@ -534,7 +534,8 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
 		HATRACK_CTR(HATRACK_CTR_HI2_SLEEP2b_WORKED);		
 		return new_store;
 	    }
-		HATRACK_CTR(HATRACK_CTR_HI2_SLEEP2b_FAILED);	    
+		HATRACK_CTR(HATRACK_CTR_HI2_SLEEP2b_FAILED);
+		new_store = self->store_next;
         }
         else {
             new_store = candidate_store;
