@@ -213,6 +213,16 @@ hatrack_vtable_t lohat2_vtable = {
     .len     = (hatrack_len_func)lohat2_len,
     .view    = (hatrack_view_func)lohat2_view
 };
+hatrack_vtable_t witchhat_vtable = {
+    .init    = (hatrack_init_func)witchhat_init,
+    .get     = (hatrack_get_func)witchhat_get,
+    .put     = (hatrack_put_func)witchhat_put,
+    .putcond = (hatrack_putcond_func)witchhat_put_if_empty,
+    .remove  = (hatrack_remove_func)witchhat_remove,
+    .delete  = (hatrack_delete_func)witchhat_delete,
+    .len     = (hatrack_len_func)witchhat_len,
+    .view    = (hatrack_view_func)witchhat_view
+};
 
 // clang-format on
 
@@ -231,4 +241,7 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("lohat0", &lohat0_vtable, sizeof(lohat0_t));
     testhat_register_algorithm("lohat1", &lohat1_vtable, sizeof(lohat1_t));
     testhat_register_algorithm("lohat2", &lohat2_vtable, sizeof(lohat2_t));
+    testhat_register_algorithm("witchhat",
+                               &witchhat_vtable,
+                               sizeof(witchhat_t));
 }

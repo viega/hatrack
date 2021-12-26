@@ -39,6 +39,7 @@
 #include "lohat0.h"
 #include "lohat1.h"
 #include "lohat2.h"
+#include "witchhat.h"
 
 /* For testing, we keep vtables of the operations to make it easier to
  * switch between different algorithms for testing. These types are
