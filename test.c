@@ -847,7 +847,7 @@ char *threadsafe_dicts[] = {
     "swimcap", "swimcap2",
     "newshat",
     "hihat1", "hihat1a", "hihat64",
-    "lohat0", "lohat1", "lohat2",
+    "lohat0", "lohat1", /*"lohat2",*/
     "witchhat",
     NULL
 };
@@ -856,7 +856,7 @@ char *all_dicts[]     = {
     "swimcap", "swimcap2",
     "newshat",
     "hihat1", "hihat1a", "hihat64",
-    "lohat0", "lohat1", "lohat2",
+    "lohat0", "lohat1", /*"lohat2",*/
     "witchhat",
     NULL
 };

@@ -423,17 +423,38 @@ mmm_start_basic_op(void)
  * a consistent, full ordering of data objects in the lohat family.
  *
  * 1) When getting a read epoch that needs to be fully ordered, we
- *    need to check that the epoch we got is still the epoch after we
- *    write our our reservation to the shared array, and repeat if
- *    not.  This protects against retires of items within our epoch;
- *    we want all retires are conceptually at the end of the epoch,
- *    but if a new epoch starts before we make our reservation on this
- *    epoch, it's possible that data items could be retired in our
- *    epoch *and cleaned up by a writer*.
+ *    make a reservation. But, we can't rely on that reservation alone
+ *    for linearization. Particularly, if we're very slow to write our
+ *    reservation to the reservations array, items could get retired
+ *    in the same epoch, and freed, all before we complete our
+ *    reservation (if the epoch advances while we're suspended, for
+ *    instance).
  *
- *    Therefore, we loop until there's no conflict, making this
- *    operation lock-free. There is also a wait-free version, which we
- *    use for the ballcap hash table.
+ *    That is, once the reservation is in place, it ensures nothing
+ *    that's still in the table from that epoch or later is
+ *    removed. However, this race condition means that it does not
+ *    ensure that nothing EVER alive in that epoch won't be removed.
+ *
+ *    Checking the reservation again will give us a useful upper
+ *    bound. We know that nothing retired from that epoch on will be
+ *    freed before we're done with our linearization operation.  But,
+ *    there might be a write operation in the current epoch, and that
+ *    operation might actually end up delayed.
+ *
+ *    However! We have a restriction that there can be at most ONE
+ *    write per epoch.  Therefore, we can go ahead and use this epoch
+ *    to linearize. Either we will see the new write, in which case
+ *    our linearization point is conceptionally the instant after the
+ *    write (but before any retires), or we won't see the new write,
+ *    in which case our linearization point is effectively the very
+ *    end of the previous epoch, after any retires.
+ *
+ *    Even if there were retires in this new epoch, it won't matter;
+ *    retires in the same epoch of creation never happen, since the
+ *    writer reserves an epoch equal to or previous to that epoch, and
+ *    creates a new epoch at the end.  And, by this point, we will
+ *    have a reservation in the table, so writers in future epochs
+ *    won't free from underneath us either.
  *
  *    When full ordering is necessary, readers should use the function
  *    mmm_start_linearized_op(), instead of mmm_start_op().  They do
@@ -455,13 +476,12 @@ mmm_start_linearized_op(void)
     uint64_t read_epoch;
 
     pthread_once(&mmm_inited, mmm_register_thread);
-    read_epoch = atomic_load(&mmm_epoch);
-    do {
-        mmm_reservations[mmm_mytid] = read_epoch;
-        read_epoch                  = atomic_load(&mmm_epoch);
-    } while (HATRACK_YN_CTR(read_epoch != mmm_reservations[mmm_mytid],
-                            HATRACK_CTR_LINEARIZE_RETRIES));
-
+    mmm_reservations[mmm_mytid] = atomic_load(&mmm_epoch);
+    read_epoch                  = atomic_load(&mmm_epoch);
+#ifdef HATRACK_COUNTERS
+    HATRACK_YN_CTR(read_epoch == mmm_reservations[mmm_mytid],
+                   HATRACK_CTR_LINEAR_EPOCH_EQ);
+#endif
     return read_epoch;
 }
 

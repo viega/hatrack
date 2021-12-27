@@ -103,7 +103,7 @@
 #endif
 
 #ifndef HATRACK_RETRY_THRESHOLD
-#define HATRACK_RETRY_THRESHOLD 3
+#define HATRACK_RETRY_THRESHOLD 6
 #endif
 
 // Off by default. Uncommment, or turn them on via the compiler.

@@ -50,7 +50,7 @@ char *hatrack_counter_names[HATRACK_COUNTERS_NUM] = {
 };
 
 char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
-    "mmm linearize retries",    // 0
+    "linearize epoch eq",       // 0
     "mmm write commits",        // 1
     "mmm commit helps",         // 2
     "lh0 bucket acquires",      // 3
