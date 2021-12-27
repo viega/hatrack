@@ -41,9 +41,11 @@ refhat0_init(refhat0_t *self)
 void *
 refhat0_get(refhat0_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t          bix = hatrack_bucket_index(hv, self->last_slot);
+    uint64_t          bix;
     uint64_t          i;
     refhat0_bucket_t *cur;
+
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
@@ -73,10 +75,12 @@ refhat0_get(refhat0_t *self, hatrack_hash_t *hv, bool *found)
 void *
 refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
-    uint64_t          bix = hatrack_bucket_index(hv, self->last_slot);
+    uint64_t          bix;
     uint64_t          i;
     refhat0_bucket_t *cur;
     void             *ret;
+
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
@@ -123,9 +127,11 @@ refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
 bool
 refhat0_put_if_empty(refhat0_t *self, hatrack_hash_t *hv, void *item)
 {
-    uint64_t          bix = hatrack_bucket_index(hv, self->last_slot);
+    uint64_t          bix;
     uint64_t          i;
     refhat0_bucket_t *cur;
+
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
@@ -161,10 +167,12 @@ refhat0_put_if_empty(refhat0_t *self, hatrack_hash_t *hv, void *item)
 void *
 refhat0_remove(refhat0_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t          bix = hatrack_bucket_index(hv, self->last_slot);
+    uint64_t          bix;
     uint64_t          i;
     refhat0_bucket_t *cur;
     void             *ret;
+
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];

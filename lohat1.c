@@ -308,12 +308,14 @@ lohat1_store_get(lohat1_store_t *self,
                  hatrack_hash_t *hv1,
                  bool           *found)
 {
-    uint64_t           bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t           bix;
     uint64_t           i;
     hatrack_hash_t     hv2;
     lohat1_history_t  *bucket;
     lohat_record_t    *head;
     lohat1_indirect_t *ptrbucket;
+
+    bix = hatrack_bucket_index(hv1, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         ptrbucket = &self->ptr_buckets[bix];
@@ -511,7 +513,7 @@ lohat1_store_put_if_empty(lohat1_store_t *self,
                           hatrack_hash_t *hv1,
                           void           *item)
 {
-    uint64_t           bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t           bix;
     uint64_t           i;
     hatrack_hash_t     hv2;
     lohat1_history_t  *bucket;
@@ -519,6 +521,8 @@ lohat1_store_put_if_empty(lohat1_store_t *self,
     lohat_record_t    *head;
     lohat_record_t    *candidate;
     lohat1_indirect_t *ptrbucket;
+
+    bix = hatrack_bucket_index(hv1, self->last_slot);
 
     for (i = 0; i < self->last_slot; i++) {
         ptrbucket = &self->ptr_buckets[bix];
@@ -631,13 +635,15 @@ lohat1_store_remove(lohat1_store_t *self,
                     hatrack_hash_t *hv1,
                     bool           *found)
 {
-    uint64_t           bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t           bix;
     uint64_t           i;
     hatrack_hash_t     hv2;
     lohat1_history_t  *bucket;
     lohat_record_t    *head;
     lohat_record_t    *candidate;
     lohat1_indirect_t *ptrbucket;
+
+    bix = hatrack_bucket_index(hv1, self->last_slot);
 
     for (i = 0; i < self->last_slot; i++) {
         ptrbucket = &self->ptr_buckets[bix];

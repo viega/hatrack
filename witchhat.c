@@ -205,12 +205,14 @@ witchhat_store_get(witchhat_store_t *self,
 		   hatrack_hash_t   *hv1,
 		   bool             *found)
 {
-    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t         bix;
     uint64_t         i;
     hatrack_hash_t   hv2;
     witchhat_bucket_t *bucket;
     witchhat_record_t  record;
 
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+    
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_read(&bucket->hv);

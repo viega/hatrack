@@ -311,12 +311,14 @@ lohat0_store_put(lohat0_store_t *self,
                  bool           *found)
 {
     void             *ret;
-    uint64_t          bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t          bix;
     uint64_t          i;
     hatrack_hash_t    hv2;
     lohat0_history_t *bucket;
     lohat_record_t   *head;
     lohat_record_t   *candidate;
+
+    bix = hatrack_bucket_index(hv1, self->last_slot);
 
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
