@@ -134,7 +134,18 @@ char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
     "wh F_MOVED (migrate)",     // 81
     "wh len installed",         // 82
     "wh store installs",        // 83
-    
+    "wool bucket acquires",     // 84
+    "wool record installs",     // 85
+    "wool record delete",       // 86
+    "wool store creates",       // 87
+    "wool F_MOVING set",        // 88
+    "wool F_MOVED (empty)",     // 89
+    "wool F_MOVED (deleted)",   // 90
+    "wool migrate hash",        // 91
+    "wool migrate record",      // 92
+    "wool F_MOVED (migrate)",   // 93
+    "wool len installed",       // 94
+    "wool store installs",      // 95
 };
 
 // clang-format on
