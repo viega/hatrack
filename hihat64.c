@@ -26,7 +26,7 @@
 #include "hihat64.h"
 
 // clang-format off
-static hihat64_store_t  *hihat64_store_new        (uint64_t);
+static hihat64_store_t *hihat64_store_new         (uint64_t);
 static void            *hihat64_store_get         (hihat64_store_t *,
 						   hihat64_t *,
 					           hatrack_hash_t *, bool *);
@@ -105,11 +105,11 @@ hihat64_remove(hihat64_t *self, hatrack_hash_t *hv, bool *found)
 void
 hihat64_delete(hihat64_t *self)
 {
+    hihat64_record_t *rec;
     hihat64_store_t  *store   = atomic_load(&self->store_current);
     hihat64_bucket_t *buckets = store->buckets;
     hihat64_bucket_t *p       = buckets;
     hihat64_bucket_t *end     = store->buckets + (store->last_slot + 1);
-    hihat64_record_t *rec;
 
     while (p < end) {
         rec = hatrack_pflag_clear(atomic_load(&p->record),
@@ -149,7 +149,7 @@ hihat64_view(hihat64_t *self, uint64_t *num, bool sort)
 
     mmm_start_basic_op();
 
-    store = atomic_load(&self->store_current);
+    store = atomic_read(&self->store_current);
     view  = (hatrack_view_t *)malloc(sizeof(hatrack_view_t)
                                     * (store->last_slot + 1));
     p     = view;
@@ -157,7 +157,7 @@ hihat64_view(hihat64_t *self, uint64_t *num, bool sort)
     end   = cur + (store->last_slot + 1);
 
     while (cur < end) {
-        record = atomic_load(&cur->record);
+        record = atomic_read(&cur->record);
         if (!hatrack_pflag_test(record, HIHAT64_F_USED)) {
             cur++;
             continue;
@@ -165,9 +165,9 @@ hihat64_view(hihat64_t *self, uint64_t *num, bool sort)
         deflagged = hatrack_pflag_clear(record,
                                         HIHAT64_F_USED | HIHAT64_F_MOVED
                                             | HIHAT64_F_MOVING);
-        hv        = atomic_load(&cur->h1);
+        hv        = atomic_read(&cur->h1);
 #ifdef HIHAT64_USE_FULL_HASH
-        hv2 = atomic_load(&cur->h2);
+        hv2 = atomic_read(&cur->h2);
 #endif
         p->hv.w1 = hv;
 #ifdef HIHAT64_USE_FULL_HASH
@@ -222,7 +222,7 @@ hihat64_store_get(hihat64_store_t *self,
                   hatrack_hash_t  *hvp,
                   bool            *found)
 {
-    uint64_t bix = hatrack_bucket_index(hvp, self->last_slot);
+    uint64_t bix;
     uint64_t i;
     uint64_t shv1;
 #ifdef HIHAT64_USE_FULL_HASH
@@ -231,9 +231,11 @@ hihat64_store_get(hihat64_store_t *self,
     hihat64_bucket_t *bucket;
     hihat64_record_t *record;
 
+    bix = hatrack_bucket_index(hvp, self->last_slot);
+
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        shv1   = atomic_load(&bucket->h1);
+        shv1   = atomic_read(&bucket->h1);
 #ifndef HIHAT64_USE_FULL_HASH
         if (!shv1) {
             goto not_found;
@@ -244,7 +246,7 @@ hihat64_store_get(hihat64_store_t *self,
             continue;
         }
 #ifdef HIHAT64_USE_FULL_HASH
-        shv2 = atomic_load(&bucket->h2);
+        shv2 = atomic_read(&bucket->h2);
         // We could also check for !shv1 here, but it's statistically
         // a wasted operation.
         if (!shv2) {
@@ -264,7 +266,7 @@ not_found:
     return NULL;
 
 found_bucket:
-    record = hatrack_pflag_clear(atomic_load(&bucket->record),
+    record = hatrack_pflag_clear(atomic_read(&bucket->record),
                                  HIHAT64_F_MOVING | HIHAT64_F_MOVED);
     if (!hatrack_pflag_test(record, HIHAT64_F_USED)) {
         goto not_found;
@@ -283,7 +285,7 @@ hihat64_store_put(hihat64_store_t *self,
                   void            *item,
                   bool            *found)
 {
-    uint64_t          bix = hatrack_bucket_index(hvp, self->last_slot);
+    uint64_t          bix;
     uint64_t          i;
     hihat64_bucket_t *bucket;
     hihat64_record_t *record;
@@ -292,18 +294,37 @@ hihat64_store_put(hihat64_store_t *self,
     hihat64_record_t *raw_candidate;
     uint64_t          hv;
 
+    bix = hatrack_bucket_index(hvp, self->last_slot);
+
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv     = 0;
-        if (!LCAS(&bucket->h1, &hv, hvp->w1, HIHAT64_CTR_BUCKET_ACQUIRE)) {
-            if (hv != hvp->w1) {
-                bix = (bix + 1) & self->last_slot;
-                continue;
+        hv     = atomic_read(&bucket->h1);
+        if (!hv) {
+            if (LCAS(&bucket->h1, &hv, hvp->w1, HIHAT64_CTR_BUCKET_ACQUIRE)) {
+#ifdef HIHAT64_USE_FULL_HASH
+                goto found_first_part;
+#else
+                goto found_bucket;
+#endif
             }
         }
+        if (hv != hvp->w1) {
+            bix = (bix + 1) & self->last_slot;
+            continue;
+        }
+
 #ifdef HIHAT64_USE_FULL_HASH
-        hv = 0;
-        if (!LCAS(&bucket->h2, &hv, hvp->w2, HIHAT64_CTR_BUCKET_ACQUIRE2)) {
+found_first_part:
+        hv = atomic_read(&bucket->h2);
+        if (!hv) {
+            if (!LCAS(&bucket->h2, &hv, hvp->w2, HIHAT64_CTR_BUCKET_ACQUIRE2)) {
+                if (hv != hvp->w2) {
+                    bix = (bix + 1) & self->last_slot;
+                    continue;
+                }
+            }
+        }
+        else {
             if (hv != hvp->w2) {
                 bix = (bix + 1) & self->last_slot;
                 continue;
@@ -318,7 +339,7 @@ migrate_and_retry:
     return hihat64_store_put(self, top, hvp, item, found);
 
 found_bucket:
-    record = atomic_load(&bucket->record);
+    record = atomic_read(&bucket->record);
     if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
         goto migrate_and_retry;
     }
@@ -377,7 +398,7 @@ hihat64_store_put_if_empty(hihat64_store_t *self,
                            hatrack_hash_t  *hvp,
                            void            *item)
 {
-    uint64_t          bix = hatrack_bucket_index(hvp, self->last_slot);
+    uint64_t          bix;
     uint64_t          i;
     uint64_t          hv;
     hihat64_bucket_t *bucket;
@@ -385,18 +406,36 @@ hihat64_store_put_if_empty(hihat64_store_t *self,
     hihat64_record_t *candidate;
     hihat64_record_t *raw_candidate;
 
+    bix = hatrack_bucket_index(hvp, self->last_slot);
+
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv     = 0;
-        if (!LCAS(&bucket->h1, &hv, hvp->w1, HIHAT64_CTR_BUCKET_ACQUIRE)) {
-            if (hv != hvp->w1) {
-                bix = (bix + 1) & self->last_slot;
-                continue;
+        hv     = atomic_read(&bucket->h1);
+        if (!hv) {
+            if (LCAS(&bucket->h1, &hv, hvp->w1, HIHAT64_CTR_BUCKET_ACQUIRE)) {
+#ifdef HIHAT64_USE_FULL_HASH
+                goto found_first_part;
+#else
+                goto found_bucket;
+#endif
             }
         }
+        if (hv != hvp->w1) {
+            bix = (bix + 1) & self->last_slot;
+            continue;
+        }
 #ifdef HIHAT64_USE_FULL_HASH
-        hv = 0;
-        if (!LCAS(&bucket->h2, &hv, hvp->w2, HIHAT64_CTR_BUCKET_ACQUIRE2)) {
+found_first_part:
+        hv = atomic_read(&bucket->h2);
+        if (!hv) {
+            if (!LCAS(&bucket->h2, &hv, hvp->w2, HIHAT64_CTR_BUCKET_ACQUIRE2)) {
+                if (hv != hvp->w2) {
+                    bix = (bix + 1) & self->last_slot;
+                    continue;
+                }
+            }
+        }
+        else {
             if (hv != hvp->w2) {
                 bix = (bix + 1) & self->last_slot;
                 continue;
@@ -411,7 +450,7 @@ migrate_and_retry:
     return hihat64_store_put_if_empty(self, top, hvp, item);
 
 found_bucket:
-    record = atomic_load(&bucket->record);
+    record = atomic_read(&bucket->record);
     if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
         goto migrate_and_retry;
     }
@@ -452,7 +491,7 @@ hihat64_store_remove(hihat64_store_t *self,
                      hatrack_hash_t  *hvp,
                      bool            *found)
 {
-    uint64_t bix = hatrack_bucket_index(hvp, self->last_slot);
+    uint64_t bix;
     uint64_t i;
     uint64_t shv1;
 #ifdef HIHAT64_USE_FULL_HASH
@@ -462,9 +501,11 @@ hihat64_store_remove(hihat64_store_t *self,
     hihat64_record_t *record;
     hihat64_record_t *candidate;
 
+    bix = hatrack_bucket_index(hvp, self->last_slot);
+
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        shv1   = atomic_load(&bucket->h1);
+        shv1   = atomic_read(&bucket->h1);
 #ifndef HIHAT64_USE_FULL_HASH
         if (!shv1) {
             goto not_found;
@@ -475,7 +516,7 @@ hihat64_store_remove(hihat64_store_t *self,
             continue;
         }
 #ifdef HIHAT64_USE_FULL_HASH
-        shv2 = atomic_load(&bucket->h2);
+        shv2 = atomic_read(&bucket->h2);
         // We could also check for !shv1 here, but it's statistically
         // a wasted operation.
         if (!shv2) {
@@ -495,7 +536,7 @@ not_found:
     return NULL;
 
 found_bucket:
-    record = hatrack_pflag_clear(atomic_load(&bucket->record),
+    record = hatrack_pflag_clear(atomic_read(&bucket->record),
                                  HIHAT64_F_MOVING | HIHAT64_F_MOVED);
     if (!hatrack_pflag_test(record, HIHAT64_F_USED)) {
         goto not_found;
@@ -553,7 +594,7 @@ hihat64_store_migrate(hihat64_store_t *self, hihat64_t *top)
      */
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[i];
-        record = atomic_load(&bucket->record);
+        record = atomic_read(&bucket->record);
 
         do {
             if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
@@ -572,7 +613,7 @@ hihat64_store_migrate(hihat64_store_t *self, hihat64_t *top)
         }
     }
 
-    new_store = atomic_load(&self->store_next);
+    new_store = atomic_read(&self->store_next);
 
     // If we couldn't acquire a store, try to install one. If we fail, free it.
     if (!new_store) {
@@ -600,7 +641,7 @@ hihat64_store_migrate(hihat64_store_t *self, hihat64_t *top)
 
     for (i = 0; i <= self->last_slot; i++) {
         bucket    = &self->buckets[i];
-        record    = atomic_load(&bucket->record);
+        record    = atomic_read(&bucket->record);
         deflagged = hatrack_pflag_clear(record,
                                         HIHAT64_F_USED | HIHAT64_F_MOVED
                                             | HIHAT64_F_MOVING);
@@ -620,7 +661,7 @@ hihat64_store_migrate(hihat64_store_t *self, hihat64_t *top)
             continue;
         }
 
-        hv  = atomic_load(&bucket->h1);
+        hv  = atomic_read(&bucket->h1);
         bix = hv & new_store->last_slot;
 
         for (j = 0; j <= new_store->last_slot; j++) {
@@ -637,7 +678,7 @@ hihat64_store_migrate(hihat64_store_t *self, hihat64_t *top)
             }
 #ifdef HIHAT64_USE_FULL_HASH
             expected_hv = 0;
-            hv          = atomic_load(&bucket->h2);
+            hv          = atomic_read(&bucket->h2);
             if (!LCAS(&new_bucket->h2,
                       &expected_hv,
                       hv,

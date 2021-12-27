@@ -27,6 +27,7 @@
 #include "config.h"
 #include "debug.h"
 #include "counters.h"
+#include "hatomic.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>

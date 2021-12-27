@@ -25,23 +25,8 @@
 #define __COUNTERS_H__
 
 #include <stdint.h>
-#include <stdatomic.h>
 #include <stdalign.h>
-
-/* It's perhaps a bit odd to have this live in counters.h, b/c on the
- * surface it doesn't have anything to do with counters. But, when
- * counters are turned on, we provide an API for counting the results
- * of CASs, and we use that most everywhere.
- */
-#define CAS(target, expected, desired)                                         \
-    atomic_compare_exchange_weak(target, expected, desired)
-
-#define CAS2(target, expected, desired)                                        \
-    atomic_compare_exchange_weak_explicit(target,                              \
-                                          expected,                            \
-                                          desired,                             \
-                                          memory_order_relaxed,                \
-                                          memory_order_relaxed)
+#include <stdatomic.h>
 
 #ifdef HATRACK_COUNTERS
 extern _Atomic uint64_t hatrack_counters[];
@@ -191,22 +176,12 @@ void counters_output_alltime(void);
 #define HATRACK_YN_ON(x, id)  (x) ? hatrack_yn_ctr_t(id) : hatrack_yn_ctr_f(id)
 #define HATRACK_YN_OFF(x, id) (x)
 
-#define LCAS_DEBUG(target, expected, desired, id)                              \
-    HATRACK_YN_CTR(CAS(target, expected, desired), id)
-
-#define LCAS_SKIP(target, expected, desired, id) CAS(target, expected, desired)
-#define LCAS(target, expected, desired, id)                                    \
-    LCAS_DEBUG(target, expected, desired, id)
-
 #else
 
 #define HATRACK_CTR_ON(id)
 #define HATRACK_CTR_OFF(id)
 #define HATRACK_YN_ON(x, id)  (x)
 #define HATRACK_YN_OFF(x, id) (x)
-
-#define LCAS_SKIP(target, expected, desired, id)  CAS(target, expected, desired)
-#define LCAS_DEBUG(target, expected, desired, id) CAS(target, expected, desired)
 
 #define counters_output_delta()
 #define counters_output_alltime()
@@ -215,7 +190,5 @@ void counters_output_alltime(void);
 
 #define HATRACK_CTR(id)       HATRACK_CTR_ON(id)
 #define HATRACK_YN_CTR(x, id) HATRACK_YN_ON(x, id)
-#define LCAS(target, expected, desired, id)                                    \
-    LCAS_DEBUG(target, expected, desired, id)
 
 #endif /* __COUNTERS_H__ */

@@ -75,10 +75,12 @@ lohat2_init(lohat2_t *self)
 void *
 lohat2_get(lohat2_t *self, hatrack_hash_t *hv, bool *found)
 {
-    void *ret;
+    void           *ret;
+    lohat2_store_t *store;
 
     mmm_start_basic_op();
-    ret = lohat2_store_get(self->store_current, self, hv, found);
+    store = atomic_read(&self->store_current);
+    ret   = lohat2_store_get(store, self, hv, found);
     mmm_end_op();
 
     return ret;
@@ -87,10 +89,12 @@ lohat2_get(lohat2_t *self, hatrack_hash_t *hv, bool *found)
 void *
 lohat2_put(lohat2_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
-    void *ret;
+    void           *ret;
+    lohat2_store_t *store;
 
     mmm_start_basic_op();
-    ret = lohat2_store_put(self->store_current, self, hv, item, found);
+    store = atomic_read(&self->store_current);
+    ret   = lohat2_store_put(store, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -99,9 +103,12 @@ lohat2_put(lohat2_t *self, hatrack_hash_t *hv, void *item, bool *found)
 bool
 lohat2_put_if_empty(lohat2_t *self, hatrack_hash_t *hv, void *item)
 {
-    bool ret;
+    bool            ret;
+    lohat2_store_t *store;
+
     mmm_start_basic_op();
-    ret = lohat2_store_put_if_empty(self->store_current, self, hv, item);
+    store = atomic_read(&self->store_current);
+    ret   = lohat2_store_put_if_empty(store, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -110,10 +117,12 @@ lohat2_put_if_empty(lohat2_t *self, hatrack_hash_t *hv, void *item)
 void *
 lohat2_remove(lohat2_t *self, hatrack_hash_t *hv, bool *found)
 {
-    void *ret;
+    void           *ret;
+    lohat2_store_t *store;
 
     mmm_start_basic_op();
-    ret = lohat2_store_remove(self->store_current, self, hv, found);
+    store = atomic_read(&self->store_current);
+    ret   = lohat2_store_remove(store, self, hv, found);
     mmm_end_op();
 
     return ret;
@@ -155,11 +164,11 @@ lohat2_len(lohat2_t *self)
      * gives us the number of buckets in the history store
      * that have been claimed.
      */
-    diff = atomic_load(&self->store_current->hist_next)
+    diff = atomic_read(&self->store_current->hist_next)
          - self->store_current->hist_buckets;
 
     // Subtract out buckets known to be empty.
-    return diff - atomic_load(&self->store_current->del_count);
+    return diff - atomic_read(&self->store_current->del_count);
 }
 
 hatrack_view_t *
@@ -177,9 +186,9 @@ lohat2_view(lohat2_t *self, uint64_t *out_num, bool sort)
     uint64_t          num_items;
 
     epoch = mmm_start_linearized_op();
-    store = atomic_load(&self->store_current);
+    store = atomic_read(&self->store_current);
     cur   = store->hist_buckets;
-    end   = atomic_load(&store->hist_next);
+    end   = atomic_read(&store->hist_next);
 
     if (store->hist_end < end) {
         end = store->hist_end;
@@ -189,8 +198,8 @@ lohat2_view(lohat2_t *self, uint64_t *out_num, bool sort)
     p    = view;
 
     while (cur < end) {
-        hv  = atomic_load(&cur->hv);
-        rec = hatrack_pflag_clear(atomic_load(&cur->head),
+        hv  = atomic_read(&cur->hv);
+        rec = hatrack_pflag_clear(atomic_read(&cur->head),
                                   LOHAT_F_MOVING | LOHAT_F_MOVED);
 
         // If there's a record, we need to ensure its epoch is updated
@@ -316,7 +325,7 @@ lohat2_store_get(lohat2_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         ptrbucket = &self->ptr_buckets[bix];
-        hv2       = atomic_load(&ptrbucket->hv);
+        hv2       = atomic_read(&ptrbucket->hv);
         if (hatrack_bucket_unreserved(&hv2)) {
 not_found:
             if (found) {
@@ -329,7 +338,7 @@ not_found:
             continue;
         }
 
-        bucket = atomic_load(&ptrbucket->ptr);
+        bucket = atomic_read(&ptrbucket->ptr);
         // It's possible that another thread has started a write but
         // has not finished it yet.
         if (!bucket) {
@@ -337,7 +346,7 @@ not_found:
         }
         // If there's a forward record, follow it.
         while (true) {
-            fwd = atomic_load(&bucket->fwd);
+            fwd = atomic_read(&bucket->fwd);
             if (!fwd) {
                 break;
             }
@@ -348,7 +357,7 @@ not_found:
     goto not_found;
 
 found_history_bucket:
-    head = hatrack_pflag_clear(atomic_load(&bucket->head),
+    head = hatrack_pflag_clear(atomic_read(&bucket->head),
                                LOHAT_F_MOVING | LOHAT_F_MOVED);
     if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
         if (found) {
@@ -395,7 +404,7 @@ lohat2_store_put(lohat2_store_t *self,
          * array. However, with the hv, we always just try to write
          * it.
          */
-        bucket = atomic_load(&ptrbucket->ptr);
+        bucket = atomic_read(&ptrbucket->ptr);
         if (!bucket) {
             new_bucket = atomic_fetch_add(&self->hist_next, 1);
             if (new_bucket >= self->hist_end) {
@@ -421,7 +430,7 @@ lohat2_store_put(lohat2_store_t *self,
         LCAS(&bucket->hv, &hv2, *hv1, LOHAT2_CTR_HIST_HASH);
 
         while (true) {
-            fwd = atomic_load(&bucket->fwd);
+            fwd = atomic_read(&bucket->fwd);
             if (!fwd) {
                 break;
             }
@@ -435,7 +444,7 @@ migrate_and_retry:
     return lohat2_store_put(self, top, hv1, item, found);
 
 found_history_bucket:
-    head = atomic_load(&bucket->head);
+    head = atomic_read(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
         goto migrate_and_retry;
@@ -570,7 +579,7 @@ lohat2_store_put_if_empty(lohat2_store_t *self,
          * array. However, with the hv, we always just try to write
          * it.
          */
-        bucket = atomic_load(&ptrbucket->ptr);
+        bucket = atomic_read(&ptrbucket->ptr);
         if (!bucket) {
             new_bucket = atomic_fetch_add(&self->hist_next, 1);
             if (new_bucket >= self->hist_end) {
@@ -593,7 +602,7 @@ lohat2_store_put_if_empty(lohat2_store_t *self,
         LCAS(&bucket->hv, &hv2, *hv1, LOHAT2_CTR_HIST_HASH);
 
         while (true) {
-            fwd = atomic_load(&bucket->fwd);
+            fwd = atomic_read(&bucket->fwd);
             if (!fwd) {
                 break;
             }
@@ -607,7 +616,7 @@ migrate_and_retry:
     return lohat2_store_put_if_empty(self, top, hv1, item);
 
 found_history_bucket:
-    head = atomic_load(&bucket->head);
+    head = atomic_read(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
         goto migrate_and_retry;
@@ -694,7 +703,7 @@ lohat2_store_remove(lohat2_store_t *self,
 
     for (i = 0; i < self->last_slot; i++) {
         ptrbucket = &self->ptr_buckets[bix];
-        hv2       = atomic_load(&ptrbucket->hv);
+        hv2       = atomic_read(&ptrbucket->hv);
         if (hatrack_bucket_unreserved(&hv2)) {
             break;
         }
@@ -704,7 +713,7 @@ lohat2_store_remove(lohat2_store_t *self,
             continue;
         }
 
-        bucket = atomic_load(&ptrbucket->ptr);
+        bucket = atomic_read(&ptrbucket->ptr);
         if (!bucket) {
             break;
         }
@@ -715,7 +724,7 @@ lohat2_store_remove(lohat2_store_t *self,
         LCAS(&bucket->hv, &hv2, *hv1, LOHAT2_CTR_BUCKET_ACQUIRE);
 
         while (true) {
-            fwd = atomic_load(&bucket->fwd);
+            fwd = atomic_read(&bucket->fwd);
             if (!fwd) {
                 break;
             }
@@ -731,7 +740,7 @@ empty_bucket:
     return NULL;
 
 found_history_bucket:
-    head = atomic_load(&bucket->head);
+    head = atomic_read(&bucket->head);
 
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
 migrate_and_retry:
@@ -818,7 +827,7 @@ lohat2_store_migrate(lohat2_store_t *self, lohat2_t *top)
     store_end = self->hist_end;
 
     while (cur < store_end) {
-        old_head = atomic_load(&cur->head);
+        old_head = atomic_read(&cur->head);
         do {
             if (hatrack_pflag_test(old_head, LOHAT_F_MOVING)) {
                 break;
@@ -836,7 +845,7 @@ lohat2_store_migrate(lohat2_store_t *self, lohat2_t *top)
         cur++;
     }
 
-    new_store = atomic_load(&self->store_next);
+    new_store = atomic_read(&self->store_next);
 
     // If we couldn't acquire a store, try to install one. If we fail, free it.
     if (!new_store) {
@@ -862,11 +871,11 @@ lohat2_store_migrate(lohat2_store_t *self, lohat2_t *top)
     target = new_store->hist_buckets;
 
     while (cur < store_end) {
-        if (atomic_load(&cur->fwd)) {
+        if (atomic_read(&cur->fwd)) {
             cur++;
             continue;
         }
-        old_head = atomic_load(&cur->head);
+        old_head = atomic_read(&cur->head);
         deflagged
             = hatrack_pflag_clear(old_head, LOHAT_F_MOVING | LOHAT_F_MOVED);
 
@@ -926,7 +935,7 @@ lohat2_store_migrate(lohat2_store_t *self, lohat2_t *top)
         expected_hv.w2 = 0;
         expected_head  = NULL;
 
-        cur_hv = atomic_load(&cur->hv);
+        cur_hv = atomic_read(&cur->hv);
 
         LCAS(&target->hv, &expected_hv, cur_hv, LOHAT2_CTR_MIGRATE_HV);
         LCAS(&target->head, &expected_head, deflagged, LOHAT2_CTR_MIG_REC);

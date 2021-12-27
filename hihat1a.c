@@ -50,8 +50,9 @@ static hihat1_store_t *hihat1a_store_migrate      (hihat1_store_t *,
 void
 hihat1a_init(hihat1_t *self)
 {
-    hihat1_store_t *store = hihat1a_store_new(HATRACK_MIN_SIZE);
+    hihat1_store_t *store;
 
+    store       = hihat1a_store_new(HATRACK_MIN_SIZE);
     self->epoch = 0;
     atomic_store(&self->store_current, store);
 }
@@ -59,10 +60,12 @@ hihat1a_init(hihat1_t *self)
 void *
 hihat1a_get(hihat1_t *self, hatrack_hash_t *hv, bool *found)
 {
-    void *ret;
+    void           *ret;
+    hihat1_store_t *store;
 
     mmm_start_basic_op();
-    ret = hihat1a_store_get(self->store_current, self, hv, found);
+    store = atomic_read(&self->store_current);
+    ret   = hihat1a_store_get(store, self, hv, found);
     mmm_end_op();
 
     return ret;
@@ -71,10 +74,12 @@ hihat1a_get(hihat1_t *self, hatrack_hash_t *hv, bool *found)
 void *
 hihat1a_put(hihat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
-    void *ret;
+    void           *ret;
+    hihat1_store_t *store;
 
     mmm_start_basic_op();
-    ret = hihat1a_store_put(self->store_current, self, hv, item, found);
+    store = atomic_read(&self->store_current);    
+    ret = hihat1a_store_put(store, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -83,10 +88,12 @@ hihat1a_put(hihat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
 bool
 hihat1a_put_if_empty(hihat1_t *self, hatrack_hash_t *hv, void *item)
 {
-    bool ret;
+    bool            ret;
+    hihat1_store_t *store;
 
     mmm_start_basic_op();
-    ret = hihat1a_store_put_if_empty(self->store_current, self, hv, item);
+    store = atomic_read(&self->store_current);    
+    ret = hihat1a_store_put_if_empty(store, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -95,10 +102,12 @@ hihat1a_put_if_empty(hihat1_t *self, hatrack_hash_t *hv, void *item)
 void *
 hihat1a_remove(hihat1_t *self, hatrack_hash_t *hv, bool *found)
 {
-    void *ret;
+    void           *ret;
+    hihat1_store_t *store;
 
     mmm_start_basic_op();
-    ret = hihat1a_store_remove(self->store_current, self, hv, found);
+    store = atomic_read(&self->store_current);    
+    ret = hihat1a_store_remove(store, self, hv, found);
     mmm_end_op();
 
     return ret;
@@ -133,7 +142,7 @@ hihat1a_view(hihat1_t *self, uint64_t *num, bool sort)
 
     mmm_start_basic_op();
 
-    store     = atomic_load(&self->store_current);
+    store     = atomic_read(&self->store_current);
     alloc_len = sizeof(hatrack_view_t) * (store->last_slot + 1);
     view      = (hatrack_view_t *)malloc(alloc_len);
     p         = view;
@@ -141,8 +150,8 @@ hihat1a_view(hihat1_t *self, uint64_t *num, bool sort)
     end       = cur + (store->last_slot + 1);
 
     while (cur < end) {
-        hv            = atomic_load(&cur->hv);
-        record        = atomic_load(&cur->record);
+        hv            = atomic_read(&cur->hv);
+        record        = atomic_read(&cur->record);
         p->hv         = hv;
         p->item       = record.item;
         p->sort_epoch = record.info & HIHAT_F_MASK;
@@ -196,15 +205,17 @@ hihat1a_store_get(hihat1_store_t *self,
                  hatrack_hash_t *hv1,
                  bool           *found)
 {
-    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t         bix;
     uint64_t         i;
     hatrack_hash_t   hv2;
     hihat1_bucket_t *bucket;
     hihat1_record_t  record;
 
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+    
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv2    = atomic_load(&bucket->hv);
+        hv2    = atomic_read(&bucket->hv);
         if (hatrack_bucket_unreserved(&hv2)) {
             goto not_found;
         }
@@ -213,7 +224,7 @@ hihat1a_store_get(hihat1_store_t *self,
             continue;
         }
 
-        record = atomic_load(&bucket->record);
+        record = atomic_read(&bucket->record);
         if (record.info & HIHAT_F_USED) {
             if (found) {
                 *found = true;
@@ -237,28 +248,30 @@ hihat1a_store_put(hihat1_store_t *self,
                  bool           *found)
 {
     void            *old_item;
-    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t         bix;
     uint64_t         i;
     hatrack_hash_t   hv2;
     hihat1_bucket_t *bucket;
     hihat1_record_t  record;
     hihat1_record_t  candidate;
 
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+    
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv2.w1 = 0;
-        hv2.w2 = 0;
-        if (!LCAS(&bucket->hv, &hv2, *hv1, HIHAT1_CTR_BUCKET_ACQUIRE)) {
-            if (!hatrack_hashes_eq(hv1, &hv2)) {
-                bix = (bix + 1) & self->last_slot;
-                continue;
-            }
-        }
-        else {
-            if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
-		goto migrate_and_retry;
-            }
-        }
+	hv2    = atomic_read(&bucket->hv);
+	if (hatrack_bucket_unreserved(&hv2)) {
+	    if (LCAS(&bucket->hv, &hv2, *hv1, HIHAT1_CTR_BUCKET_ACQUIRE)) {
+		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
+		    goto migrate_and_retry;
+		}
+		goto found_bucket;
+	    }
+	}
+	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	    bix = (bix + 1) & self->last_slot;
+	    continue;
+	}
         goto found_bucket;
     }
  migrate_and_retry:
@@ -266,7 +279,7 @@ hihat1a_store_put(hihat1_store_t *self,
     return hihat1a_store_put(self, top, hv1, item, found);
 
 found_bucket:
-    record = atomic_load(&bucket->record);
+    record = atomic_read(&bucket->record);
     if (record.info & HIHAT_F_MOVING) {
 	goto migrate_and_retry;
     }
@@ -303,32 +316,31 @@ hihat1a_store_put_if_empty(hihat1_store_t *self,
                           hatrack_hash_t *hv1,
                           void           *item)
 {
-    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t         bix;
     uint64_t         i;
     hatrack_hash_t   hv2;
     hihat1_bucket_t *bucket;
     hihat1_record_t  record;
     hihat1_record_t  candidate;
 
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+    
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv2.w1 = 0;
-        hv2.w2 = 0;
-        if (!LCAS(&bucket->hv, &hv2, *hv1, HIHAT1_CTR_BUCKET_ACQUIRE)) {
-            if (!hatrack_hashes_eq(hv1, &hv2)) {
-                bix = (bix + 1) & self->last_slot;
-                continue;
-            }
-        }
-        else {
-            if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
-                return hihat1a_store_put_if_empty(
-                    hihat1a_store_migrate(self, top),
-                    top,
-                    hv1,
-                    item);
-            }
-        }
+	hv2    = atomic_read(&bucket->hv);
+	if (hatrack_bucket_unreserved(&hv2)) {
+	    if (LCAS(&bucket->hv, &hv2, *hv1, HIHAT1_CTR_BUCKET_ACQUIRE)) {
+		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
+		    goto migrate_and_retry;
+		}
+		goto found_bucket;
+	    }
+	}
+	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	    bix = (bix + 1) & self->last_slot;
+	    continue;
+	}
+	
         goto found_bucket;
     }
 
@@ -337,7 +349,7 @@ hihat1a_store_put_if_empty(hihat1_store_t *self,
     return hihat1a_store_put_if_empty(self, top, hv1, item);
 
 found_bucket:
-    record = atomic_load(&bucket->record);
+    record = atomic_read(&bucket->record);
     if (record.info & HIHAT_F_MOVING) {
 	goto migrate_and_retry;
     }
@@ -368,16 +380,18 @@ hihat1a_store_remove(hihat1_store_t *self,
                     bool           *found)
 {
     void            *old_item;
-    uint64_t         bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t         bix;
     uint64_t         i;
     hatrack_hash_t   hv2;
     hihat1_bucket_t *bucket;
     hihat1_record_t  record;
     hihat1_record_t  candidate;
 
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+    
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv2    = atomic_load(&bucket->hv);
+        hv2    = atomic_read(&bucket->hv);
         if (hatrack_bucket_unreserved(&hv2)) {
             break;
         }
@@ -396,7 +410,7 @@ hihat1a_store_remove(hihat1_store_t *self,
     return NULL;
 
 found_bucket:
-    record = atomic_load(&bucket->record);
+    record = atomic_read(&bucket->record);
     if (record.info & HIHAT_F_MOVING) {
     migrate_and_retry:
 	self = hihat1a_store_migrate(self, top);
@@ -456,22 +470,22 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
     uint64_t         expected_used = ~0;
  
 
-    new_store = atomic_load(&self->store_next);
+    new_store = atomic_read(&self->store_next);
     
     if (new_store) {
 	// Try twice to let whoever is in front of us to complete
 	// the migration.
 
 	nanosleep(&sleep_time, NULL);
-	new_store = atomic_load(&self->store_next);
-	if (new_store == atomic_load(&top->store_current)) {
+	new_store = atomic_read(&self->store_next);
+	if (new_store == atomic_read(&top->store_current)) {
 	    HATRACK_CTR(HATRACK_CTR_HI2_SLEEP1a_WORKED);
 	    return new_store;
 	}
 	HATRACK_CTR(HATRACK_CTR_HI2_SLEEP1a_FAILED);
 	nanosleep(&sleep_time, NULL);
-	new_store = atomic_load(&self->store_next);
-	if (new_store == atomic_load(&top->store_current)) {
+	new_store = atomic_read(&self->store_next);
+	if (new_store == atomic_read(&top->store_current)) {
 	    HATRACK_CTR(HATRACK_CTR_HI2_SLEEP1b_WORKED);    
 	    return new_store;
 	}
@@ -487,7 +501,7 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
      */
     for (i = 0; i <= self->last_slot; i++) {
         bucket                = &self->buckets[i];
-        record                = atomic_load(&bucket->record);
+        record                = atomic_read(&bucket->record);
         candidate_record.info = record.info | HIHAT_F_MOVING;
         candidate_record.item = record.item;
 
@@ -505,7 +519,7 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
         }
     }
 
-    new_store = atomic_load(&self->store_next);
+    new_store = atomic_read(&self->store_next);
 
     // If we couldn't acquire a store, try to install one. If we fail, free it.
     if (!new_store) {
@@ -524,14 +538,14 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
 	    // If we lost the CAS, give the other thread time to
 	    // migrate.
 	    nanosleep(&sleep_time, NULL);
-	    new_store = atomic_load(&top->store_current);
+	    new_store = atomic_read(&top->store_current);
 	    if (new_store != self) {
 		HATRACK_CTR(HATRACK_CTR_HI2_SLEEP2a_WORKED);		
 		return new_store;
 	    }
 	    HATRACK_CTR(HATRACK_CTR_HI2_SLEEP2a_FAILED);		    
 	    nanosleep(&sleep_time, NULL);
-	    new_store = atomic_load(&top->store_current);
+	    new_store = atomic_read(&top->store_current);
 	    if (new_store != self) {
 		HATRACK_CTR(HATRACK_CTR_HI2_SLEEP2b_WORKED);		
 		return new_store;
@@ -550,7 +564,7 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
     // and, if it's not fully migrated, we can attempt to migrate it.
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[i];
-        record = atomic_load(&bucket->record);
+        record = atomic_read(&bucket->record);
 
         if (record.info & HIHAT_F_MOVED) {
             continue;
@@ -567,7 +581,7 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
             continue;
         }
 
-        hv  = atomic_load(&bucket->hv);
+        hv  = atomic_read(&bucket->hv);
         bix = hatrack_bucket_index(&hv, new_store->last_slot);
 
         for (j = 0; j <= new_store->last_slot; j++) {

@@ -61,9 +61,11 @@ void *
 witchhat_get(witchhat_t *self, hatrack_hash_t *hv, bool *found)
 {
     void *ret;
-
+    witchhat_store_t *store;
+    
     mmm_start_basic_op();
-    ret = witchhat_store_get(self->store_current, self, hv, found);
+    store = atomic_read(&self->store_current);
+    ret = witchhat_store_get(store, self, hv, found);
     mmm_end_op();
 
     return ret;
@@ -73,9 +75,11 @@ void *
 witchhat_put(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
+    witchhat_store_t *store;    
 
     mmm_start_basic_op();
-    ret = witchhat_store_put(self->store_current, self, hv, item, found, 0);
+    store = atomic_read(&self->store_current);
+    ret   = witchhat_store_put(store, self, hv, item, found, 0);
     mmm_end_op();
 
     return ret;
@@ -84,10 +88,12 @@ witchhat_put(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 bool
 witchhat_put_if_empty(witchhat_t *self, hatrack_hash_t *hv, void *item)
 {
-    bool ret;
+    bool              ret;
+    witchhat_store_t *store;        
 
     mmm_start_basic_op();
-    ret = witchhat_store_put_if_empty(self->store_current, self, hv, item, 0);
+    store = atomic_read(&self->store_current);
+    ret   = witchhat_store_put_if_empty(store, self, hv, item, 0);
     mmm_end_op();
 
     return ret;
@@ -96,10 +102,12 @@ witchhat_put_if_empty(witchhat_t *self, hatrack_hash_t *hv, void *item)
 void *
 witchhat_remove(witchhat_t *self, hatrack_hash_t *hv, bool *found)
 {
-    void *ret;
+    void             *ret;
+    witchhat_store_t *store;        
 
     mmm_start_basic_op();
-    ret = witchhat_store_remove(self->store_current, self, hv, found, 0);
+    store = atomic_read(&self->store_current);
+    ret   = witchhat_store_remove(store, self, hv, found, 0);
     mmm_end_op();
 
     return ret;
@@ -134,7 +142,7 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
 
     mmm_start_basic_op();
 
-    store     = atomic_load(&self->store_current);
+    store     = atomic_read(&self->store_current);
     alloc_len = sizeof(hatrack_view_t) * (store->last_slot + 1);
     view      = (hatrack_view_t *)malloc(alloc_len);
     p         = view;
@@ -142,8 +150,8 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
     end       = cur + (store->last_slot + 1);
 
     while (cur < end) {
-        hv            = atomic_load(&cur->hv);
-        record        = atomic_load(&cur->record);
+        hv            = atomic_read(&cur->hv);
+        record        = atomic_read(&cur->record);
         p->hv         = hv;
         p->item       = record.item;
         p->sort_epoch = record.info & WITCHHAT_F_MASK;
@@ -205,7 +213,7 @@ witchhat_store_get(witchhat_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv2    = atomic_load(&bucket->hv);
+        hv2    = atomic_read(&bucket->hv);
         if (hatrack_bucket_unreserved(&hv2)) {
             goto not_found;
         }
@@ -214,7 +222,7 @@ witchhat_store_get(witchhat_store_t *self,
             continue;
         }
 
-        record = atomic_load(&bucket->record);
+        record = atomic_read(&bucket->record);
         if (record.info & WITCHHAT_F_USED) {
             if (found) {
                 *found = true;
@@ -250,7 +258,7 @@ witchhat_store_put(witchhat_store_t *self,
     
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-	hv2    = atomic_load(&bucket->hv);
+	hv2    = atomic_read(&bucket->hv);
 	if (hatrack_bucket_unreserved(&hv2)) {
 	    if (LCAS(&bucket->hv, &hv2, *hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
@@ -280,7 +288,7 @@ witchhat_store_put(witchhat_store_t *self,
     return witchhat_store_put(self, top, hv1, item, found, count);
 
 found_bucket:
-    record = atomic_load(&bucket->record);
+    record = atomic_read(&bucket->record);
     
     if (record.info & WITCHHAT_F_MOVING) {
 	goto migrate_and_retry;
@@ -343,7 +351,7 @@ witchhat_store_put_if_empty(witchhat_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-	hv2    = atomic_load(&bucket->hv);
+	hv2    = atomic_read(&bucket->hv);
 	if (hatrack_bucket_unreserved(&hv2)) {
 	    if (LCAS(&bucket->hv, &hv2, *hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
@@ -377,7 +385,7 @@ witchhat_store_put_if_empty(witchhat_store_t *self,
     return witchhat_store_put_if_empty(self, top, hv1, item, count);
 
 found_bucket:
-    record = atomic_load(&bucket->record);
+    record = atomic_read(&bucket->record);
     if (record.info & WITCHHAT_F_MOVING) {
 	goto migrate_and_retry;
     }
@@ -421,7 +429,7 @@ witchhat_store_remove(witchhat_store_t *self,
     
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv2    = atomic_load(&bucket->hv);
+        hv2    = atomic_read(&bucket->hv);
         if (hatrack_bucket_unreserved(&hv2)) {
             break;
         }
@@ -440,7 +448,7 @@ witchhat_store_remove(witchhat_store_t *self,
     return NULL;
 
 found_bucket:
-    record = atomic_load(&bucket->record);
+    record = atomic_read(&bucket->record);
     if (record.info & WITCHHAT_F_MOVING) {
     migrate_and_retry:
 	count = count + 1;
@@ -511,7 +519,7 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
      */
     for (i = 0; i <= self->last_slot; i++) {
         bucket                = &self->buckets[i];
-        record                = atomic_load(&bucket->record);
+        record                = atomic_read(&bucket->record);
         candidate_record.info = record.info | WITCHHAT_F_MOVING;
         candidate_record.item = record.item;
 
@@ -529,7 +537,7 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
         }
     }
 
-    new_store = atomic_load(&self->store_next);
+    new_store = atomic_read(&self->store_next);
 
     // If we couldn't acquire a store, try to install one. If we fail, free it.
     if (!new_store) {
@@ -563,7 +571,7 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
     // and, if it's not fully migrated, we can attempt to migrate it.
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[i];
-        record = atomic_load(&bucket->record);
+        record = atomic_read(&bucket->record);
 
         if (record.info & WITCHHAT_F_MOVED) {
             continue;
@@ -581,7 +589,7 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
             continue;
         }
 
-        hv  = atomic_load(&bucket->hv);
+        hv  = atomic_read(&bucket->hv);
         bix = hatrack_bucket_index(&hv, new_store->last_slot);
 
         for (j = 0; j <= new_store->last_slot; j++) {
@@ -640,5 +648,5 @@ witchhat_help_required(uint64_t count)
 
 static inline bool
 witchhat_need_to_help(witchhat_t *self) {
-    return (bool)atomic_load(&self->help_needed);
+    return (bool)atomic_read(&self->help_needed);
 }
