@@ -80,9 +80,9 @@ test_remove(testhat_t *self, uint32_t key)
 }
 
 static inline hatrack_view_t *
-test_view(testhat_t *self, uint64_t *n)
+test_view(testhat_t *self, uint64_t *n, bool sort)
 {
-    return testhat_view(self, n);
+    return testhat_view(self, n, sort);
 }
 
 static void
@@ -573,7 +573,7 @@ test_ordering(test_info_t *info)
         test_put(info->dict, i + 1, i + 1);
     }
 
-    view = test_view(info->dict, &n);
+    view = test_view(info->dict, &n, true);
 
     if (n != info->range) {
         free(view);
@@ -786,7 +786,7 @@ test_sort_speed(test_info_t *info)
         }
     }
     for (i = 0; i < info->iters / 100; i++) {
-        v = testhat_view(info->dict, &n);
+        v = testhat_view(info->dict, &n, true);
         free(v);
     }
 
@@ -822,7 +822,7 @@ test_sort_contention(test_info_t *info)
         }
 
         if (!(i % 100)) {
-            v = testhat_view(info->dict, &n);
+            v = testhat_view(info->dict, &n, false);
             free(v);
         }
     }
@@ -844,20 +844,22 @@ uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 //  clang-format on
 
 char *threadsafe_dicts[] = {
-    "swimcap", "swimcap2",
+        "swimcap", "swimcap2",
     "newshat",
+    "witchhat", 
     "hihat1", "hihat1a", "hihat64",
+    "woolhat",
     "lohat0", "lohat1", /*"lohat2",*/
-    "witchhat",
     NULL
 };
 char *all_dicts[]     = {
     "refhat0",
     "swimcap", "swimcap2",
     "newshat",
+    "witchhat", 
     "hihat1", "hihat1a", "hihat64",
+    "woolhat",    
     "lohat0", "lohat1", /*"lohat2",*/
-    "witchhat",
     NULL
 };
 char *st_dicts[]      = {

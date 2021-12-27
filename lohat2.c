@@ -47,7 +47,7 @@ static void            *lohat2_store_remove       (lohat2_store_t *, lohat2_t *,
 static lohat2_store_t *lohat2_store_migrate       (lohat2_store_t *,
 						   lohat2_t *);
 
-#if !defined(HATRACK_DONT_SORT) && !defined(HATRACK_ALWAYS_USE_QSORT)
+#ifndef HATRACK_ALWAYS_USE_QSORT
 static void             lohat2_insertion_sort     (hatrack_view_t *, uint64_t);
 #endif
 
@@ -163,7 +163,7 @@ lohat2_len(lohat2_t *self)
 }
 
 hatrack_view_t *
-lohat2_view(lohat2_t *self, uint64_t *out_num)
+lohat2_view(lohat2_t *self, uint64_t *out_num, bool sort)
 {
     lohat2_history_t *cur;
     lohat2_history_t *end;
@@ -239,20 +239,26 @@ lohat2_view(lohat2_t *self, uint64_t *out_num)
 
     view = realloc(view, num_items * sizeof(hatrack_view_t));
 
-    // Unordered buckets should be in random order, so quicksort is a
-    // good option.  Otherwise, we should use an insertion sort.
+    if (sort) {
+        // Unordered buckets should be in random order, so quicksort
+        // is a good option.  Otherwise, we should use an insertion
+        // sort.
 #ifdef HATRACK_QSORT_THRESHOLD
-    if (num_items >= HATRACK_QSORT_THRESHOLD) {
-        qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
-    }
-    else {
-        lohat2_insertion_sort(view, num_items);
-    }
+        if (num_items >= HATRACK_QSORT_THRESHOLD) {
+            qsort(view,
+                  num_items,
+                  sizeof(hatrack_view_t),
+                  hatrack_quicksort_cmp);
+        }
+        else {
+            lohat2_insertion_sort(view, num_items);
+        }
 #elif defined(HATRACK_ALWAYS_USE_QSORT)
-    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
-#elif !defined(HATRACK_DONT_SORT)
-    lohat2_insertion_sort(view, num_items);
+        qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+#else
+        lohat2_insertion_sort(view, num_items);
 #endif
+    }
 
     return view;
 }
@@ -980,7 +986,7 @@ lohat2_store_migrate(lohat2_store_t *self, lohat2_t *top)
     return new_store;
 }
 
-#if !defined(HATRACK_DONT_SORT) && !defined(HATRACK_ALWAYS_USE_QSORT)
+#ifndef HATRACK_ALWAYS_USE_QSORT
 static inline void
 lohat2_insertion_sort(hatrack_view_t *view, uint64_t num_items)
 {

@@ -75,6 +75,6 @@ bool            hihat64_put_if_empty(hihat64_t *, hatrack_hash_t *, void *);
 void           *hihat64_remove      (hihat64_t *, hatrack_hash_t *, bool *);
 void            hihat64_delete      (hihat64_t *);
 uint64_t        hihat64_len         (hihat64_t *);
-hatrack_view_t *hihat64_view        (hihat64_t *, uint64_t *);
+hatrack_view_t *hihat64_view        (hihat64_t *, uint64_t *, bool);
 
 #endif

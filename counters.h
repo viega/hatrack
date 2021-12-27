@@ -36,6 +36,13 @@
 #define CAS(target, expected, desired)                                         \
     atomic_compare_exchange_weak(target, expected, desired)
 
+#define CAS2(target, expected, desired)                                        \
+    atomic_compare_exchange_weak_explicit(target,                              \
+                                          expected,                            \
+                                          desired,                             \
+                                          memory_order_relaxed,                \
+                                          memory_order_relaxed)
+
 #ifdef HATRACK_COUNTERS
 extern _Atomic uint64_t hatrack_counters[];
 extern char            *hatrack_counter_names[];

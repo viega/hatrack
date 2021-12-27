@@ -54,7 +54,7 @@ bool     refhat0_put_if_empty (refhat0_t *, hatrack_hash_t *, void *);
 void    *refhat0_remove       (refhat0_t *, hatrack_hash_t *, bool *);
 void     refhat0_delete       (refhat0_t *);
 uint64_t refhat0_len          (refhat0_t *);
-hatrack_view_t *refhat0_view  (refhat0_t *, uint64_t *);
+hatrack_view_t *refhat0_view  (refhat0_t *, uint64_t *, bool);
 
 //clang-format on
 

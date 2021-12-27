@@ -34,11 +34,8 @@ refhat0_init(refhat0_t *self)
     self->threshold  = hatrack_compute_table_threshold(size);
     self->used_count = 0;
     self->item_count = 0;
-    self->buckets = (refhat0_bucket_t *)calloc(size, sizeof(refhat0_bucket_t));
-
-#ifndef HATRACK_DONT_SORT
     self->next_epoch = 0;
-#endif
+    self->buckets = (refhat0_bucket_t *)calloc(size, sizeof(refhat0_bucket_t));
 }
 
 void *
@@ -87,11 +84,8 @@ refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
+                cur->epoch   = self->next_epoch++;
                 self->item_count++;
-
-#ifndef HATRACK_DONT_SORT
-                cur->epoch = self->next_epoch++;
-#endif
 
                 if (found) {
                     *found = false;
@@ -112,12 +106,9 @@ refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
             }
             self->used_count++;
             self->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
-
-#ifndef HATRACK_DONT_SORT
+            cur->hv    = *hv;
+            cur->item  = item;
             cur->epoch = self->next_epoch++;
-#endif
 
             if (found) {
                 *found = false;
@@ -142,11 +133,8 @@ refhat0_put_if_empty(refhat0_t *self, hatrack_hash_t *hv, void *item)
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
+                cur->epoch   = self->next_epoch++;
                 self->item_count++;
-
-#ifndef HATRACK_DONT_SORT
-                cur->epoch = self->next_epoch++;
-#endif
 
                 return true;
             }
@@ -159,12 +147,9 @@ refhat0_put_if_empty(refhat0_t *self, hatrack_hash_t *hv, void *item)
             }
             self->used_count++;
             self->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
-
-#ifndef HATRACK_DONT_SORT
+            cur->hv    = *hv;
+            cur->item  = item;
             cur->epoch = self->next_epoch++;
-#endif
 
             return true;
         }
@@ -225,7 +210,7 @@ refhat0_len(refhat0_t *self)
 }
 
 hatrack_view_t *
-refhat0_view(refhat0_t *self, uint64_t *num)
+refhat0_view(refhat0_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t   *view;
     hatrack_view_t   *p;
@@ -242,25 +227,22 @@ refhat0_view(refhat0_t *self, uint64_t *num)
             cur++;
             continue;
         }
-        p->hv   = cur->hv;
-        p->item = cur->item;
-#ifdef HATRACK_DONT_SORT
-        p->sort_epoch = 0; // No sort info.
-#else
+        p->hv         = cur->hv;
+        p->item       = cur->item;
         p->sort_epoch = cur->epoch;
-#endif
+
         p++;
         cur++;
     }
 
     *num = self->item_count;
 
-#ifndef HATRACK_DONT_SORT
-    qsort(view,
-          self->item_count,
-          sizeof(hatrack_view_t),
-          hatrack_quicksort_cmp);
-#endif
+    if (sort) {
+        qsort(view,
+              self->item_count,
+              sizeof(hatrack_view_t),
+              hatrack_quicksort_cmp);
+    }
 
     return view;
 }

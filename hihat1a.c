@@ -119,7 +119,7 @@ hihat1a_len(hihat1_t *self)
 
 // This version cannot be linearized.
 hatrack_view_t *
-hihat1a_view(hihat1_t *self, uint64_t *num)
+hihat1a_view(hihat1_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t  *view;
     hatrack_view_t  *p;
@@ -162,9 +162,11 @@ hihat1a_view(hihat1_t *self, uint64_t *num)
 
     view = realloc(view, num_items * sizeof(hatrack_view_t));
 
-    // Unordered buckets should be in random order, so quicksort is a
-    // good option.
-    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    if (sort) {
+	// Unordered buckets should be in random order, so quicksort
+	// is a good option.
+	qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
 
     mmm_end_op();
     return view;

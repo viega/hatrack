@@ -57,6 +57,7 @@ newshat_init(newshat_t *self)
 {
     newshat_store_t *store = newshat_store_new(HATRACK_MIN_SIZE);
     self->item_count       = 0;
+    self->next_epoch       = 0;
     self->store            = store;
     pthread_mutex_init(&self->migrate_mutex, NULL);
 
@@ -130,7 +131,7 @@ newshat_len(newshat_t *self)
 }
 
 hatrack_view_t *
-newshat_view(newshat_t *self, uint64_t *num)
+newshat_view(newshat_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t  *view;
     newshat_store_t *store;
@@ -143,6 +144,7 @@ newshat_view(newshat_t *self, uint64_t *num)
     uint64_t          alloc_len;
 
     mmm_start_basic_op();
+
     store     = self->store;
     last_slot = store->last_slot;
     alloc_len = sizeof(hatrack_view_t) * (last_slot + 1);
@@ -159,7 +161,7 @@ newshat_view(newshat_t *self, uint64_t *num)
         }
         p->hv         = cur->hv;
         p->item       = cur->item;
-        p->sort_epoch = mmm_get_write_epoch(cur);
+        p->sort_epoch = cur->epoch;
         count++;
         p++;
         cur++;
@@ -175,9 +177,9 @@ newshat_view(newshat_t *self, uint64_t *num)
 
     view = (hatrack_view_t *)realloc(view, sizeof(hatrack_view_t) * count);
 
-#ifndef HATRACK_DONT_SORT
-    qsort(view, count, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
-#endif
+    if (sort) {
+        qsort(view, count, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
 
     mmm_end_op();
 
@@ -287,6 +289,7 @@ check_bucket_again:
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
+                cur->epoch   = top->next_epoch++;
                 top->item_count++;
                 if (found) {
                     *found = false;
@@ -325,8 +328,9 @@ check_bucket_again:
             }
             self->used_count++;
             top->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
+            cur->hv    = *hv;
+            cur->item  = item;
+            cur->epoch = top->next_epoch++;
             if (found) {
                 *found = false;
             }
@@ -366,6 +370,7 @@ check_bucket_again:
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
+                cur->epoch   = top->next_epoch++;
                 top->item_count++;
                 pthread_mutex_unlock(&cur->write_mutex);
                 return true;
@@ -392,8 +397,9 @@ check_bucket_again:
             }
             self->used_count++;
             top->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
+            cur->hv    = *hv;
+            cur->item  = item;
+            cur->epoch = top->next_epoch++;
             pthread_mutex_unlock(&cur->write_mutex);
             return true;
         }
@@ -507,6 +513,7 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
                 target->hv.w1 = cur->hv.w1;
                 target->hv.w2 = cur->hv.w2;
                 target->item  = cur->item;
+                target->epoch = cur->epoch;
                 break;
             }
             bix = (bix + 1) & new_last_slot;

@@ -111,29 +111,20 @@
 // #define HATRACK_DEBUG
 // #define HATRACK_MMMALLOC_CTRS  (requires counters to be turned on).
 // #define SWIMCAP_INCONSISTENT_VIEW_IS_OKAY
-// #define HATRACK_DONT_SORT
 // #define HIHAT64_USE_FULL_HASH
 // #define HATRACK_MMMALLOC_CTRS
 // #define HATRACK_EXPAND_THRESHOLD
 // #define HATRACK_CONTRACT_THRESHOLD
+// #define HATRACK_ALWAYS_USE_QSORT
 
 #endif
 
 // Sanity checks.
-#if defined(HATRACK_ALWAYS_USE_QSORT) && defined(HATRACK_DONT_SORT)
-#error "Cannot have both HATRACK_ALWAYS_USE_QSORT and HATRACK_DONT_SORT"
-#endif
-
-#if defined(HATRACK_DONT_SORT) && defined(HATRACK_QSORT_THRESHOLD)
-#error "Cannot have both HATRACK_QSORT_THRESHOLD and HATRACK_DONT_SORT"
-#endif
-
 #if defined(HATRACK_QSORT_THRESHOLD) && defined(HATRACK_ALWAYS_USE_QSORT)
 #error "Cannot have both HATRACK_QSORT_THRESHOLD and HATRACK_ALWAYS_USE_QSORT"
 #endif
 
-#if !defined(HATRACK_DONT_SORT) && !defined(HATRACK_ALWAYS_USE_QUICKSORT)      \
-    && !defined(HATRACK_ALWAYS_USE_QSORT) && !defined(HATRACK_QSORT_THRESHOLD)
+#if !defined(HATRACK_ALWAYS_USE_QSORT) && !defined(HATRACK_QSORT_THRESHOLD)
 // A reasonable default.
 #define HATRACK_QSORT_THRESHOLD 256
 #endif

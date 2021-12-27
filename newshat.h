@@ -37,6 +37,7 @@ typedef struct {
     void                *item;
     bool                 deleted;
     bool                 migrated;
+    uint64_t             epoch;
     pthread_mutex_t      write_mutex;
 } newshat_bucket_t;
 
@@ -49,6 +50,7 @@ typedef struct {
 
 typedef struct {
     uint64_t             item_count;
+    uint64_t             next_epoch;
     newshat_store_t     *store;
     pthread_mutex_t      migrate_mutex;
 } newshat_t;
@@ -61,6 +63,6 @@ bool            newshat_put_if_empty(newshat_t *, hatrack_hash_t *, void *);
 void           *newshat_remove      (newshat_t *, hatrack_hash_t *, bool *);
 void            newshat_delete      (newshat_t *);
 uint64_t        newshat_len         (newshat_t *);
-hatrack_view_t *newshat_view        (newshat_t *, uint64_t *);
+hatrack_view_t *newshat_view        (newshat_t *, uint64_t *, bool);
 
 #endif

@@ -258,6 +258,6 @@ bool            lohat2_put_if_empty(lohat2_t *, hatrack_hash_t *, void *);
 void           *lohat2_remove      (lohat2_t *, hatrack_hash_t *, bool *);
 void            lohat2_delete      (lohat2_t *);
 uint64_t        lohat2_len         (lohat2_t *);
-hatrack_view_t *lohat2_view        (lohat2_t *, uint64_t *);
+hatrack_view_t *lohat2_view        (lohat2_t *, uint64_t *, bool);
 
 #endif

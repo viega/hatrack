@@ -15,7 +15,7 @@
  *
  *  Name:           woolhat.h
  *  Description:    Wait-free Operations, Orderable, Linearizable HAsh Table
- *                  This version keeps unordered buckets, and sorts 
+ *                  This version keeps unordered buckets, and sorts
  *                  by epoch when needed. Views are fully consistent.
  *
  *  Author:         John Viega, john@zork.org
@@ -79,6 +79,6 @@ bool            woolhat_put_if_empty(woolhat_t *, hatrack_hash_t *, void *);
 void           *woolhat_remove      (woolhat_t *, hatrack_hash_t *, bool *);
 void            woolhat_delete      (woolhat_t *);
 uint64_t        woolhat_len         (woolhat_t *);
-hatrack_view_t *woolhat_view        (woolhat_t *, uint64_t *);
+hatrack_view_t *woolhat_view        (woolhat_t *, uint64_t *, bool);
 
 #endif

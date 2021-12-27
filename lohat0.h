@@ -250,7 +250,7 @@ bool            lohat0_put_if_empty(lohat0_t *, hatrack_hash_t *, void *);
 void           *lohat0_remove      (lohat0_t *, hatrack_hash_t *, bool *);
 void            lohat0_delete      (lohat0_t *);
 uint64_t        lohat0_len         (lohat0_t *);
-hatrack_view_t *lohat0_view        (lohat0_t *, uint64_t *);
+hatrack_view_t *lohat0_view        (lohat0_t *, uint64_t *, bool);
 
 // clang-format on
 

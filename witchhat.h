@@ -78,6 +78,6 @@ bool            witchhat_put_if_empty(witchhat_t *, hatrack_hash_t *, void *);
 void           *witchhat_remove      (witchhat_t *, hatrack_hash_t *, bool *);
 void            witchhat_delete      (witchhat_t *);
 uint64_t        witchhat_len         (witchhat_t *);
-hatrack_view_t *witchhat_view        (witchhat_t *, uint64_t *);
+hatrack_view_t *witchhat_view        (witchhat_t *, uint64_t *, bool);
 
 #endif

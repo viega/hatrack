@@ -123,7 +123,7 @@ woolhat_delete(woolhat_t *self)
     woolhat_history_t *buckets = store->hist_buckets;
     woolhat_history_t *p       = buckets;
     woolhat_history_t *end     = buckets + (store->last_slot + 1);
-    woolhat_record_t   *rec;
+    woolhat_record_t  *rec;
 
     while (p < end) {
         rec = hatrack_pflag_clear(atomic_load(&p->head),
@@ -145,18 +145,18 @@ woolhat_len(woolhat_t *self)
 }
 
 hatrack_view_t *
-woolhat_view(woolhat_t *self, uint64_t *out_num)
+woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
 {
     woolhat_history_t *cur;
     woolhat_history_t *end;
     woolhat_store_t   *store;
-    hatrack_view_t   *view;
-    hatrack_view_t   *p;
-    hatrack_hash_t    hv;
-    woolhat_record_t   *rec;
-    uint64_t          epoch;
-    uint64_t          sort_epoch;
-    uint64_t          num_items;
+    hatrack_view_t    *view;
+    hatrack_view_t    *p;
+    hatrack_hash_t     hv;
+    woolhat_record_t  *rec;
+    uint64_t           epoch;
+    uint64_t           sort_epoch;
+    uint64_t           num_items;
 
     epoch = mmm_start_linearized_op();
     store = self->store_current;
@@ -217,9 +217,11 @@ woolhat_view(woolhat_t *self, uint64_t *out_num)
 
     view = realloc(view, num_items * sizeof(hatrack_view_t));
 
-    // Unordered buckets should be in random order, so quicksort is a
-    // good option.
-    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    if (sort) {
+        // Unordered buckets should be in random order, so quicksort
+        // is a good option.
+        qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
 
     mmm_end_op();
 
@@ -230,7 +232,7 @@ static woolhat_store_t *
 woolhat_store_new(uint64_t size)
 {
     woolhat_store_t *store;
-    uint64_t        sz;
+    uint64_t         sz;
 
     sz    = sizeof(woolhat_store_t) + sizeof(woolhat_history_t) * size;
     store = (woolhat_store_t *)mmm_alloc_committed(sz);
@@ -258,15 +260,15 @@ woolhat_retire_store(woolhat_store_t *self)
 
 static void *
 woolhat_store_get(woolhat_store_t *self,
-                 woolhat_t       *top,
-                 hatrack_hash_t *hv1,
-                 bool           *found)
+                  woolhat_t       *top,
+                  hatrack_hash_t  *hv1,
+                  bool            *found)
 {
-    uint64_t          bix = hatrack_bucket_index(hv1, self->last_slot);
-    uint64_t          i;
-    hatrack_hash_t    hv2;
+    uint64_t           bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t           i;
+    hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t   *head;
+    woolhat_record_t  *head;
 
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
@@ -301,19 +303,19 @@ found_history_bucket:
 
 static void *
 woolhat_store_put(woolhat_store_t *self,
-		  woolhat_t       *top,
-		  hatrack_hash_t *hv1,
-		  void           *item,
-		  bool           *found,
-		  uint64_t        count)
+                  woolhat_t       *top,
+                  hatrack_hash_t  *hv1,
+                  void            *item,
+                  bool            *found,
+                  uint64_t         count)
 {
-    void             *ret;
-    uint64_t          bix = hatrack_bucket_index(hv1, self->last_slot);
-    uint64_t          i;
-    hatrack_hash_t    hv2;
+    void              *ret;
+    uint64_t           bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t           i;
+    hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t   *head;
-    woolhat_record_t   *candidate;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
 
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
@@ -331,12 +333,12 @@ woolhat_store_put(woolhat_store_t *self,
 migrate_and_retry:
     count = count + 1;
     if (woolhat_help_required(count)) {
-	HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
-	atomic_fetch_add(&top->help_needed, 1);
-	self = woolhat_store_migrate(self, top);
-	ret = woolhat_store_put(self, top, hv1, item, found, count);
-	atomic_fetch_sub(&top->help_needed, 1);
-	return ret;
+        HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
+        atomic_fetch_add(&top->help_needed, 1);
+        self = woolhat_store_migrate(self, top);
+        ret  = woolhat_store_put(self, top, hv1, item, found, count);
+        atomic_fetch_sub(&top->help_needed, 1);
+        return ret;
     }
     self = woolhat_store_migrate(self, top);
     return woolhat_store_put(self, top, hv1, item, found, count);
@@ -428,17 +430,17 @@ found_history_bucket:
 
 static bool
 woolhat_store_put_if_empty(woolhat_store_t *self,
-                          woolhat_t       *top,
-                          hatrack_hash_t *hv1,
-			   void           *item,
-			   uint64_t        count)
+                           woolhat_t       *top,
+                           hatrack_hash_t  *hv1,
+                           void            *item,
+                           uint64_t         count)
 {
-    uint64_t          bix = hatrack_bucket_index(hv1, self->last_slot);
-    uint64_t          i;
-    hatrack_hash_t    hv2;
+    uint64_t           bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t           i;
+    hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t   *head;
-    woolhat_record_t   *candidate;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
 
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
@@ -456,15 +458,15 @@ woolhat_store_put_if_empty(woolhat_store_t *self,
 migrate_and_retry:
     count = count + 1;
     if (woolhat_help_required(count)) {
-	bool ret;
+        bool ret;
 
-	HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
-	atomic_fetch_add(&top->help_needed, 1);
-	self = woolhat_store_migrate(self, top);
-	ret = woolhat_store_put_if_empty(self, top, hv1, item, count);
-	atomic_fetch_sub(&top->help_needed, 1);
+        HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
+        atomic_fetch_add(&top->help_needed, 1);
+        self = woolhat_store_migrate(self, top);
+        ret  = woolhat_store_put_if_empty(self, top, hv1, item, count);
+        atomic_fetch_sub(&top->help_needed, 1);
 
-	return ret;
+        return ret;
     }
     self = woolhat_store_migrate(self, top);
     return woolhat_store_put_if_empty(self, top, hv1, item, count);
@@ -531,17 +533,17 @@ found_history_bucket:
 
 static void *
 woolhat_store_remove(woolhat_store_t *self,
-                    woolhat_t       *top,
-                    hatrack_hash_t *hv1,
-		     bool           *found,
-		     uint64_t        count)
+                     woolhat_t       *top,
+                     hatrack_hash_t  *hv1,
+                     bool            *found,
+                     uint64_t         count)
 {
-    uint64_t          bix = hatrack_bucket_index(hv1, self->last_slot);
-    uint64_t          i;
-    hatrack_hash_t    hv2;
+    uint64_t           bix = hatrack_bucket_index(hv1, self->last_slot);
+    uint64_t           i;
+    hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t   *head;
-    woolhat_record_t   *candidate;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
 
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
@@ -572,18 +574,18 @@ found_history_bucket:
 
     if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
 migrate_and_retry:
-	count = count + 1;
-	if (woolhat_help_required(count)) {
-	    void *ret;
-	    
-	    HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
-	    atomic_fetch_add(&top->help_needed, 1);
-	    self = woolhat_store_migrate(self, top);
-	    ret = woolhat_store_remove(self, top, hv1, found, count);
-	    atomic_fetch_sub(&top->help_needed, 1);
-	    return ret;
-	}
-	
+        count = count + 1;
+        if (woolhat_help_required(count)) {
+            void *ret;
+
+            HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
+            atomic_fetch_add(&top->help_needed, 1);
+            self = woolhat_store_migrate(self, top);
+            ret  = woolhat_store_remove(self, top, hv1, found, count);
+            atomic_fetch_sub(&top->help_needed, 1);
+            return ret;
+        }
+
         self = woolhat_store_migrate(self, top);
         return woolhat_store_remove(self, top, hv1, found, count);
     }
@@ -643,19 +645,19 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
 {
     woolhat_store_t   *new_store;
     woolhat_store_t   *candidate_store;
-    uint64_t          new_size;
+    uint64_t           new_size;
     woolhat_history_t *cur;
     woolhat_history_t *bucket;
-    woolhat_record_t   *head;
-    woolhat_record_t   *old_head;
-    woolhat_record_t   *deflagged;
-    woolhat_record_t   *expected_head;
-    hatrack_hash_t    hv;
-    hatrack_hash_t    expected_hv;
-    uint64_t          i, j;
-    uint64_t          bix;
-    uint64_t          new_used      = 0;
-    uint64_t          expected_used = ~0;
+    woolhat_record_t  *head;
+    woolhat_record_t  *old_head;
+    woolhat_record_t  *deflagged;
+    woolhat_record_t  *expected_head;
+    hatrack_hash_t     hv;
+    hatrack_hash_t     expected_hv;
+    uint64_t           i, j;
+    uint64_t           bix;
+    uint64_t           new_used      = 0;
+    uint64_t           expected_used = ~0;
 
     /* Quickly run through every history bucket, and mark any bucket
      * that doesn't already have F_MOVING set.  Note that the CAS
@@ -674,7 +676,8 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
                        &head,
                        hatrack_pflag_set(head, WOOLHAT_F_MOVING),
                        WOOLHAT_CTR_F_MOVING));
-        deflagged = hatrack_pflag_clear(head, WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
+        deflagged
+            = hatrack_pflag_clear(head, WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
         if (deflagged && hatrack_pflag_test(deflagged->next, WOOLHAT_F_USED)) {
             new_used++;
         }
@@ -684,11 +687,12 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
 
     // If we couldn't acquire a store, try to install one. If we fail, free it.
     if (!new_store) {
-	if (woolhat_need_to_help(top)) {
-	    new_size = (self->last_slot + 1) << 1;
-	} else {
-	    new_size = hatrack_new_size(self->last_slot, new_used);
-	}
+        if (woolhat_need_to_help(top)) {
+            new_size = (self->last_slot + 1) << 1;
+        }
+        else {
+            new_size = hatrack_new_size(self->last_slot, new_used);
+        }
         candidate_store = woolhat_store_new(new_size);
         // This helps address a potential race condition, where
         // someone could drain the table after resize, having
@@ -768,7 +772,10 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
          new_used,
          WOOLHAT_CTR_LEN_INSTALL);
 
-    if (LCAS(&top->store_current, &self, new_store, WOOLHAT_CTR_STORE_INSTALL)) {
+    if (LCAS(&top->store_current,
+             &self,
+             new_store,
+             WOOLHAT_CTR_STORE_INSTALL)) {
         woolhat_retire_store(self);
     }
 
@@ -779,12 +786,13 @@ static inline bool
 woolhat_help_required(uint64_t count)
 {
     if (count == HATRACK_RETRY_THRESHOLD) {
-	return true;
+        return true;
     }
     return false;
 }
 
 static inline bool
-woolhat_need_to_help(woolhat_t *self) {
+woolhat_need_to_help(woolhat_t *self)
+{
     return (bool)atomic_load(&self->help_needed);
 }

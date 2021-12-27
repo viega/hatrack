@@ -40,6 +40,7 @@
 #include "lohat1.h"
 #include "lohat2.h"
 #include "witchhat.h"
+#include "woolhat.h"
 
 /* For testing, we keep vtables of the operations to make it easier to
  * switch between different algorithms for testing. These types are
@@ -61,7 +62,7 @@ typedef void *          (*hatrack_remove_func) (void *, hatrack_hash_t *,
 						bool *);
 typedef void            (*hatrack_delete_func) (void *);
 typedef uint64_t        (*hatrack_len_func)    (void *);
-typedef hatrack_view_t *(*hatrack_view_func)   (void *, uint64_t *);
+typedef hatrack_view_t *(*hatrack_view_func)   (void *, uint64_t *, bool);
 
 typedef struct {
     hatrack_init_func    init;
@@ -122,9 +123,9 @@ testhat_len(testhat_t *self)
 }
 
 static inline hatrack_view_t *
-testhat_view(testhat_t *self, uint64_t *num_items)
+testhat_view(testhat_t *self, uint64_t *num_items, bool sort)
 {
-    return (*self->vtable.view)(self->htable, num_items);
+    return (*self->vtable.view)(self->htable, num_items, sort);
 }
 
 #endif

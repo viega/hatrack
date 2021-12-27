@@ -88,7 +88,7 @@ bool            hihat1_put_if_empty(hihat1_t *, hatrack_hash_t *, void *);
 void           *hihat1_remove      (hihat1_t *, hatrack_hash_t *, bool *);
 void            hihat1_delete      (hihat1_t *);
 uint64_t        hihat1_len         (hihat1_t *);
-hatrack_view_t *hihat1_view        (hihat1_t *, uint64_t *);
+hatrack_view_t *hihat1_view        (hihat1_t *, uint64_t *, bool);
 
 
 void            hihat1a_init        (hihat1_t *);
@@ -99,6 +99,6 @@ bool            hihat1a_put_if_empty(hihat1_t *, hatrack_hash_t *, void *);
 void           *hihat1a_remove      (hihat1_t *, hatrack_hash_t *, bool *);
 void            hihat1a_delete      (hihat1_t *);
 uint64_t        hihat1a_len         (hihat1_t *);
-hatrack_view_t *hihat1a_view        (hihat1_t *, uint64_t *);
+hatrack_view_t *hihat1a_view        (hihat1_t *, uint64_t *, bool);
 
 #endif

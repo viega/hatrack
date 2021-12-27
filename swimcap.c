@@ -84,12 +84,12 @@ swimcap_viewer_exit(swimcap_t *self, swimcap_store_t *unused)
 void
 swimcap_init(swimcap_t *self)
 {
-    swimcap_store_t *store = swimcap_store_new(HATRACK_MIN_SIZE);
-    self->store            = store;
-    self->item_count       = 0;
-#ifndef HATRACK_DONT_SORT
+    swimcap_store_t *store;
+    store            = swimcap_store_new(HATRACK_MIN_SIZE);
+    self->store      = store;
+    self->item_count = 0;
     self->next_epoch = 0;
-#endif
+
     pthread_mutex_init(&self->write_mutex, NULL);
 
     return;
@@ -181,7 +181,7 @@ swimcap_len(swimcap_t *self)
 }
 
 hatrack_view_t *
-swimcap_view(swimcap_t *self, uint64_t *num)
+swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t   *view;
     swimcap_store_t  *store;
@@ -206,13 +206,9 @@ swimcap_view(swimcap_t *self, uint64_t *num)
             cur++;
             continue;
         }
-        p->hv   = cur->hv;
-        p->item = cur->item;
-#ifdef HATRACK_DONT_SORT
-        p->sort_epoch = 0; // No sort info.
-#else
+        p->hv         = cur->hv;
+        p->item       = cur->item;
         p->sort_epoch = cur->epoch;
-#endif
         count++;
         p++;
         cur++;
@@ -228,9 +224,9 @@ swimcap_view(swimcap_t *self, uint64_t *num)
 
     view = (hatrack_view_t *)realloc(view, sizeof(hatrack_view_t) * count);
 
-#ifndef HATRACK_DONT_SORT
-    qsort(view, count, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
-#endif
+    if (sort) {
+        qsort(view, count, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
 
     swimcap_viewer_exit(self, store);
     return view;
@@ -308,11 +304,8 @@ swimcap_store_put(swimcap_store_t *self,
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
+                cur->epoch   = top->next_epoch++;
                 top->item_count++;
-
-#ifndef HATRACK_DONT_SORT
-                cur->epoch = top->next_epoch++;
-#endif
 
                 if (found) {
                     *found = false;
@@ -333,12 +326,9 @@ swimcap_store_put(swimcap_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
-
-#ifndef HATRACK_DONT_SORT
+            cur->hv    = *hv;
+            cur->item  = item;
             cur->epoch = top->next_epoch++;
-#endif
 
             if (found) {
                 *found = false;
@@ -370,11 +360,9 @@ swimcap_store_put_if_empty(swimcap_store_t *self,
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
+                cur->epoch   = top->next_epoch++;
                 top->item_count++;
 
-#ifndef HATRACK_DONT_SORT
-                cur->epoch = top->next_epoch++;
-#endif
                 return true;
             }
             return false;
@@ -386,12 +374,10 @@ swimcap_store_put_if_empty(swimcap_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
-
-#ifndef HATRACK_DONT_SORT
+            cur->hv    = *hv;
+            cur->item  = item;
             cur->epoch = top->next_epoch++;
-#endif
+
             return true;
         }
         bix = (bix + 1) & last_slot;
@@ -476,6 +462,7 @@ swimcap_migrate(swimcap_t *self)
                 target->hv.w1 = cur->hv.w1;
                 target->hv.w2 = cur->hv.w2;
                 target->item  = cur->item;
+                target->epoch = cur->epoch;
                 break;
             }
             bix = (bix + 1) & new_last_slot;

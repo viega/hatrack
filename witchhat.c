@@ -120,7 +120,7 @@ witchhat_len(witchhat_t *self)
 
 // This version cannot be linearized.
 hatrack_view_t *
-witchhat_view(witchhat_t *self, uint64_t *num)
+witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t  *view;
     hatrack_view_t  *p;
@@ -163,9 +163,11 @@ witchhat_view(witchhat_t *self, uint64_t *num)
 
     view = realloc(view, num_items * sizeof(hatrack_view_t));
 
-    // Unordered buckets should be in random order, so quicksort is a
-    // good option.
-    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    if (sort) {
+	// Unordered buckets should be in random order, so quicksort
+	// is a good option.
+	qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
 
     mmm_end_op();
     return view;
@@ -640,4 +642,3 @@ static inline bool
 witchhat_need_to_help(witchhat_t *self) {
     return (bool)atomic_load(&self->help_needed);
 }
-

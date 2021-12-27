@@ -42,6 +42,7 @@
 typedef struct {
     hatrack_hash_t      hv;
     void               *item;
+    uint64_t            epoch;
     bool                deleted;
 } swimcap2_bucket_t;
 
@@ -54,6 +55,7 @@ typedef struct {
 
 typedef struct {
     uint64_t            item_count;
+    uint64_t            next_epoch;
     swimcap2_store_t   *store;
     pthread_mutex_t     write_mutex;
 } swimcap2_t;
@@ -66,6 +68,6 @@ bool            swimcap2_put_if_empty(swimcap2_t *, hatrack_hash_t *, void *);
 void           *swimcap2_remove      (swimcap2_t *, hatrack_hash_t *, bool *);
 void            swimcap2_delete      (swimcap2_t *);
 uint64_t        swimcap2_len         (swimcap2_t *);
-hatrack_view_t *swimcap2_view        (swimcap2_t *, uint64_t *);
+hatrack_view_t *swimcap2_view        (swimcap2_t *, uint64_t *, bool);
 
 #endif

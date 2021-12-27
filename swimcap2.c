@@ -158,7 +158,7 @@ swimcap2_len(swimcap2_t *self)
 }
 
 hatrack_view_t *
-swimcap2_view(swimcap2_t *self, uint64_t *num)
+swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t   *view;
     swimcap2_store_t *store;
@@ -187,7 +187,7 @@ swimcap2_view(swimcap2_t *self, uint64_t *num)
         }
         p->hv         = cur->hv;
         p->item       = cur->item;
-        p->sort_epoch = mmm_get_write_epoch(cur);
+        p->sort_epoch = cur->epoch;
         count++;
         p++;
         cur++;
@@ -202,9 +202,9 @@ swimcap2_view(swimcap2_t *self, uint64_t *num)
 
     view = (hatrack_view_t *)realloc(view, sizeof(hatrack_view_t) * count);
 
-#ifndef HATRACK_DONT_SORT
-    qsort(view, count, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
-#endif
+    if (sort) {
+        qsort(view, count, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
 
     mmm_end_op();
     return view;
@@ -283,6 +283,7 @@ swimcap2_store_put(swimcap2_store_t *self,
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
+                cur->epoch   = top->next_epoch++;
                 top->item_count++;
                 if (found) {
                     *found = false;
@@ -303,8 +304,9 @@ swimcap2_store_put(swimcap2_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
+            cur->hv    = *hv;
+            cur->item  = item;
+            cur->epoch = top->next_epoch++;
             if (found) {
                 *found = false;
             }
@@ -336,6 +338,7 @@ swimcap2_store_put_if_empty(swimcap2_store_t *self,
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
+                cur->epoch   = top->next_epoch;
                 top->item_count++;
                 return true;
             }
@@ -348,8 +351,9 @@ swimcap2_store_put_if_empty(swimcap2_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv   = *hv;
-            cur->item = item;
+            cur->hv    = *hv;
+            cur->item  = item;
+            cur->epoch = top->next_epoch++;
             return true;
         }
         bix = (bix + 1) & last_slot;
@@ -432,6 +436,7 @@ swimcap2_migrate(swimcap2_t *self)
                 target->hv.w1 = cur->hv.w1;
                 target->hv.w2 = cur->hv.w2;
                 target->item  = cur->item;
+                target->epoch = cur->epoch;
                 break;
             }
             bix = (bix + 1) & new_last_slot;

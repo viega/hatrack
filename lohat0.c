@@ -137,7 +137,7 @@ lohat0_len(lohat0_t *self)
 }
 
 hatrack_view_t *
-lohat0_view(lohat0_t *self, uint64_t *out_num)
+lohat0_view(lohat0_t *self, uint64_t *out_num, bool sort)
 {
     lohat0_history_t *cur;
     lohat0_history_t *end;
@@ -209,9 +209,11 @@ lohat0_view(lohat0_t *self, uint64_t *out_num)
 
     view = realloc(view, num_items * sizeof(hatrack_view_t));
 
-    // Unordered buckets should be in random order, so quicksort is a
-    // good option.
-    qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    if (sort) {
+        // Unordered buckets should be in random order, so quicksort
+        // is a good option.
+        qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
 
     mmm_end_op();
 
