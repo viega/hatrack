@@ -53,6 +53,7 @@ witchhat_init(witchhat_t *self)
     witchhat_store_t *store = witchhat_store_new(HATRACK_MIN_SIZE);
 
     self->epoch = 0;
+    atomic_store(&self->help_needed, 0);
     atomic_store(&self->store_current, store);
 }
 
@@ -247,19 +248,19 @@ witchhat_store_put(witchhat_store_t *self,
     
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv2.w1 = 0;
-        hv2.w2 = 0;
-        if (!LCAS(&bucket->hv, &hv2, *hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
-            if (!hatrack_hashes_eq(hv1, &hv2)) {
-                bix = (bix + 1) & self->last_slot;
-                continue;
-            }
-        }
-        else {
-            if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
-		goto migrate_and_retry;
-            }
-        }
+	hv2    = atomic_load(&bucket->hv);
+	if (hatrack_bucket_unreserved(&hv2)) {
+	    if (LCAS(&bucket->hv, &hv2, *hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
+		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
+		    goto migrate_and_retry;
+		}
+		goto found_bucket;
+	    }
+	}
+	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	    bix = (bix + 1) & self->last_slot;
+	    continue;
+	}
         goto found_bucket;
     }
 
@@ -340,19 +341,20 @@ witchhat_store_put_if_empty(witchhat_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
-        hv2.w1 = 0;
-        hv2.w2 = 0;
-        if (!LCAS(&bucket->hv, &hv2, *hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
-            if (!hatrack_hashes_eq(hv1, &hv2)) {
-                bix = (bix + 1) & self->last_slot;
-                continue;
-            }
-        }
-        else {
-            if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
-		goto migrate_and_retry;
-            }
-        }
+	hv2    = atomic_load(&bucket->hv);
+	if (hatrack_bucket_unreserved(&hv2)) {
+	    if (LCAS(&bucket->hv, &hv2, *hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
+		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
+		    goto migrate_and_retry;
+		}
+		goto found_bucket;
+	    }
+	}
+	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	    bix = (bix + 1) & self->last_slot;
+	    continue;
+	}
+	
         goto found_bucket;
     }
 
@@ -533,9 +535,9 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
 	// if the value of top->help_needed changes. It's ultimately
 	// irrelevent; either store will be big enough to handle the migration.
 	if (witchhat_need_to_help(top)) {
-	    new_size = hatrack_new_size(self->last_slot, self->last_slot);
+	    new_size = (self->last_slot + 1) << 1;
 	} else {
-	    new_size        = hatrack_new_size(self->last_slot, new_used);
+	    new_size = hatrack_new_size(self->last_slot, new_used);
 	}
         candidate_store = witchhat_store_new(new_size);
         // This helps address a potential race condition, where
