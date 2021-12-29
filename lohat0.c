@@ -31,6 +31,8 @@ static void            *lohat0_store_get    (lohat0_store_t *, lohat0_t *,
 					     hatrack_hash_t *, bool *);
 static void            *lohat0_store_put    (lohat0_store_t *, lohat0_t *,
 					     hatrack_hash_t *, void *, bool *);
+static void            *lohat0_store_replace(lohat0_store_t *, lohat0_t *,
+					     hatrack_hash_t *, void *, bool *);
 static bool             lohat0_store_add    (lohat0_store_t *, lohat0_t *,
 					     hatrack_hash_t *, void *);
 static void            *lohat0_store_remove (lohat0_store_t *, lohat0_t *,
@@ -80,6 +82,20 @@ lohat0_put(lohat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);
     ret   = lohat0_store_put(store, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+lohat0_replace(lohat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void           *ret;
+    lohat0_store_t *store;
+
+    mmm_start_basic_op();
+    store = atomic_read(&self->store_current);
+    ret   = lohat0_store_replace(store, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -419,6 +435,81 @@ found_history_bucket:
     mmm_retire(head);
 
     return ret;
+}
+
+static void *
+lohat0_store_replace(lohat0_store_t *self,
+                     lohat0_t       *top,
+                     hatrack_hash_t *hv1,
+                     void           *item,
+                     bool           *found)
+{
+    uint64_t          bix;
+    uint64_t          i;
+    hatrack_hash_t    hv2;
+    lohat0_history_t *bucket;
+    lohat_record_t   *head;
+    lohat_record_t   *candidate;
+
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+
+    for (i = 0; i < self->last_slot; i++) {
+        bucket = &self->hist_buckets[bix];
+        hv2    = atomic_read(&bucket->hv);
+        if (hatrack_bucket_unreserved(&hv2)) {
+            goto not_found;
+        }
+        if (!hatrack_hashes_eq(hv1, &hv2)) {
+            bix = (bix + 1) & self->last_slot;
+            continue;
+        }
+        goto found_history_bucket;
+    }
+
+not_found:
+    if (found) {
+        *found = false;
+    }
+
+    return NULL;
+
+found_history_bucket:
+    head = atomic_read(&bucket->head);
+
+    if (!head) {
+        goto not_found;
+    }
+
+    if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+migrate_and_retry:
+        self = lohat0_store_migrate(self, top);
+        return lohat0_store_put(self, top, hv1, item, found);
+    }
+    candidate       = mmm_alloc(sizeof(lohat_record_t));
+    candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
+    candidate->item = item;
+
+    do {
+        if (!hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+            mmm_retire_unused(candidate);
+            goto not_found;
+        }
+        if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+            mmm_retire_unused(candidate);
+            goto migrate_and_retry;
+        }
+        mmm_help_commit(head);
+        mmm_copy_create_epoch(candidate, head);
+    } while (!LCAS(&bucket->head, &head, candidate, LOHAT0_CTR_REC_INSTALL));
+
+    mmm_commit_write(candidate);
+    mmm_retire(head);
+
+    if (found) {
+        *found = true;
+    }
+
+    return head->item;
 }
 
 static bool

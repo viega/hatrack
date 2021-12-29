@@ -242,14 +242,15 @@ typedef struct lohat0_st {
 
 // clang-format off
 
-void            lohat0_init  (lohat0_t *);
-void           *lohat0_get   (lohat0_t *, hatrack_hash_t *, bool *);
-void           *lohat0_put   (lohat0_t *, hatrack_hash_t *, void *, bool *);
-bool            lohat0_add   (lohat0_t *, hatrack_hash_t *, void *);
-void           *lohat0_remove(lohat0_t *, hatrack_hash_t *, bool *);
-void            lohat0_delete(lohat0_t *);
-uint64_t        lohat0_len   (lohat0_t *);
-hatrack_view_t *lohat0_view  (lohat0_t *, uint64_t *, bool);
+void            lohat0_init   (lohat0_t *);
+void           *lohat0_get    (lohat0_t *, hatrack_hash_t *, bool *);
+void           *lohat0_put    (lohat0_t *, hatrack_hash_t *, void *, bool *);
+void           *lohat0_replace(lohat0_t *, hatrack_hash_t *, void *, bool *);
+bool            lohat0_add    (lohat0_t *, hatrack_hash_t *, void *);
+void           *lohat0_remove (lohat0_t *, hatrack_hash_t *, bool *);
+void            lohat0_delete (lohat0_t *);
+uint64_t        lohat0_len    (lohat0_t *);
+hatrack_view_t *lohat0_view   (lohat0_t *, uint64_t *, bool);
 
 // clang-format on
 
