@@ -32,16 +32,18 @@
 #include "swimcap.h"
 
 // clang-format off
-static swimcap_store_t *swimcap_store_new   (uint64_t);
-static void            *swimcap_store_get   (swimcap_store_t *,
-					     hatrack_hash_t *, bool *);
-static void            *swimcap_store_put   (swimcap_store_t *, swimcap_t *,
-					     hatrack_hash_t *, void *, bool *);
-static bool             swimcap_store_add   (swimcap_store_t *, swimcap_t *, 
-					     hatrack_hash_t *, void *);
-static void            *swimcap_store_remove(swimcap_store_t *, swimcap_t *,
-					     hatrack_hash_t *, bool *);
-static void             swimcap_migrate     (swimcap_t *);
+static swimcap_store_t *swimcap_store_new    (uint64_t);
+static void            *swimcap_store_get    (swimcap_store_t *,
+					      hatrack_hash_t *, bool *);
+static void            *swimcap_store_put    (swimcap_store_t *, swimcap_t *,
+					      hatrack_hash_t *, void *, bool *);
+static void            *swimcap_store_replace(swimcap_store_t *, swimcap_t *,
+					      hatrack_hash_t *, void *, bool *);
+static bool             swimcap_store_add    (swimcap_store_t *, swimcap_t *, 
+					      hatrack_hash_t *, void *);
+static void            *swimcap_store_remove (swimcap_store_t *, swimcap_t *,
+					      hatrack_hash_t *, bool *);
+static void             swimcap_migrate      (swimcap_t *);
 // clang-format on
 
 /* These macros clean up swimcap_view() to make it more readable.  It
@@ -111,6 +113,24 @@ swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
     }
 
     ret = swimcap_store_put(self->store, self, hv, item, found);
+
+    if (pthread_mutex_unlock(&self->write_mutex)) {
+        abort();
+    }
+
+    return ret;
+}
+
+void *
+swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void *ret;
+
+    if (pthread_mutex_lock(&self->write_mutex)) {
+        abort();
+    }
+
+    ret = swimcap_store_replace(self->store, self, hv, item, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -323,6 +343,49 @@ swimcap_store_put(swimcap_store_t *self,
             cur->item  = item;
             cur->epoch = top->next_epoch++;
 
+            if (found) {
+                *found = false;
+            }
+            return NULL;
+        }
+        bix = (bix + 1) & last_slot;
+    }
+    __builtin_unreachable();
+}
+
+static void *
+swimcap_store_replace(swimcap_store_t *self,
+                      swimcap_t       *top,
+                      hatrack_hash_t  *hv,
+                      void            *item,
+                      bool            *found)
+{
+    uint64_t          bix;
+    uint64_t          i;
+    uint64_t          last_slot;
+    swimcap_bucket_t *cur;
+    void             *ret;
+
+    last_slot = self->last_slot;
+    bix       = hatrack_bucket_index(hv, last_slot);
+
+    for (i = 0; i <= last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (cur->deleted) {
+                if (found) {
+                    *found = false;
+                }
+                return NULL;
+            }
+            ret       = cur->item;
+            cur->item = item;
+            if (found) {
+                *found = true;
+            }
+            return ret;
+        }
+        if (hatrack_bucket_unreserved(&cur->hv)) {
             if (found) {
                 *found = false;
             }

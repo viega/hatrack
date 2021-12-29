@@ -31,6 +31,8 @@ static void            *hihat64_store_get    (hihat64_store_t *, hihat64_t *,
 					      hatrack_hash_t *, bool *);
 static void            *hihat64_store_put    (hihat64_store_t *, hihat64_t *,
 					      hatrack_hash_t *, void *, bool *);
+static void            *hihat64_store_replace(hihat64_store_t *, hihat64_t *,
+					      hatrack_hash_t *, void *, bool *);
 static bool             hihat64_store_add    (hihat64_store_t *, hihat64_t *,
 					      hatrack_hash_t *, void *);
 static void            *hihat64_store_remove (hihat64_store_t *, hihat64_t *,
@@ -65,6 +67,18 @@ hihat64_put(hihat64_t *self, hatrack_hash_t *hv, void *item, bool *found)
 
     mmm_start_basic_op();
     ret = hihat64_store_put(self->store_current, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+hihat64_replace(hihat64_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void *ret;
+
+    mmm_start_basic_op();
+    ret = hihat64_store_replace(self->store_current, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -382,6 +396,117 @@ found_bucket:
     }
 
     return NULL;
+}
+
+static void *
+hihat64_store_replace(hihat64_store_t *self,
+                      hihat64_t       *top,
+                      hatrack_hash_t  *hvp,
+                      void            *item,
+                      bool            *found)
+{
+    uint64_t          bix;
+    uint64_t          i;
+    hihat64_bucket_t *bucket;
+    hihat64_record_t *record;
+    hihat64_record_t *deflagged = NULL;
+    hihat64_record_t *candidate;
+    hihat64_record_t *raw_candidate;
+    uint64_t          hv;
+
+    bix = hatrack_bucket_index(hvp, self->last_slot);
+
+    for (i = 0; i < self->last_slot; i++) {
+        bucket = &self->buckets[bix];
+        hv     = atomic_read(&bucket->h1);
+        if (!hv) {
+            goto not_found;
+        }
+        if (hv != hvp->w1) {
+            bix = (bix + 1) & self->last_slot;
+            continue;
+        }
+
+#ifdef HIHAT64_USE_FULL_HASH
+found_first_part:
+        hv = atomic_read(&bucket->h2);
+        if (!hv) {
+            goto not_found;
+        }
+        else {
+            if (hv != hvp->w2) {
+                bix = (bix + 1) & self->last_slot;
+                continue;
+            }
+        }
+#endif
+        goto found_bucket;
+    }
+
+not_found:
+    if (found) {
+        *found = false;
+    }
+    return NULL;
+
+found_bucket:
+    record = atomic_read(&bucket->record);
+    if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
+migrate_and_retry:
+        self = hihat64_store_migrate(self, top);
+        return hihat64_store_replace(self, top, hvp, item, found);
+    }
+
+    candidate       = mmm_alloc_committed(sizeof(hihat64_record_t));
+    candidate->item = item;
+    raw_candidate   = candidate;
+    candidate       = hatrack_pflag_set(candidate, HIHAT64_F_USED);
+
+    if (!record || !hatrack_pflag_test(record, HIHAT64_F_USED)) {
+        mmm_retire_unused(raw_candidate);
+        goto not_found;
+    }
+
+    /* If we lose the compare and swap, since we're not storing
+     * history data, we have two options; we can pretend we overwrote
+     * something, and return ourself as the thing we overwrote for the
+     * sake of memory management, or we can loop here, until the CAS
+     * succeeds, and decide what to do once the CAS succeeds.  We
+     * could also take the stance, in case of a failure, that there
+     * was nothing to overwrite; from a linearization perspective,
+     * it's as if the write that beat us was a remove followed by a
+     * write, and our operation came in between the two.
+     *
+     * In this implementation, we'll do the CAS loop, since we don't
+     * have history, and we want the results to make some intuitive
+     * sense.
+     *
+     * When implementing this method for wait-free hash tables, we
+     * choose a different approach, for the sake of making it less
+     * complicated to make the algorithm wait-free.
+     */
+    while (
+        !LCAS(&bucket->record, &record, candidate, HIHAT64_CTR_REC_INSTALL)) {
+        if (hatrack_pflag_test(record, HIHAT64_F_MOVING)) {
+            mmm_retire_unused(raw_candidate);
+            goto migrate_and_retry;
+        }
+        if (!hatrack_pflag_test(record, HIHAT64_F_USED)) {
+            mmm_retire_unused(raw_candidate);
+            goto not_found;
+        }
+        // Keep bumping the epoch on a failed CAS.
+        mmm_commit_write(candidate);
+    }
+
+    deflagged = hatrack_pflag_clear(record, HIHAT64_F_USED);
+    mmm_retire(deflagged);
+
+    if (found) {
+        *found = true;
+    }
+
+    return deflagged->item;
 }
 
 static bool

@@ -124,6 +124,42 @@ refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
     __builtin_unreachable();
 }
 
+void *
+refhat0_replace(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    uint64_t          bix;
+    uint64_t          i;
+    refhat0_bucket_t *cur;
+    void             *ret;
+
+    bix = hatrack_bucket_index(hv, self->last_slot);
+
+    for (i = 0; i <= self->last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (cur->deleted) {
+                if (found) {
+                    *found = false;
+                }
+                return NULL;
+            }
+            ret       = cur->item;
+            cur->item = item;
+            if (found) {
+                *found = true;
+            }
+            return ret;
+        }
+        if (hatrack_bucket_unreserved(&cur->hv)) {
+            if (found) {
+                *found = false;
+            }
+        }
+        bix = (bix + 1) & self->last_slot;
+    }
+    __builtin_unreachable();
+}
+
 bool
 refhat0_add(refhat0_t *self, hatrack_hash_t *hv, void *item)
 {

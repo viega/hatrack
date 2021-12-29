@@ -34,16 +34,21 @@
 #include "swimcap2.h"
 
 // clang-format off
-static swimcap2_store_t *swimcap2_store_new   (uint64_t);
-static void             *swimcap2_store_get   (swimcap2_store_t *,
-					       hatrack_hash_t *, bool *);
-static void             *swimcap2_store_put   (swimcap2_store_t *, swimcap2_t *,
-					       hatrack_hash_t *, void *,
-					       bool *);
-static bool              swimcap2_store_add   (swimcap2_store_t *, swimcap2_t *,
-					       hatrack_hash_t *, void *);
-static void             *swimcap2_store_remove(swimcap2_store_t *, swimcap2_t *,
-					       hatrack_hash_t *, bool *);
+static swimcap2_store_t *swimcap2_store_new    (uint64_t);
+static void             *swimcap2_store_get    (swimcap2_store_t *,
+						hatrack_hash_t *, bool *);
+static void             *swimcap2_store_put    (swimcap2_store_t *,
+						swimcap2_t *, hatrack_hash_t *,
+						void *, bool *);
+static void             *swimcap2_store_replace(swimcap2_store_t *,
+						swimcap2_t *, hatrack_hash_t *,
+						void *, bool *);
+static bool              swimcap2_store_add    (swimcap2_store_t *,
+						swimcap2_t *, hatrack_hash_t *,
+						void *);
+static void             *swimcap2_store_remove (swimcap2_store_t *,
+						swimcap2_t *, hatrack_hash_t *,
+						bool *);
 static void              swimcap2_migrate     (swimcap2_t *);
 // clang-format on
 
@@ -81,6 +86,26 @@ swimcap2_put(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
     }
 
     ret = swimcap2_store_put(self->store, self, hv, item, found);
+
+    if (pthread_mutex_unlock(&self->write_mutex)) {
+        abort();
+    }
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+swimcap2_replace(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void *ret;
+
+    mmm_start_basic_op();
+    if (pthread_mutex_lock(&self->write_mutex)) {
+        abort();
+    }
+
+    ret = swimcap2_store_replace(self->store, self, hv, item, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -301,6 +326,50 @@ swimcap2_store_put(swimcap2_store_t *self,
             cur->hv    = *hv;
             cur->item  = item;
             cur->epoch = top->next_epoch++;
+            if (found) {
+                *found = false;
+            }
+
+            return NULL;
+        }
+        bix = (bix + 1) & last_slot;
+    }
+    __builtin_unreachable();
+}
+
+static void *
+swimcap2_store_replace(swimcap2_store_t *self,
+                       swimcap2_t       *top,
+                       hatrack_hash_t   *hv,
+                       void             *item,
+                       bool             *found)
+{
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
+    swimcap2_bucket_t *cur;
+    void              *ret;
+
+    last_slot = self->last_slot;
+    bix       = hatrack_bucket_index(hv, last_slot);
+
+    for (i = 0; i <= last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (cur->deleted) {
+                if (found) {
+                    *found = false;
+                }
+                return NULL;
+            }
+            ret       = cur->item;
+            cur->item = item;
+            if (found) {
+                *found = true;
+            }
+            return ret;
+        }
+        if (hatrack_bucket_unreserved(&cur->hv)) {
             if (found) {
                 *found = false;
             }

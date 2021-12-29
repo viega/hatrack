@@ -47,14 +47,15 @@ typedef struct {
 #endif
 } refhat0_t;
 
-void            refhat0_init  (refhat0_t *);
-void           *refhat0_get   (refhat0_t *, hatrack_hash_t *, bool *);
-void           *refhat0_put   (refhat0_t *, hatrack_hash_t *, void *, bool *);
-bool            refhat0_add   (refhat0_t *, hatrack_hash_t *, void *);
-void           *refhat0_remove(refhat0_t *, hatrack_hash_t *, bool *);
-void            refhat0_delete(refhat0_t *);
-uint64_t        refhat0_len   (refhat0_t *);
-hatrack_view_t *refhat0_view  (refhat0_t *, uint64_t *, bool);
+void            refhat0_init   (refhat0_t *);
+void           *refhat0_get    (refhat0_t *, hatrack_hash_t *, bool *);
+void           *refhat0_put    (refhat0_t *, hatrack_hash_t *, void *, bool *);
+void           *refhat0_replace(refhat0_t *, hatrack_hash_t *, void *, bool *);
+bool            refhat0_add    (refhat0_t *, hatrack_hash_t *, void *);
+void           *refhat0_remove (refhat0_t *, hatrack_hash_t *, bool *);
+void            refhat0_delete (refhat0_t *);
+uint64_t        refhat0_len    (refhat0_t *);
+hatrack_view_t *refhat0_view   (refhat0_t *, uint64_t *, bool);
 
 //clang-format on
 

@@ -96,13 +96,14 @@ swimcap_reader_exit(swimcap_store_t *store)
 }
 
 // clang-format off
-void            swimcap_init  (swimcap_t *);
-void           *swimcap_get   (swimcap_t *, hatrack_hash_t *, bool *);
-void           *swimcap_put   (swimcap_t *, hatrack_hash_t *, void *, bool *);
-bool            swimcap_add   (swimcap_t *, hatrack_hash_t *, void *);
-void           *swimcap_remove(swimcap_t *, hatrack_hash_t *, bool *);
-void            swimcap_delete(swimcap_t *);
-uint64_t        swimcap_len   (swimcap_t *);
-hatrack_view_t *swimcap_view  (swimcap_t *, uint64_t *, bool);
+void            swimcap_init   (swimcap_t *);
+void           *swimcap_get    (swimcap_t *, hatrack_hash_t *, bool *);
+void           *swimcap_put    (swimcap_t *, hatrack_hash_t *, void *, bool *);
+void           *swimcap_replace(swimcap_t *, hatrack_hash_t *, void *, bool *);
+bool            swimcap_add    (swimcap_t *, hatrack_hash_t *, void *);
+void           *swimcap_remove (swimcap_t *, hatrack_hash_t *, bool *);
+void            swimcap_delete (swimcap_t *);
+uint64_t        swimcap_len    (swimcap_t *);
+hatrack_view_t *swimcap_view   (swimcap_t *, uint64_t *, bool);
 
 #endif

@@ -37,6 +37,8 @@ static void           *hihat1a_store_get    (hihat1_store_t *, hihat1_t *,
 					     hatrack_hash_t *, bool *);
 static void           *hihat1a_store_put    (hihat1_store_t *, hihat1_t *,
 					     hatrack_hash_t *, void *, bool *);
+static void           *hihat1a_store_replace(hihat1_store_t *, hihat1_t *,
+					     hatrack_hash_t *, void *, bool *);
 static bool            hihat1a_store_add    (hihat1_store_t *, hihat1_t *,
 					     hatrack_hash_t *, void *);
 static void           *hihat1a_store_remove (hihat1_store_t *, hihat1_t *,
@@ -76,6 +78,20 @@ hihat1a_put(hihat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);    
     ret = hihat1a_store_put(store, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+hihat1a_replace(hihat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void           *ret;
+    hihat1_store_t *store;
+
+    mmm_start_basic_op();
+    store = atomic_read(&self->store_current);    
+    ret = hihat1a_store_replace(store, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -305,6 +321,99 @@ found_bucket:
 
     return item;
 }
+
+static void *
+hihat1a_store_replace(hihat1_store_t *self,
+		     hihat1_t       *top,
+		     hatrack_hash_t *hv1,
+		     void           *item,
+		     bool           *found)
+{
+    void            *old_item;
+    uint64_t         bix;
+    uint64_t         i;
+    hatrack_hash_t   hv2;
+    hihat1_bucket_t *bucket;
+    hihat1_record_t  record;
+    hihat1_record_t  candidate;
+
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+    
+    for (i = 0; i <= self->last_slot; i++) {
+        bucket = &self->buckets[bix];
+	hv2    = atomic_read(&bucket->hv);
+	if (hatrack_bucket_unreserved(&hv2)) {
+	    goto not_found;
+	}
+	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	    bix = (bix + 1) & self->last_slot;
+	    continue;
+	}
+        goto found_bucket;
+    }
+
+ not_found:
+    if (found) {
+	*found = false;
+    }
+    return NULL;
+
+ found_bucket:
+    record = atomic_read(&bucket->record);
+    if (record.info & HIHAT_F_MOVING) {
+    migrate_and_retry:
+	self = hihat1a_store_migrate(self, top);
+	return hihat1a_store_replace(self, top, hv1, item, found);
+    }
+
+    if (!(record.info & HIHAT_F_USED)) {
+	goto not_found;
+    }
+
+    if (found) {
+	*found = true;
+    }
+    
+    old_item       = record.item;
+    candidate.item = item;
+    candidate.info = top->epoch++ | HIHAT_F_USED;
+
+    /* If we lose the compare and swap, since we're not storing
+     * history data, we have two options; we can pretend we overwrote
+     * something, and return ourself as the thing we overwrote for the
+     * sake of memory management, or we can loop here, until the CAS
+     * succeeds, and decide what to do once the CAS succeeds.  We
+     * could also take the stance, in case of a failure, that there
+     * was nothing to overwrite; from a linearization perspective,
+     * it's as if the write that beat us was a remove followed by a
+     * write, and our operation came in between the two.
+     *
+     * In this implementation, we'll do the CAS loop, since we don't
+     * have history, and we want the results to make some intuitive
+     * sense.
+     *
+     * When implementing this method for wait-free hash tables, we
+     * choose a different approach, for the sake of making it less
+     * complicated to make the algorithm wait-free.
+     */    
+    while(!LCAS(&bucket->record, &record, candidate, HIHAT1_CTR_REC_INSTALL)) {
+	if (record.info & HIHAT_F_MOVING) {
+	    goto migrate_and_retry;
+	}
+	candidate.info = top->epoch++ | HIHAT_F_USED;
+    }
+
+    if (record.info & HIHAT_F_RMD) {
+	goto not_found;
+    }
+
+    if (found) {
+	*found = true;
+    }
+
+    return record.item;
+}
+
 
 static bool
 hihat1a_store_add(hihat1_store_t *self,

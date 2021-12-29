@@ -35,6 +35,9 @@ static void            *newshat_store_get    (newshat_store_t *, newshat_t *,
 static void            *newshat_store_put    (newshat_store_t *, newshat_t *,
 					      hatrack_hash_t *, void *,
 					      bool *);
+static void            *newshat_store_replace(newshat_store_t *, newshat_t *,
+					      hatrack_hash_t *, void *,
+					      bool *);
 static bool             newshat_store_add    (newshat_store_t *, newshat_t *,
 					      hatrack_hash_t *, void *);
 static void            *newshat_store_remove (newshat_store_t *, newshat_t *,
@@ -74,6 +77,18 @@ newshat_put(newshat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 
     mmm_start_basic_op();
     ret = newshat_store_put(self->store, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+newshat_replace(newshat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void *ret;
+
+    mmm_start_basic_op();
+    ret = newshat_store_replace(self->store, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -320,6 +335,59 @@ check_bucket_again:
                 *found = false;
             }
             pthread_mutex_unlock(&cur->write_mutex);
+            return NULL;
+        }
+        bix = (bix + 1) & last_slot;
+    }
+    __builtin_unreachable();
+}
+
+static void *
+newshat_store_replace(newshat_store_t *self,
+                      newshat_t       *top,
+                      hatrack_hash_t  *hv,
+                      void            *item,
+                      bool            *found)
+{
+    uint64_t          bix;
+    uint64_t          i;
+    uint64_t          last_slot;
+    newshat_bucket_t *cur;
+    void             *ret;
+
+    last_slot = self->last_slot;
+
+    bix = hatrack_bucket_index(hv, last_slot);
+
+    for (i = 0; i <= last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (pthread_mutex_lock(&cur->write_mutex)) {
+                abort();
+            }
+            if (cur->migrated) {
+                pthread_mutex_unlock(&cur->write_mutex);
+                return newshat_store_put(top->store, top, hv, item, found);
+            }
+            if (cur->deleted) {
+                if (found) {
+                    *found = false;
+                }
+                pthread_mutex_unlock(&cur->write_mutex);
+                return NULL;
+            }
+            ret       = cur->item;
+            cur->item = item;
+            if (found) {
+                *found = true;
+            }
+            pthread_mutex_unlock(&cur->write_mutex);
+            return ret;
+        }
+        if (hatrack_bucket_unreserved(&cur->hv)) {
+            if (found) {
+                *found = false;
+            }
             return NULL;
         }
         bix = (bix + 1) & last_slot;
