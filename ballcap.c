@@ -32,26 +32,16 @@
 
 // clang-format off
 
-static ballcap_store_t *ballcap_store_new         (uint64_t);
-static void            *ballcap_store_get         (ballcap_store_t *,
-						   ballcap_t *,
-						   hatrack_hash_t *,
-						   bool *);
-static void            *ballcap_store_put         (ballcap_store_t *,
-						   ballcap_t *,
-						   hatrack_hash_t *,
-						   void *,
-						   bool *);
-static bool             ballcap_store_put_if_empty(ballcap_store_t *,
-						   ballcap_t *,
-						   hatrack_hash_t *,
-						   void *);
-static void            *ballcap_store_remove      (ballcap_store_t *,
-						   ballcap_t *,
-						   hatrack_hash_t *,
-						   bool *);
-static ballcap_store_t *ballcap_store_migrate     (ballcap_store_t *,
-						   ballcap_t *);
+static ballcap_store_t *ballcap_store_new    (uint64_t);
+static void            *ballcap_store_get    (ballcap_store_t *, ballcap_t *,
+					      hatrack_hash_t *, bool *);
+static void            *ballcap_store_put    (ballcap_store_t *, ballcap_t *,
+					      hatrack_hash_t *, void *, bool *);
+static bool             ballcap_store_add    (ballcap_store_t *, ballcap_t *,
+					      hatrack_hash_t *, void *);
+static void            *ballcap_store_remove (ballcap_store_t *, ballcap_t *,
+					      hatrack_hash_t *, bool *);
+static ballcap_store_t *ballcap_store_migrate(ballcap_store_t *, ballcap_t *);
 
 // clang-format on
 
@@ -92,12 +82,12 @@ ballcap_put(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-ballcap_put_if_empty(ballcap_t *self, hatrack_hash_t *hv, void *item)
+ballcap_add(ballcap_t *self, hatrack_hash_t *hv, void *item)
 {
     bool ret;
 
     mmm_start_basic_op();
-    ret = ballcap_store_put_if_empty(self->store, self, hv, item);
+    ret = ballcap_store_add(self->store, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -402,10 +392,10 @@ check_bucket_again:
 }
 
 bool
-ballcap_store_put_if_empty(ballcap_store_t *self,
-                           ballcap_t       *top,
-                           hatrack_hash_t  *hv,
-                           void            *item)
+ballcap_store_add(ballcap_store_t *self,
+		  ballcap_t       *top,
+		  hatrack_hash_t  *hv,
+		  void            *item)
 {
     uint64_t          bix;
     uint64_t          i;
@@ -425,13 +415,13 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->write_mutex);
-                return ballcap_store_put_if_empty(top->store, top, hv, item);
+                return ballcap_store_add(top->store, top, hv, item);
             }
             if (!cur->record->deleted) {
                 pthread_mutex_unlock(&cur->write_mutex);
                 return false;
             }
-            DEBUG_PTR(cur->record, "retired in store_put_if_empty");
+            DEBUG_PTR(cur->record, "retired in store_add");
             mmm_retire(cur->record);
 
             goto fill_record;
@@ -442,7 +432,7 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->write_mutex);
-                return ballcap_store_put_if_empty(top->store, top, hv, item);
+                return ballcap_store_add(top->store, top, hv, item);
             }
             if (!hatrack_bucket_unreserved(&cur->hv)) {
                 pthread_mutex_unlock(&cur->write_mutex);
@@ -451,7 +441,7 @@ check_bucket_again:
             if (self->used_count == self->threshold) {
                 pthread_mutex_unlock(&cur->write_mutex);
                 self = ballcap_store_migrate(self, top);
-                return ballcap_store_put_if_empty(self, top, hv, item);
+                return ballcap_store_add(self, top, hv, item);
             }
             self->used_count++;
             top->item_count++;

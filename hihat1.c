@@ -27,19 +27,16 @@
 #include "hihat1.h"
 
 // clang-format off
-static hihat1_store_t  *hihat1_store_new         (uint64_t);
-static void            *hihat1_store_get         (hihat1_store_t *, hihat1_t *,
-					          hatrack_hash_t *, bool *);
-static void            *hihat1_store_put         (hihat1_store_t *, hihat1_t *,
-					          hatrack_hash_t *, void *,
-						  bool *);
-static bool             hihat1_store_put_if_empty(hihat1_store_t *,
-						  hihat1_t *,
-						  hatrack_hash_t *,
-						  void *);
-static void            *hihat1_store_remove      (hihat1_store_t *, hihat1_t *,
-					          hatrack_hash_t *, bool *);
-static hihat1_store_t *hihat1_store_migrate      (hihat1_store_t *, hihat1_t *);
+static hihat1_store_t  *hihat1_store_new   (uint64_t);
+static void            *hihat1_store_get   (hihat1_store_t *, hihat1_t *,
+					    hatrack_hash_t *, bool *);
+static void            *hihat1_store_put   (hihat1_store_t *, hihat1_t *,
+					    hatrack_hash_t *, void *, bool *);
+static bool             hihat1_store_add   (hihat1_store_t *, hihat1_t *,
+					    hatrack_hash_t *, void *);
+static void            *hihat1_store_remove(hihat1_store_t *, hihat1_t *,
+					    hatrack_hash_t *, bool *);
+static hihat1_store_t *hihat1_store_migrate(hihat1_store_t *, hihat1_t *);
 
 void
 hihat1_init(hihat1_t *self)
@@ -79,14 +76,14 @@ hihat1_put(hihat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-hihat1_put_if_empty(hihat1_t *self, hatrack_hash_t *hv, void *item)
+hihat1_add(hihat1_t *self, hatrack_hash_t *hv, void *item)
 {
     bool            ret;
     hihat1_store_t *store;
 
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);    
-    ret   = hihat1_store_put_if_empty(store, self, hv, item);
+    ret   = hihat1_store_add(store, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -306,10 +303,10 @@ hihat1_store_put(hihat1_store_t *self,
 }
 
 static bool
-hihat1_store_put_if_empty(hihat1_store_t *self,
-                          hihat1_t       *top,
-                          hatrack_hash_t *hv1,
-                          void           *item)
+hihat1_store_add(hihat1_store_t *self,
+		 hihat1_t       *top,
+		 hatrack_hash_t *hv1,
+		 void           *item)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -341,7 +338,7 @@ hihat1_store_put_if_empty(hihat1_store_t *self,
 
  migrate_and_retry:
     self = hihat1_store_migrate(self, top);
-    return hihat1_store_put_if_empty(self, top, hv1, item);
+    return hihat1_store_add(self, top, hv1, item);
 
 found_bucket:
     record = atomic_read(&bucket->record);

@@ -25,20 +25,17 @@
 
 // clang-format off
 
-static lohat0_store_t  *lohat0_store_new         (uint64_t);
-static void             lohat0_retire_store      (lohat0_store_t *);
-static void            *lohat0_store_get         (lohat0_store_t *, lohat0_t *,
-						  hatrack_hash_t *, bool *);
-static void            *lohat0_store_put         (lohat0_store_t *, lohat0_t *,
-						  hatrack_hash_t *, void *,
-						  bool *);
-static bool             lohat0_store_put_if_empty(lohat0_store_t *,
-						  lohat0_t *,
-						  hatrack_hash_t *,
-						  void *);
-static void            *lohat0_store_remove      (lohat0_store_t *, lohat0_t *,
-					          hatrack_hash_t *, bool *);
-static lohat0_store_t  *lohat0_store_migrate     (lohat0_store_t *, lohat0_t *);
+static lohat0_store_t  *lohat0_store_new    (uint64_t);
+static void             lohat0_retire_store (lohat0_store_t *);
+static void            *lohat0_store_get    (lohat0_store_t *, lohat0_t *,
+					     hatrack_hash_t *, bool *);
+static void            *lohat0_store_put    (lohat0_store_t *, lohat0_t *,
+					     hatrack_hash_t *, void *, bool *);
+static bool             lohat0_store_add    (lohat0_store_t *, lohat0_t *,
+					     hatrack_hash_t *, void *);
+static void            *lohat0_store_remove (lohat0_store_t *, lohat0_t *,
+					     hatrack_hash_t *, bool *);
+static lohat0_store_t  *lohat0_store_migrate(lohat0_store_t *, lohat0_t *);
 
 // clang-format on
 
@@ -89,14 +86,14 @@ lohat0_put(lohat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-lohat0_put_if_empty(lohat0_t *self, hatrack_hash_t *hv, void *item)
+lohat0_add(lohat0_t *self, hatrack_hash_t *hv, void *item)
 {
     bool            ret;
     lohat0_store_t *store;
 
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);
-    ret   = lohat0_store_put_if_empty(store, self, hv, item);
+    ret   = lohat0_store_add(store, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -425,7 +422,7 @@ found_history_bucket:
 }
 
 static bool
-lohat0_store_put_if_empty(lohat0_store_t *self,
+lohat0_store_add(lohat0_store_t *self,
                           lohat0_t       *top,
                           hatrack_hash_t *hv1,
                           void           *item)
@@ -457,7 +454,7 @@ lohat0_store_put_if_empty(lohat0_store_t *self,
 
 migrate_and_retry:
     self = lohat0_store_migrate(self, top);
-    return lohat0_store_put_if_empty(self, top, hv1, item);
+    return lohat0_store_add(self, top, hv1, item);
 
 found_history_bucket:
     head = atomic_read(&bucket->head);

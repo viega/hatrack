@@ -188,5 +188,7 @@ have a lot of work remaining:
 6) I'm going to write a long document describing the algorithms, that
    will be available in the doc/ directory.
 
-7) I need to add a replace() function to every algorithm, and perhaps
-   change put_if_empty() to add().
+7) I need to add a replace() function to every algorithm.
+
+8) I plan to add a lock-free malloc/free implementation to help remove
+   malloc implementation locks as a potential bottleneck when testing.

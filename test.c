@@ -53,14 +53,14 @@ test_put(testhat_t *self, uint32_t key, uint32_t value)
 }
 
 static inline bool
-test_put_if_empty(testhat_t *self, uint32_t key, uint32_t value)
+test_add(testhat_t *self, uint32_t key, uint32_t value)
 {
     test_item item;
 
     item.s.key   = key;
     item.s.value = value;
 
-    return testhat_put_if_empty(self, &precomputed_hashes[key], (void *)item.i);
+    return testhat_add(self, &precomputed_hashes[key], (void *)item.i);
 }
 
 static inline uint32_t
@@ -607,7 +607,7 @@ test_condput(test_info_t *info)
     uint64_t i;
 
     for (i = 0; i < info->range; i++) {
-        test_put_if_empty(info->dict, i + 1, i + 1);
+        test_add(info->dict, i + 1, i + 1);
     }
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
@@ -616,7 +616,7 @@ test_condput(test_info_t *info)
         }
     }
     for (i = 0; i < info->range; i++) {
-        if (test_put_if_empty(info->dict, i + 1, i + 2)) {
+        if (test_add(info->dict, i + 1, i + 2)) {
             fprintf(stderr, "Didn't return false when it should have.\n");
             return false;
         }
@@ -624,7 +624,7 @@ test_condput(test_info_t *info)
     }
 
     for (i = 0; i < info->range; i++) {
-        if (!test_put_if_empty(info->dict, i + 1, i + 2)) {
+        if (!test_add(info->dict, i + 1, i + 2)) {
             fprintf(stderr, "Can't reput over a deleted item\n");
             return false;
         }

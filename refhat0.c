@@ -125,7 +125,7 @@ refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-refhat0_put_if_empty(refhat0_t *self, hatrack_hash_t *hv, void *item)
+refhat0_add(refhat0_t *self, hatrack_hash_t *hv, void *item)
 {
     uint64_t          bix;
     uint64_t          i;
@@ -149,7 +149,7 @@ refhat0_put_if_empty(refhat0_t *self, hatrack_hash_t *hv, void *item)
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 refhat0_migrate(self);
-                return refhat0_put_if_empty(self, hv, item);
+                return refhat0_add(self, hv, item);
             }
             self->used_count++;
             self->item_count++;

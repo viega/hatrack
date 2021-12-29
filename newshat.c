@@ -28,27 +28,18 @@
 
 // clang-format off
 
-static newshat_store_t *newshat_store_new         (uint64_t);
-static void             newshat_store_delete      (newshat_store_t *);
-static void            *newshat_store_get         (newshat_store_t *,
-						   newshat_t *,
-						   hatrack_hash_t *,
-						   bool *);
-static void            *newshat_store_put         (newshat_store_t *,
-						   newshat_t *,
-						   hatrack_hash_t *,
-						   void *,
-						   bool *);
-static bool             newshat_store_put_if_empty(newshat_store_t *,
-						   newshat_t *,
-						   hatrack_hash_t *,
-						   void *);
-static void            *newshat_store_remove      (newshat_store_t *,
-						   newshat_t *,
-						   hatrack_hash_t *,
-						   bool *);
-static newshat_store_t *newshat_store_migrate     (newshat_store_t *,
-						   newshat_t *);
+static newshat_store_t *newshat_store_new    (uint64_t);
+static void             newshat_store_delete (newshat_store_t *);
+static void            *newshat_store_get    (newshat_store_t *, newshat_t *,
+					      hatrack_hash_t *, bool *);
+static void            *newshat_store_put    (newshat_store_t *, newshat_t *,
+					      hatrack_hash_t *, void *,
+					      bool *);
+static bool             newshat_store_add    (newshat_store_t *, newshat_t *,
+					      hatrack_hash_t *, void *);
+static void            *newshat_store_remove (newshat_store_t *, newshat_t *,
+					      hatrack_hash_t *, bool *);
+static newshat_store_t *newshat_store_migrate(newshat_store_t *, newshat_t *);
 
 // clang-format on
 
@@ -89,12 +80,12 @@ newshat_put(newshat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-newshat_put_if_empty(newshat_t *self, hatrack_hash_t *hv, void *item)
+newshat_add(newshat_t *self, hatrack_hash_t *hv, void *item)
 {
     bool ret;
 
     mmm_start_basic_op();
-    ret = newshat_store_put_if_empty(self->store, self, hv, item);
+    ret = newshat_store_add(self->store, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -337,10 +328,10 @@ check_bucket_again:
 }
 
 bool
-newshat_store_put_if_empty(newshat_store_t *self,
-                           newshat_t       *top,
-                           hatrack_hash_t  *hv,
-                           void            *item)
+newshat_store_add(newshat_store_t *self,
+		  newshat_t       *top,
+		  hatrack_hash_t  *hv,
+		  void            *item)
 {
     uint64_t          bix;
     uint64_t          i;
@@ -359,7 +350,7 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->write_mutex);
-                return newshat_store_put_if_empty(top->store, top, hv, item);
+                return newshat_store_add(top->store, top, hv, item);
             }
             if (cur->deleted) {
                 cur->item    = item;
@@ -378,7 +369,7 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->write_mutex);
-                return newshat_store_put_if_empty(top->store, top, hv, item);
+                return newshat_store_add(top->store, top, hv, item);
             }
             if (!hatrack_bucket_unreserved(&cur->hv)) {
                 pthread_mutex_unlock(&cur->write_mutex);
@@ -387,7 +378,7 @@ check_bucket_again:
             if (self->used_count == self->threshold) {
                 pthread_mutex_unlock(&cur->write_mutex);
                 self = newshat_store_migrate(self, top);
-                return newshat_store_put_if_empty(self, top, hv, item);
+                return newshat_store_add(self, top, hv, item);
             }
             self->used_count++;
             top->item_count++;

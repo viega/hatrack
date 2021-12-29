@@ -25,27 +25,22 @@
 
 // clang-format off
 
-static woolhat_store_t *woolhat_store_new         (uint64_t);
-static void             woolhat_retire_store      (woolhat_store_t *);
-static void            *woolhat_store_get         (woolhat_store_t *,
-						   woolhat_t *,
-						   hatrack_hash_t *, bool *);
-static void            *woolhat_store_put         (woolhat_store_t *,
-						   woolhat_t *,
-						   hatrack_hash_t *, void *,
-						   bool *, uint64_t);
-static bool             woolhat_store_put_if_empty(woolhat_store_t *,
-						   woolhat_t *,
-						   hatrack_hash_t *,
-						   void *, uint64_t);
-static void            *woolhat_store_remove      (woolhat_store_t *,
-						   woolhat_t *,
-						   hatrack_hash_t *, bool *,
-						   uint64_t);
-static woolhat_store_t *woolhat_store_migrate     (woolhat_store_t *,
-						   woolhat_t *);
-static inline bool      woolhat_help_required     (uint64_t);
-static inline bool      woolhat_need_to_help      (woolhat_t *);
+static woolhat_store_t *woolhat_store_new    (uint64_t);
+static void             woolhat_retire_store (woolhat_store_t *);
+static void            *woolhat_store_get    (woolhat_store_t *, woolhat_t *,
+					      hatrack_hash_t *, bool *);
+static void            *woolhat_store_put    (woolhat_store_t *, woolhat_t *,
+					      hatrack_hash_t *, void *, bool *,
+					      uint64_t);
+static bool             woolhat_store_add    (woolhat_store_t *, woolhat_t *,
+					      hatrack_hash_t *, void *,
+					      uint64_t);
+static void            *woolhat_store_remove (woolhat_store_t *, woolhat_t *,
+					      hatrack_hash_t *, bool *,
+					      uint64_t);
+static woolhat_store_t *woolhat_store_migrate(woolhat_store_t *, woolhat_t *);
+static inline bool      woolhat_help_required(uint64_t);
+static inline bool      woolhat_need_to_help (woolhat_t *);
 
 // clang-format on
 
@@ -97,14 +92,14 @@ woolhat_put(woolhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-woolhat_put_if_empty(woolhat_t *self, hatrack_hash_t *hv, void *item)
+woolhat_add(woolhat_t *self, hatrack_hash_t *hv, void *item)
 {
     bool             ret;
     woolhat_store_t *store;
 
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);
-    ret   = woolhat_store_put_if_empty(store, self, hv, item, 0);
+    ret   = woolhat_store_add(store, self, hv, item, 0);
     mmm_end_op();
 
     return ret;
@@ -443,7 +438,7 @@ found_history_bucket:
 }
 
 static bool
-woolhat_store_put_if_empty(woolhat_store_t *self,
+woolhat_store_add(woolhat_store_t *self,
                            woolhat_t       *top,
                            hatrack_hash_t  *hv1,
                            void            *item,
@@ -482,13 +477,13 @@ migrate_and_retry:
         HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
         atomic_fetch_add(&top->help_needed, 1);
         self = woolhat_store_migrate(self, top);
-        ret  = woolhat_store_put_if_empty(self, top, hv1, item, count);
+        ret  = woolhat_store_add(self, top, hv1, item, count);
         atomic_fetch_sub(&top->help_needed, 1);
 
         return ret;
     }
     self = woolhat_store_migrate(self, top);
-    return woolhat_store_put_if_empty(self, top, hv1, item, count);
+    return woolhat_store_add(self, top, hv1, item, count);
 
 found_history_bucket:
     head = atomic_read(&bucket->head);

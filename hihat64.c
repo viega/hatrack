@@ -26,24 +26,16 @@
 #include "hihat64.h"
 
 // clang-format off
-static hihat64_store_t *hihat64_store_new         (uint64_t);
-static void            *hihat64_store_get         (hihat64_store_t *,
-						   hihat64_t *,
-					           hatrack_hash_t *, bool *);
-static void            *hihat64_store_put         (hihat64_store_t *,
-						   hihat64_t *,
-						   hatrack_hash_t *,
-						   void *, bool *);
-static bool             hihat64_store_put_if_empty(hihat64_store_t *,
-						   hihat64_t *,
-						   hatrack_hash_t *,
-						   void *);
-static void            *hihat64_store_remove      (hihat64_store_t *,
-						   hihat64_t *,
-					           hatrack_hash_t *,
-						   bool *);
-static hihat64_store_t *hihat64_store_migrate     (hihat64_store_t *,
-						   hihat64_t *);
+static hihat64_store_t *hihat64_store_new    (uint64_t);
+static void            *hihat64_store_get    (hihat64_store_t *, hihat64_t *,
+					      hatrack_hash_t *, bool *);
+static void            *hihat64_store_put    (hihat64_store_t *, hihat64_t *,
+					      hatrack_hash_t *, void *, bool *);
+static bool             hihat64_store_add    (hihat64_store_t *, hihat64_t *,
+					      hatrack_hash_t *, void *);
+static void            *hihat64_store_remove (hihat64_store_t *, hihat64_t *,
+					      hatrack_hash_t *, bool *);
+static hihat64_store_t *hihat64_store_migrate(hihat64_store_t *, hihat64_t *);
 // clang-format on
 
 void
@@ -79,12 +71,12 @@ hihat64_put(hihat64_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-hihat64_put_if_empty(hihat64_t *self, hatrack_hash_t *hv, void *item)
+hihat64_add(hihat64_t *self, hatrack_hash_t *hv, void *item)
 {
     bool ret;
 
     mmm_start_basic_op();
-    ret = hihat64_store_put_if_empty(self->store_current, self, hv, item);
+    ret = hihat64_store_add(self->store_current, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -393,7 +385,7 @@ found_bucket:
 }
 
 static bool
-hihat64_store_put_if_empty(hihat64_store_t *self,
+hihat64_store_add(hihat64_store_t *self,
                            hihat64_t       *top,
                            hatrack_hash_t  *hvp,
                            void            *item)
@@ -447,7 +439,7 @@ found_first_part:
 
 migrate_and_retry:
     self = hihat64_store_migrate(self, top);
-    return hihat64_store_put_if_empty(self, top, hvp, item);
+    return hihat64_store_add(self, top, hvp, item);
 
 found_bucket:
     record = atomic_read(&bucket->record);

@@ -32,23 +32,16 @@
 #include "swimcap.h"
 
 // clang-format off
-static swimcap_store_t *swimcap_store_new         (uint64_t);
-static void            *swimcap_store_get         (swimcap_store_t *,
-						   hatrack_hash_t *,
-						   bool *);
-static void            *swimcap_store_put         (swimcap_store_t *,
-						   swimcap_t *,
-						   hatrack_hash_t *,
-						   void *, bool *);
-static bool             swimcap_store_put_if_empty(swimcap_store_t *,
-						   swimcap_t *, 
-						   hatrack_hash_t *,
-						   void *);
-static void            *swimcap_store_remove      (swimcap_store_t *,
-						   swimcap_t *,
-						   hatrack_hash_t *,
-						   bool *);
-static void             swimcap_migrate           (swimcap_t *);
+static swimcap_store_t *swimcap_store_new   (uint64_t);
+static void            *swimcap_store_get   (swimcap_store_t *,
+					     hatrack_hash_t *, bool *);
+static void            *swimcap_store_put   (swimcap_store_t *, swimcap_t *,
+					     hatrack_hash_t *, void *, bool *);
+static bool             swimcap_store_add   (swimcap_store_t *, swimcap_t *, 
+					     hatrack_hash_t *, void *);
+static void            *swimcap_store_remove(swimcap_store_t *, swimcap_t *,
+					     hatrack_hash_t *, bool *);
+static void             swimcap_migrate     (swimcap_t *);
 // clang-format on
 
 /* These macros clean up swimcap_view() to make it more readable.  It
@@ -127,14 +120,14 @@ swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-swimcap_put_if_empty(swimcap_t *self, hatrack_hash_t *hv, void *item)
+swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
 {
     bool ret;
     if (pthread_mutex_lock(&self->write_mutex)) {
         abort();
     }
 
-    ret = swimcap_store_put_if_empty(self->store, self, hv, item);
+    ret = swimcap_store_add(self->store, self, hv, item);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -341,10 +334,10 @@ swimcap_store_put(swimcap_store_t *self,
 }
 
 static bool
-swimcap_store_put_if_empty(swimcap_store_t *self,
-                           swimcap_t       *top,
-                           hatrack_hash_t  *hv,
-                           void            *item)
+swimcap_store_add(swimcap_store_t *self,
+		  swimcap_t       *top,
+		  hatrack_hash_t  *hv,
+		  void            *item)
 {
     uint64_t          bix;
     uint64_t          i;
@@ -370,7 +363,7 @@ swimcap_store_put_if_empty(swimcap_store_t *self,
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
-                return swimcap_store_put_if_empty(top->store, top, hv, item);
+                return swimcap_store_add(top->store, top, hv, item);
             }
             self->used_count++;
             top->item_count++;

@@ -60,14 +60,13 @@ typedef struct {
     pthread_mutex_t     write_mutex;
 } swimcap2_t;
 
-void            swimcap2_init        (swimcap2_t *);
-void           *swimcap2_get         (swimcap2_t *, hatrack_hash_t *, bool *);
-void           *swimcap2_put         (swimcap2_t *, hatrack_hash_t *, void *, 
-				      bool *);
-bool            swimcap2_put_if_empty(swimcap2_t *, hatrack_hash_t *, void *);
-void           *swimcap2_remove      (swimcap2_t *, hatrack_hash_t *, bool *);
-void            swimcap2_delete      (swimcap2_t *);
-uint64_t        swimcap2_len         (swimcap2_t *);
-hatrack_view_t *swimcap2_view        (swimcap2_t *, uint64_t *, bool);
+void            swimcap2_init  (swimcap2_t *);
+void           *swimcap2_get   (swimcap2_t *, hatrack_hash_t *, bool *);
+void           *swimcap2_put   (swimcap2_t *, hatrack_hash_t *, void *, bool *);
+bool            swimcap2_add   (swimcap2_t *, hatrack_hash_t *, void *);
+void           *swimcap2_remove(swimcap2_t *, hatrack_hash_t *, bool *);
+void            swimcap2_delete(swimcap2_t *);
+uint64_t        swimcap2_len   (swimcap2_t *);
+hatrack_view_t *swimcap2_view  (swimcap2_t *, uint64_t *, bool);
 
 #endif

@@ -34,23 +34,17 @@
 #include "swimcap2.h"
 
 // clang-format off
-static swimcap2_store_t *swimcap2_store_new         (uint64_t);
-static void             *swimcap2_store_get         (swimcap2_store_t *,
-						     hatrack_hash_t *,
-						     bool *);
-static void             *swimcap2_store_put         (swimcap2_store_t *,
-						     swimcap2_t *,
-						     hatrack_hash_t *,
-						     void *, bool *);
-static bool              swimcap2_store_put_if_empty(swimcap2_store_t *,
-						     swimcap2_t *,
-						     hatrack_hash_t *,
-						     void *);
-static void             *swimcap2_store_remove      (swimcap2_store_t *,
-						     swimcap2_t *,
-						     hatrack_hash_t *,
-						     bool *);
-static void              swimcap2_migrate           (swimcap2_t *);
+static swimcap2_store_t *swimcap2_store_new   (uint64_t);
+static void             *swimcap2_store_get   (swimcap2_store_t *,
+					       hatrack_hash_t *, bool *);
+static void             *swimcap2_store_put   (swimcap2_store_t *, swimcap2_t *,
+					       hatrack_hash_t *, void *,
+					       bool *);
+static bool              swimcap2_store_add   (swimcap2_store_t *, swimcap2_t *,
+					       hatrack_hash_t *, void *);
+static void             *swimcap2_store_remove(swimcap2_store_t *, swimcap2_t *,
+					       hatrack_hash_t *, bool *);
+static void              swimcap2_migrate     (swimcap2_t *);
 // clang-format on
 
 void
@@ -97,7 +91,7 @@ swimcap2_put(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-swimcap2_put_if_empty(swimcap2_t *self, hatrack_hash_t *hv, void *item)
+swimcap2_add(swimcap2_t *self, hatrack_hash_t *hv, void *item)
 {
     bool ret;
 
@@ -106,7 +100,7 @@ swimcap2_put_if_empty(swimcap2_t *self, hatrack_hash_t *hv, void *item)
         abort();
     }
 
-    ret = swimcap2_store_put_if_empty(self->store, self, hv, item);
+    ret = swimcap2_store_add(self->store, self, hv, item);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -319,7 +313,7 @@ swimcap2_store_put(swimcap2_store_t *self,
 }
 
 static bool
-swimcap2_store_put_if_empty(swimcap2_store_t *self,
+swimcap2_store_add(swimcap2_store_t *self,
                             swimcap2_t       *top,
                             hatrack_hash_t   *hv,
                             void             *item)
@@ -347,7 +341,7 @@ swimcap2_store_put_if_empty(swimcap2_store_t *self,
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap2_migrate(top);
-                return swimcap2_store_put_if_empty(top->store, top, hv, item);
+                return swimcap2_store_add(top->store, top, hv, item);
             }
             self->used_count++;
             top->item_count++;

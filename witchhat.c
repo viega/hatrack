@@ -26,26 +26,26 @@
 #include "witchhat.h"
 
 // clang-format off
-static witchhat_store_t  *witchhat_store_new         (uint64_t);
-static void              *witchhat_store_get         (witchhat_store_t *,
-						      witchhat_t *,
-						      hatrack_hash_t *, bool *);
-static void              *witchhat_store_put         (witchhat_store_t *,
-						      witchhat_t *,
-						      hatrack_hash_t *, 
-						      void *, bool *, uint64_t);
-static bool               witchhat_store_put_if_empty(witchhat_store_t *,
-						      witchhat_t *,
-						      hatrack_hash_t *,
-						      void *, uint64_t);
-static void              *witchhat_store_remove      (witchhat_store_t *,
-						      witchhat_t *,
-						      hatrack_hash_t *,
-						      bool *, uint64_t);
-static witchhat_store_t  *witchhat_store_migrate      (witchhat_store_t *,
-						       witchhat_t *);
-static inline bool        witchhat_help_required      (uint64_t);
-static inline bool        witchhat_need_to_help       (witchhat_t *);
+static witchhat_store_t  *witchhat_store_new    (uint64_t);
+static void              *witchhat_store_get    (witchhat_store_t *,
+						 witchhat_t *,
+						 hatrack_hash_t *, bool *);
+static void              *witchhat_store_put    (witchhat_store_t *,
+						 witchhat_t *,
+						 hatrack_hash_t *, 
+						 void *, bool *, uint64_t);
+static bool               witchhat_store_add    (witchhat_store_t *,
+						 witchhat_t *,
+						 hatrack_hash_t *,
+						 void *, uint64_t);
+static void              *witchhat_store_remove (witchhat_store_t *,
+						 witchhat_t *,
+						 hatrack_hash_t *,
+						 bool *, uint64_t);
+static witchhat_store_t  *witchhat_store_migrate(witchhat_store_t *,
+						 witchhat_t *);
+static inline bool        witchhat_help_required(uint64_t);
+static inline bool        witchhat_need_to_help (witchhat_t *);
 
 void
 witchhat_init(witchhat_t *self)
@@ -86,14 +86,14 @@ witchhat_put(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-witchhat_put_if_empty(witchhat_t *self, hatrack_hash_t *hv, void *item)
+witchhat_add(witchhat_t *self, hatrack_hash_t *hv, void *item)
 {
     bool              ret;
     witchhat_store_t *store;        
 
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);
-    ret   = witchhat_store_put_if_empty(store, self, hv, item, 0);
+    ret   = witchhat_store_add(store, self, hv, item, 0);
     mmm_end_op();
 
     return ret;
@@ -336,7 +336,7 @@ found_bucket:
 }
 
 static bool
-witchhat_store_put_if_empty(witchhat_store_t *self,
+witchhat_store_add(witchhat_store_t *self,
 			    witchhat_t       *top,
 			    hatrack_hash_t   *hv1,
 			    void             *item,
@@ -378,13 +378,13 @@ witchhat_store_put_if_empty(witchhat_store_t *self,
 	HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);	
 	atomic_fetch_add(&top->help_needed, 1);
 	self = witchhat_store_migrate(self, top);
-	ret  = witchhat_store_put_if_empty(self, top, hv1, item, count);
+	ret  = witchhat_store_add(self, top, hv1, item, count);
 	atomic_fetch_sub(&top->help_needed, 1);
 
 	return ret;
     }
     self = witchhat_store_migrate(self, top);
-    return witchhat_store_put_if_empty(self, top, hv1, item, count);
+    return witchhat_store_add(self, top, hv1, item, count);
 
 found_bucket:
     record = atomic_read(&bucket->record);
