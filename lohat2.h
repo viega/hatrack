@@ -250,13 +250,14 @@ typedef struct {
     _Atomic(lohat2_store_t *)   store_current;
 } lohat2_t;
 
-void            lohat2_init  (lohat2_t *);
-void           *lohat2_get   (lohat2_t *, hatrack_hash_t *, bool *);
-void           *lohat2_put   (lohat2_t *, hatrack_hash_t *, void *, bool *);
-bool            lohat2_add   (lohat2_t *, hatrack_hash_t *, void *);
-void           *lohat2_remove(lohat2_t *, hatrack_hash_t *, bool *);
-void            lohat2_delete(lohat2_t *);
-uint64_t        lohat2_len   (lohat2_t *);
-hatrack_view_t *lohat2_view  (lohat2_t *, uint64_t *, bool);
+void            lohat2_init   (lohat2_t *);
+void           *lohat2_get    (lohat2_t *, hatrack_hash_t *, bool *);
+void           *lohat2_put    (lohat2_t *, hatrack_hash_t *, void *, bool *);
+void           *lohat2_replace(lohat2_t *, hatrack_hash_t *, void *, bool *);
+bool            lohat2_add    (lohat2_t *, hatrack_hash_t *, void *);
+void           *lohat2_remove (lohat2_t *, hatrack_hash_t *, bool *);
+void            lohat2_delete (lohat2_t *);
+uint64_t        lohat2_len    (lohat2_t *);
+hatrack_view_t *lohat2_view   (lohat2_t *, uint64_t *, bool);
 
 #endif
