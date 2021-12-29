@@ -57,6 +57,8 @@ typedef void *          (*hatrack_get_func)    (void *, hatrack_hash_t *,
 						bool *);
 typedef void *          (*hatrack_put_func)    (void *, hatrack_hash_t *,
 						void *, bool *);
+typedef void *          (*hatrack_replace_func)(void *, hatrack_hash_t *,
+						void *, bool *);
 typedef bool            (*hatrack_add_func)    (void *, hatrack_hash_t *,
 						void *);
 typedef void *          (*hatrack_remove_func) (void *, hatrack_hash_t *,
@@ -69,6 +71,7 @@ typedef struct {
     hatrack_init_func    init;
     hatrack_get_func     get;
     hatrack_put_func     put;
+    hatrack_replace_func replace;
     hatrack_add_func     add;
     hatrack_remove_func  remove;
     hatrack_delete_func  delete;
@@ -94,6 +97,12 @@ static inline void *
 testhat_put(testhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     return (*self->vtable.put)(self->htable, hv, item, found);        
+}
+
+static inline void *
+testhat_replace(testhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    return (*self->vtable.replace)(self->htable, hv, item, found);        
 }
 
 static inline bool

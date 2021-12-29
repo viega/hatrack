@@ -52,6 +52,17 @@ test_put(testhat_t *self, uint32_t key, uint32_t value)
     testhat_put(self, &precomputed_hashes[key], (void *)item.i, NULL);
 }
 
+/*static*/ inline void
+test_replace(testhat_t *self, uint32_t key, uint32_t value)
+{
+    test_item item;
+
+    item.s.key   = key;
+    item.s.value = value;
+
+    testhat_replace(self, &precomputed_hashes[key], (void *)item.i, NULL);
+}
+
 static inline bool
 test_add(testhat_t *self, uint32_t key, uint32_t value)
 {

@@ -37,6 +37,8 @@ static void            *ballcap_store_get    (ballcap_store_t *, ballcap_t *,
 					      hatrack_hash_t *, bool *);
 static void            *ballcap_store_put    (ballcap_store_t *, ballcap_t *,
 					      hatrack_hash_t *, void *, bool *);
+static void            *ballcap_store_replace(ballcap_store_t *, ballcap_t *,
+					      hatrack_hash_t *, void *, bool *);
 static bool             ballcap_store_add    (ballcap_store_t *, ballcap_t *,
 					      hatrack_hash_t *, void *);
 static void            *ballcap_store_remove (ballcap_store_t *, ballcap_t *,
@@ -76,6 +78,18 @@ ballcap_put(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 
     mmm_start_basic_op();
     ret = ballcap_store_put(self->store, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+ballcap_replace(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void *ret;
+
+    mmm_start_basic_op();
+    ret = ballcap_store_replace(self->store, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -386,6 +400,78 @@ check_bucket_again:
 
             return ret;
         }
+        bix = (bix + 1) & last_slot;
+    }
+    __builtin_unreachable();
+}
+
+static void *
+ballcap_store_replace(ballcap_store_t *self,
+                      ballcap_t       *top,
+                      hatrack_hash_t  *hv,
+                      void            *item,
+                      bool            *found)
+{
+    uint64_t          bix;
+    uint64_t          i;
+    uint64_t          last_slot;
+    ballcap_bucket_t *cur;
+    ballcap_record_t *record;
+    void             *ret;
+
+    last_slot = self->last_slot;
+
+    bix = hatrack_bucket_index(hv, last_slot);
+
+    for (i = 0; i <= last_slot; i++) {
+        cur = &self->buckets[bix];
+        if (hatrack_bucket_unreserved(&cur->hv)) {
+            if (found) {
+                *found = false;
+            }
+            return NULL;
+        }
+        if (hatrack_hashes_eq(hv, &cur->hv)) {
+            if (pthread_mutex_lock(&cur->write_mutex)) {
+                abort();
+            }
+            if (cur->migrated) {
+                pthread_mutex_unlock(&cur->write_mutex);
+                return ballcap_store_replace(top->store, top, hv, item, found);
+            }
+            /* Because we're using locks, there should always be a
+             * record here. We may have to revisit this in the future
+             * if we decide to handle killed threads that are holding
+             * locks when killed.
+             */
+            if (cur->record->deleted) {
+                if (found) {
+                    *found = false;
+                }
+                return NULL;
+            }
+
+            record          = mmm_alloc(sizeof(ballcap_record_t));
+            record->item    = item;
+            record->deleted = false;
+
+            ret = cur->record->item;
+            if (found) {
+                *found = true;
+            }
+            // Since we're overwriting a pre-existing record, we should
+            // inherit its creation time, in terms of our sort order.
+            mmm_copy_create_epoch(record, cur->record);
+            DEBUG_MMM(cur->record, "retired in replace");
+            mmm_retire(cur->record);
+            record->next = cur->record;
+            cur->record  = record;
+            mmm_commit_write(record);
+            pthread_mutex_unlock(&cur->write_mutex);
+
+            return ret;
+        }
+
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();

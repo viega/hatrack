@@ -32,6 +32,9 @@ static void            *woolhat_store_get    (woolhat_store_t *, woolhat_t *,
 static void            *woolhat_store_put    (woolhat_store_t *, woolhat_t *,
 					      hatrack_hash_t *, void *, bool *,
 					      uint64_t);
+static void            *woolhat_store_replace(woolhat_store_t *, woolhat_t *,
+					      hatrack_hash_t *, void *, bool *,
+					      uint64_t);
 static bool             woolhat_store_add    (woolhat_store_t *, woolhat_t *,
 					      hatrack_hash_t *, void *,
 					      uint64_t);
@@ -86,6 +89,20 @@ woolhat_put(woolhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);
     ret   = woolhat_store_put(store, self, hv, item, found, 0);
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+woolhat_replace(woolhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void            *ret;
+    woolhat_store_t *store;
+
+    mmm_start_basic_op();
+    store = atomic_read(&self->store_current);
+    ret   = woolhat_store_replace(store, self, hv, item, found, 0);
     mmm_end_op();
 
     return ret;
@@ -435,6 +452,107 @@ found_history_bucket:
     mmm_retire(head);
 
     return ret;
+}
+
+static void *
+woolhat_store_replace(woolhat_store_t *self,
+                      woolhat_t       *top,
+                      hatrack_hash_t  *hv1,
+                      void            *item,
+                      bool            *found,
+                      uint64_t         count)
+{
+    void              *ret;
+    uint64_t           bix;
+    uint64_t           i;
+    hatrack_hash_t     hv2;
+    woolhat_history_t *bucket;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
+
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+
+    for (i = 0; i < self->last_slot; i++) {
+        bucket = &self->hist_buckets[bix];
+        hv2    = atomic_read(&bucket->hv);
+        if (hatrack_bucket_unreserved(&hv2)) {
+            goto not_found;
+        }
+        if (!hatrack_hashes_eq(hv1, &hv2)) {
+            bix = (bix + 1) & self->last_slot;
+            continue;
+        }
+        goto found_history_bucket;
+    }
+
+not_found:
+    if (found) {
+        *found = false;
+    }
+
+    return NULL;
+
+found_history_bucket:
+    head = atomic_read(&bucket->head);
+
+    if (!head) {
+        goto not_found;
+    }
+
+    if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
+migrate_and_retry:
+        count = count + 1;
+        if (woolhat_help_required(count)) {
+            HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
+            atomic_fetch_add(&top->help_needed, 1);
+            self = woolhat_store_migrate(self, top);
+            ret  = woolhat_store_replace(self, top, hv1, item, found, count);
+            atomic_fetch_sub(&top->help_needed, 1);
+            return ret;
+        }
+        self = woolhat_store_migrate(self, top);
+        return woolhat_store_replace(self, top, hv1, item, found, count);
+    }
+
+    if (!hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
+        goto not_found;
+    }
+
+    candidate       = mmm_alloc(sizeof(woolhat_record_t));
+    candidate->next = hatrack_pflag_set(head, WOOLHAT_F_USED);
+    candidate->item = item;
+
+    mmm_help_commit(head);
+    mmm_copy_create_epoch(candidate, head);
+
+    if (!LCAS(&bucket->head, &head, candidate, WOOLHAT_CTR_REC_INSTALL)) {
+        /* CAS failed. This is either because a flag got updated
+         * (because of a table migration), or because a new record got
+         * added first.  In the later case, we act like our write
+         * happened, and that we got immediately overwritten, before
+         * any read was possible.  We want the caller to delete the
+         * item if appropriate, so when found is passed, we return
+         * *found = true, and return the item passed in as a result.
+         */
+        mmm_retire_unused(candidate);
+
+        if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
+            goto migrate_and_retry;
+        }
+        if (found) {
+            *found = true;
+        }
+        return item;
+    }
+
+    mmm_commit_write(candidate);
+    mmm_retire(head);
+
+    if (found) {
+        *found = true;
+    }
+
+    return head->item;
 }
 
 static bool

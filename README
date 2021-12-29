@@ -180,7 +180,8 @@ have a lot of work remaining:
    automated testing as I make future commits.
 
 4) While I currently have a basic testbed and performance testing rig,
-   I intend to do a lot to improve this.
+   I intend to do a lot to improve this (including a lot of
+   functionality testing that hasn't happened yet).
 
 5) I need to go through the code base, do clean-up and commenting. I'm
    also going to organize the directory structure, etc.
@@ -188,7 +189,5 @@ have a lot of work remaining:
 6) I'm going to write a long document describing the algorithms, that
    will be available in the doc/ directory.
 
-7) I need to add a replace() function to every algorithm.
-
-8) I plan to add a lock-free malloc/free implementation to help remove
+7) I plan to add a lock-free malloc/free implementation to help remove
    malloc implementation locks as a potential bottleneck when testing.
