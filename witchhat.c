@@ -34,6 +34,10 @@ static void              *witchhat_store_put    (witchhat_store_t *,
 						 witchhat_t *,
 						 hatrack_hash_t *, 
 						 void *, bool *, uint64_t);
+static void              *witchhat_store_replace(witchhat_store_t *,
+						 witchhat_t *,
+						 hatrack_hash_t *, 
+						 void *, bool *, uint64_t);
 static bool               witchhat_store_add    (witchhat_store_t *,
 						 witchhat_t *,
 						 hatrack_hash_t *,
@@ -80,6 +84,20 @@ witchhat_put(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);
     ret   = witchhat_store_put(store, self, hv, item, found, 0);
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+witchhat_replace(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+{
+    void *ret;
+    witchhat_store_t *store;    
+
+    mmm_start_basic_op();
+    store = atomic_read(&self->store_current);
+    ret   = witchhat_store_replace(store, self, hv, item, found, 0);
     mmm_end_op();
 
     return ret;
@@ -316,7 +334,7 @@ found_bucket:
         return old_item;
     }
 
-    /* If the CAS failed, there are two options:
+    /* If the CAS failed, there are two possible reasons:
      *
      * 1) Another thread beat us to updating the bucket, in which case
      *    we can consider our update "successful", as if it happened
@@ -333,6 +351,106 @@ found_bucket:
     }
 
     return item;
+}
+
+static void *
+witchhat_store_replace(witchhat_store_t *self,
+		       witchhat_t       *top,
+		       hatrack_hash_t   *hv1,
+		       void             *item,
+		       bool             *found,
+		       uint64_t          count)
+{
+    void              *old_item;
+    uint64_t           bix;
+    uint64_t           i;
+    hatrack_hash_t     hv2;
+    witchhat_bucket_t *bucket;
+    witchhat_record_t  record;
+    witchhat_record_t  candidate;
+    
+    bix  = hatrack_bucket_index(hv1, self->last_slot);
+    
+    for (i = 0; i <= self->last_slot; i++) {
+        bucket = &self->buckets[bix];
+	hv2    = atomic_read(&bucket->hv);
+	if (hatrack_bucket_unreserved(&hv2)) {
+	    goto not_found;
+	}
+	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	    bix = (bix + 1) & self->last_slot;
+	    continue;
+	}
+        goto found_bucket;
+    }
+
+ not_found:
+    if (found) {
+	*found = false;
+    }
+
+    return NULL;
+
+found_bucket:
+    record = atomic_read(&bucket->record);
+    
+    if (record.info & WITCHHAT_F_MOVING) {
+    migrate_and_retry:
+	count = count + 1;
+	if (witchhat_help_required(count)) {
+	    HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
+	    atomic_fetch_add(&top->help_needed, 1);
+	    self     = witchhat_store_migrate(self, top);
+	    old_item =
+		witchhat_store_replace(self, top, hv1, item, found, count);
+	    
+	    atomic_fetch_sub(&top->help_needed, 1);
+	    return old_item;
+	}
+	self = witchhat_store_migrate(self, top);
+	return witchhat_store_replace(self, top, hv1, item, found, count);
+    }
+
+    if (!(record.info & WITCHHAT_F_USED)) {
+	goto not_found;
+    }
+
+    if (record.info & WITCHHAT_F_RMD) {
+	goto not_found;
+    }
+
+
+    old_item       = record.item;
+    candidate.item = item;
+    candidate.info = top->epoch++ | WITCHHAT_F_USED;
+
+    /* If the CAS failed, there are two possible reasons:
+     *
+     * 1) When we checked, no migration was in progress, but when we
+     *    tried to update the record, there was one, in which case we
+     *    need to help.
+     *
+     * 2) Another thread beat us to updating the bucket, in which case
+     *    we will consider our update "successful", as if it happened
+     *    first, and then got overwritten.  In that case, we return
+     *    the item we were going to insert, for the sake of memory
+     *    management. For purposes of ordering, we are claiming that
+     *    we successfully overwrote the old record before the item
+     *    that won the CAS race. But we're unable to return the item,
+     *    because the thing that came along and knocked us out, didn't
+     *    free out memory.
+     */
+    
+    if (!LCAS(&bucket->record, &record, candidate, WITCHHAT_CTR_REC_INSTALL)) {
+	if (record.info & WITCHHAT_F_MOVING) {
+	    goto migrate_and_retry;
+	}
+	goto not_found;
+    }
+    if (found) {
+	*found = true;
+    }
+    return old_item;
 }
 
 static bool
