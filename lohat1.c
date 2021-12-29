@@ -509,9 +509,9 @@ found_history_bucket:
 
 static bool
 lohat1_store_add(lohat1_store_t *self,
-                          lohat1_t       *top,
-                          hatrack_hash_t *hv1,
-                          void           *item)
+                 lohat1_t       *top,
+                 hatrack_hash_t *hv1,
+                 void           *item)
 {
     uint64_t           bix;
     uint64_t           i;

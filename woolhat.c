@@ -439,10 +439,10 @@ found_history_bucket:
 
 static bool
 woolhat_store_add(woolhat_store_t *self,
-                           woolhat_t       *top,
-                           hatrack_hash_t  *hv1,
-                           void            *item,
-                           uint64_t         count)
+                  woolhat_t       *top,
+                  hatrack_hash_t  *hv1,
+                  void            *item,
+                  uint64_t         count)
 {
     uint64_t           bix;
     uint64_t           i;

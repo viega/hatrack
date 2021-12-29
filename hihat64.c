@@ -386,9 +386,9 @@ found_bucket:
 
 static bool
 hihat64_store_add(hihat64_store_t *self,
-                           hihat64_t       *top,
-                           hatrack_hash_t  *hvp,
-                           void            *item)
+                  hihat64_t       *top,
+                  hatrack_hash_t  *hvp,
+                  void            *item)
 {
     uint64_t          bix;
     uint64_t          i;

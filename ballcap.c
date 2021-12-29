@@ -393,9 +393,9 @@ check_bucket_again:
 
 bool
 ballcap_store_add(ballcap_store_t *self,
-		  ballcap_t       *top,
-		  hatrack_hash_t  *hv,
-		  void            *item)
+                  ballcap_t       *top,
+                  hatrack_hash_t  *hv,
+                  void            *item)
 {
     uint64_t          bix;
     uint64_t          i;

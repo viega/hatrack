@@ -314,9 +314,9 @@ swimcap2_store_put(swimcap2_store_t *self,
 
 static bool
 swimcap2_store_add(swimcap2_store_t *self,
-                            swimcap2_t       *top,
-                            hatrack_hash_t   *hv,
-                            void             *item)
+                   swimcap2_t       *top,
+                   hatrack_hash_t   *hv,
+                   void             *item)
 {
     uint64_t           bix;
     uint64_t           i;

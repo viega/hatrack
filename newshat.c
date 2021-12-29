@@ -329,9 +329,9 @@ check_bucket_again:
 
 bool
 newshat_store_add(newshat_store_t *self,
-		  newshat_t       *top,
-		  hatrack_hash_t  *hv,
-		  void            *item)
+                  newshat_t       *top,
+                  hatrack_hash_t  *hv,
+                  void            *item)
 {
     uint64_t          bix;
     uint64_t          i;

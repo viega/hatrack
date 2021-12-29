@@ -335,9 +335,9 @@ swimcap_store_put(swimcap_store_t *self,
 
 static bool
 swimcap_store_add(swimcap_store_t *self,
-		  swimcap_t       *top,
-		  hatrack_hash_t  *hv,
-		  void            *item)
+                  swimcap_t       *top,
+                  hatrack_hash_t  *hv,
+                  void            *item)
 {
     uint64_t          bix;
     uint64_t          i;
