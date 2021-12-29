@@ -340,7 +340,8 @@ found_bucket:
      *    we can consider our update "successful", as if it happened
      *    first, and then got overwritten.  In that case, we return
      *    the item we were going to insert, for the sake of memory
-     *    management.
+     *    management. This would look less weird if we used a callback
+     *    to handle removed records...
      *
      * 2) When we checked, no migration was in progress, but when we
      *    tried to update the record, there was one, in which case we
