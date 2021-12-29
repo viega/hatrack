@@ -34,6 +34,7 @@
 #include "swimcap.h"
 #include "swimcap2.h"
 #include "newshat.h"
+#include "ballcap.h"
 #include "hihat1.h"
 #include "hihat64.h"
 #include "lohat0.h"

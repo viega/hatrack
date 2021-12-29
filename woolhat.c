@@ -223,7 +223,7 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
         return NULL;
     }
 
-    view = realloc(view, num_items * sizeof(hatrack_view_t));
+    view = (hatrack_view_t *)realloc(view, num_items * sizeof(hatrack_view_t));
 
     if (sort) {
         // Unordered buckets should be in random order, so quicksort
@@ -378,7 +378,7 @@ found_history_bucket:
     if (head) {
         mmm_help_commit(head);
         if (hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
-            mmm_set_create_epoch(candidate, mmm_get_create_epoch(head));
+            mmm_copy_create_epoch(candidate, head);
         }
     }
     else {

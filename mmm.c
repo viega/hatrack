@@ -131,6 +131,10 @@ mmm_retire(void *ptr)
 {
     mmm_header_t *cell = mmm_get_header(ptr);
 
+    if (!cell->write_epoch) {
+	DEBUG_MMM(ptr, "No write epoch??");
+	abort();
+    }
 #ifdef HATRACK_DEBUG
 // Algorithms that steal bits from pointers might steal up to
 // three bits, thus the mask of 0x07.
@@ -138,26 +142,25 @@ mmm_retire(void *ptr)
 	DEBUG_MMM(ptr, "Bad alignment on retired pointer.");
 	abort();
     }
-    
+
     // Detect multiple threads adding this to their retire list.
     // Generally, you should be able to avoid this, but with
     // HATRACK_DEBUG on we explicitly check for it.
     if (cell->retire_epoch) {
 	DEBUG_MMM(ptr, "Double free");
+	DEBUG_PTR((void *)atomic_load(&mmm_epoch), "epoch of double free");
 	abort();
 	return;
     }
-
-    if (cell == mmm_retire_list) {
-	abort();
-    }
-
-    DEBUG_MMM(cell->data, "mmm_retire");
 #endif	
     
     cell->retire_epoch = atomic_load(&mmm_epoch);
     cell->next         = mmm_retire_list;
     mmm_retire_list    = cell;
+
+#ifdef HATRACK_DEBUG
+    DEBUG_MMM(cell->data, "mmm_retire");
+#endif    
 
     if (++mmm_retire_ctr & HATRACK_RETIRE_FREQ) {
 	mmm_retire_ctr = 0;

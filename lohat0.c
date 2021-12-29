@@ -360,7 +360,7 @@ found_history_bucket:
     if (head) {
         mmm_help_commit(head);
         if (hatrack_pflag_test(head->next, LOHAT_F_USED)) {
-            mmm_set_create_epoch(candidate, mmm_get_create_epoch(head));
+            mmm_copy_create_epoch(candidate, head);
         }
     }
     else {

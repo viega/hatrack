@@ -210,7 +210,7 @@ static inline void hatrack_debug_mmm(void *, char *);
  * is possible:
  *
  * 1) Our thread runs start_op(), and reads epoch N.
- * 2) Our thread gets SUSPENDED before recording its reservation.
+< * 2) Our thread gets SUSPENDED before recording its reservation.
  * 3) In epoch N+1, another thread retires a piece of the data structure
  *     that was alive in epoch N.
  * 4) Since no reservations are currently recorded for epoch N, the
@@ -595,6 +595,12 @@ mmm_get_create_epoch(void *ptr)
 {
     mmm_header_t *header = mmm_get_header(ptr);
     return header->create_epoch ? header->create_epoch : header->write_epoch;
+}
+
+static inline void
+mmm_copy_create_epoch(void *dst, void *src)
+{
+    mmm_set_create_epoch(dst, mmm_get_create_epoch(src));
 }
 
 #endif

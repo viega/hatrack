@@ -611,11 +611,13 @@ test_condput(test_info_t *info)
     }
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
+            fprintf(stderr, "Get != put\n");
             return false;
         }
     }
     for (i = 0; i < info->range; i++) {
         if (test_put_if_empty(info->dict, i + 1, i + 2)) {
+            fprintf(stderr, "Didn't return false when it should have.\n");
             return false;
         }
         test_remove(info->dict, i + 1);
@@ -623,11 +625,13 @@ test_condput(test_info_t *info)
 
     for (i = 0; i < info->range; i++) {
         if (!test_put_if_empty(info->dict, i + 1, i + 2)) {
+            fprintf(stderr, "Can't reput over a deleted item\n");
             return false;
         }
     }
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 2) {
+            fprintf(stderr, "No consistency in final check\n");
             return false;
         }
     }
@@ -844,12 +848,14 @@ uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 //  clang-format on
 
 char *threadsafe_dicts[] = {
-        "swimcap", "swimcap2",
+    "swimcap", "swimcap2",
     "newshat",
     "witchhat", 
     "hihat1", "hihat1a", "hihat64",
+    "ballcap",
     "woolhat",
-    "lohat0", "lohat1", /*"lohat2",*/
+    "lohat0", "lohat1",
+    /*"lohat2",*/
     NULL
 };
 char *all_dicts[]     = {
@@ -858,14 +864,18 @@ char *all_dicts[]     = {
     "newshat",
     "witchhat", 
     "hihat1", "hihat1a", "hihat64",
+    "ballcap",
     "woolhat",    
-    "lohat0", "lohat1", /*"lohat2",*/
+    "lohat0", "lohat1",
+    /*"lohat2",*/
     NULL
 };
 char *st_dicts[]      = {
     "refhat0",
     NULL
 };
+
+
 
 #ifndef DEFAULT_ITERS
 #define DEFAULT_ITERS 1000000
