@@ -33,6 +33,9 @@ static void            *lohat1_store_get          (lohat1_store_t *, lohat1_t *,
 static void            *lohat1_store_put          (lohat1_store_t *, lohat1_t *,
 						   hatrack_hash_t *, void *,
 						   bool *);
+static void            *lohat1_store_replace      (lohat1_store_t *, lohat1_t *,
+						   hatrack_hash_t *, void *,
+						   bool *);
 static bool             lohat1_store_add          (lohat1_store_t *,
 						   lohat1_t *,
 						   hatrack_hash_t *, void *);
@@ -89,6 +92,21 @@ lohat1_put(lohat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);
     ret   = lohat1_store_put(store, self, hv, item, found);
+    mmm_end_op();
+
+    return ret;
+}
+
+void *
+lohat1_replace(lohat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
+
+{
+    void           *ret;
+    lohat1_store_t *store;
+
+    mmm_start_basic_op();
+    store = atomic_read(&self->store_current);
+    ret   = lohat1_store_replace(store, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -505,6 +523,95 @@ found_history_bucket:
     mmm_retire(head);
 
     return ret;
+}
+
+static void *
+lohat1_store_replace(lohat1_store_t *self,
+                     lohat1_t       *top,
+                     hatrack_hash_t *hv1,
+                     void           *item,
+                     bool           *found)
+{
+    uint64_t           bix;
+    uint64_t           i;
+    hatrack_hash_t     hv2;
+    lohat1_history_t  *bucket;
+    lohat_record_t    *head;
+    lohat_record_t    *candidate;
+    lohat1_indirect_t *ptrbucket;
+
+    bix = hatrack_bucket_index(hv1, self->last_slot);
+
+    for (i = 0; i < self->last_slot; i++) {
+        ptrbucket = &self->ptr_buckets[bix];
+        hv2       = atomic_read(&ptrbucket->hv);
+
+        if (hatrack_bucket_unreserved(&hv2)) {
+            goto not_found;
+        }
+        if (!hatrack_hashes_eq(hv1, &hv2)) {
+            bix = (bix + 1) & self->last_slot;
+            continue;
+        }
+
+        /* If we are the first writer, or if there's a writer ahead of
+         * us who was slow, both the ptr value and the hash value in
+         * the history record may not be set.  If we can't follow the
+         * pointer, we conclude 'not found' and move on.  We don't
+         * bother checking the hash value; the writer might speed up,
+         * and if not, we'll bail when we see a null record.
+         */
+        bucket = atomic_read(&ptrbucket->ptr);
+        if (!bucket) {
+            goto not_found;
+        }
+
+        goto found_history_bucket;
+    }
+
+not_found:
+    if (found) {
+        *found = false;
+    }
+    return NULL;
+
+found_history_bucket:
+    head = atomic_read(&bucket->head);
+
+    if (!head) {
+        goto not_found;
+    }
+
+    if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+migrate_and_retry:
+        self = lohat1_store_migrate(self, top);
+        return lohat1_store_replace(self, top, hv1, item, found);
+    }
+    candidate       = mmm_alloc(sizeof(lohat_record_t));
+    candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
+    candidate->item = item;
+
+    do {
+        if (!hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+            mmm_retire_unused(candidate);
+            goto not_found;
+        }
+        if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+            mmm_retire_unused(candidate);
+            goto migrate_and_retry;
+        }
+        mmm_help_commit(head);
+        mmm_copy_create_epoch(candidate, head);
+    } while (!LCAS(&bucket->head, &head, candidate, LOHAT0_CTR_REC_INSTALL));
+
+    mmm_commit_write(candidate);
+    mmm_retire(head);
+
+    if (found) {
+        *found = true;
+    }
+
+    return head->item;
 }
 
 static bool

@@ -483,7 +483,7 @@ found_history_bucket:
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
 migrate_and_retry:
         self = lohat0_store_migrate(self, top);
-        return lohat0_store_put(self, top, hv1, item, found);
+        return lohat0_store_replace(self, top, hv1, item, found);
     }
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
