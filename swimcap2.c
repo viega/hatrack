@@ -179,15 +179,15 @@ swimcap2_len(swimcap2_t *self)
 hatrack_view_t *
 swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t   *view;
-    swimcap2_store_t *store;
-
-    hatrack_view_t    *p;
-    swimcap2_bucket_t *cur;
-    swimcap2_bucket_t *end;
-    uint64_t           count;
-    uint64_t           last_slot;
-    uint64_t           alloc_len;
+    hatrack_view_t     *view;
+    swimcap2_store_t   *store;
+    swimcap2_contents_t contents;
+    hatrack_view_t     *p;
+    swimcap2_bucket_t  *cur;
+    swimcap2_bucket_t  *end;
+    uint64_t            count;
+    uint64_t            last_slot;
+    uint64_t            alloc_len;
 
     mmm_start_basic_op();
     store     = self->store;
@@ -200,13 +200,14 @@ swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
     count     = 0;
 
     while (cur < end) {
-        if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+        contents = atomic_read(&cur->contents);
+        if (!(contents.info & SWIMCAP2_F_USED)) {
             cur++;
             continue;
         }
         p->hv         = cur->hv;
-        p->item       = cur->item;
-        p->sort_epoch = cur->epoch;
+        p->item       = contents.item;
+        p->sort_epoch = contents.info & ~SWIMCAP2_F_USED;
         count++;
         p++;
         cur++;
@@ -247,10 +248,11 @@ swimcap2_store_new(uint64_t size)
 static void *
 swimcap2_store_get(swimcap2_store_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t           bix;
-    uint64_t           last_slot;
-    uint64_t           i;
-    swimcap2_bucket_t *cur;
+    uint64_t            bix;
+    uint64_t            last_slot;
+    uint64_t            i;
+    swimcap2_bucket_t  *cur;
+    swimcap2_contents_t contents;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -258,16 +260,22 @@ swimcap2_store_get(swimcap2_store_t *self, hatrack_hash_t *hv, bool *found)
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
+            // It's possible the hash has been written, but no item
+            // has yet, so we need to load atomically, then make sure
+            // there's something to return.
+            contents = atomic_read(&cur->contents);
+            if (contents.info & SWIMCAP2_F_USED) {
+                if (found) {
+                    *found = true;
+                }
+                return contents.item;
+            }
+            else {
                 if (found) {
                     *found = false;
                 }
                 return NULL;
             }
-            if (found) {
-                *found = true;
-            }
-            return cur->item;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (found) {
@@ -287,11 +295,12 @@ swimcap2_store_put(swimcap2_store_t *self,
                    void             *item,
                    bool             *found)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    void              *ret;
+    uint64_t            bix;
+    uint64_t            i;
+    uint64_t            last_slot;
+    swimcap2_bucket_t  *cur;
+    swimcap2_contents_t contents;
+    void               *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -299,21 +308,25 @@ swimcap2_store_put(swimcap2_store_t *self,
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
-                cur->item    = item;
-                cur->deleted = false;
-                cur->epoch   = top->next_epoch++;
-                top->item_count++;
+            contents = atomic_load(&cur->contents);
+            if (contents.info & SWIMCAP2_F_DELETED) {
                 if (found) {
                     *found = false;
                 }
-                return NULL;
+                contents.info = top->next_epoch++ | SWIMCAP2_F_USED;
+                ret           = NULL;
+                top->item_count++;
             }
-            ret       = cur->item;
-            cur->item = item;
-            if (found) {
-                *found = true;
+            else {
+                if (found) {
+                    *found = true;
+                }
+                ret = contents.item;
             }
+
+            contents.item = item;
+            atomic_store(&cur->contents, contents);
+
             return ret;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -323,13 +336,14 @@ swimcap2_store_put(swimcap2_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv    = *hv;
-            cur->item  = item;
-            cur->epoch = top->next_epoch++;
+            cur->hv       = *hv;
+            contents.item = item;
+            contents.info = top->next_epoch++ | SWIMCAP2_F_USED;
+            atomic_store(&cur->contents, contents);
+
             if (found) {
                 *found = false;
             }
-
             return NULL;
         }
         bix = (bix + 1) & last_slot;
@@ -344,11 +358,12 @@ swimcap2_store_replace(swimcap2_store_t *self,
                        void             *item,
                        bool             *found)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    void              *ret;
+    uint64_t            bix;
+    uint64_t            i;
+    uint64_t            last_slot;
+    swimcap2_bucket_t  *cur;
+    swimcap2_contents_t contents;
+    void               *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -356,14 +371,19 @@ swimcap2_store_replace(swimcap2_store_t *self,
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
+            contents = atomic_read(&cur->contents);
+
+            if (contents.info & SWIMCAP2_F_DELETED) {
                 if (found) {
                     *found = false;
                 }
                 return NULL;
             }
-            ret       = cur->item;
-            cur->item = item;
+            ret           = contents.item;
+            contents.item = item;
+
+            atomic_store(&cur->contents, contents);
+
             if (found) {
                 *found = true;
             }
@@ -373,7 +393,6 @@ swimcap2_store_replace(swimcap2_store_t *self,
             if (found) {
                 *found = false;
             }
-
             return NULL;
         }
         bix = (bix + 1) & last_slot;
@@ -387,10 +406,11 @@ swimcap2_store_add(swimcap2_store_t *self,
                    hatrack_hash_t   *hv,
                    void             *item)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
+    uint64_t            bix;
+    uint64_t            i;
+    uint64_t            last_slot;
+    swimcap2_bucket_t  *cur;
+    swimcap2_contents_t contents;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -398,14 +418,15 @@ swimcap2_store_add(swimcap2_store_t *self,
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
-                cur->item    = item;
-                cur->deleted = false;
-                cur->epoch   = top->next_epoch;
-                top->item_count++;
-                return true;
+            contents = atomic_read(&cur->contents);
+            if (contents.info & SWIMCAP2_F_USED) {
+                return false;
             }
-            return false;
+            contents.item = item;
+            contents.info = top->next_epoch++ | SWIMCAP2_F_USED;
+            top->item_count++;
+            atomic_store(&cur->contents, contents);
+            return true;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
@@ -414,9 +435,11 @@ swimcap2_store_add(swimcap2_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv    = *hv;
-            cur->item  = item;
-            cur->epoch = top->next_epoch++;
+            cur->hv       = *hv;
+            contents.item = item;
+            contents.info = top->next_epoch++ | SWIMCAP2_F_USED;
+            atomic_store(&cur->contents, contents);
+
             return true;
         }
         bix = (bix + 1) & last_slot;
@@ -430,11 +453,12 @@ swimcap2_store_remove(swimcap2_store_t *self,
                       hatrack_hash_t   *hv,
                       bool             *found)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    void              *ret;
+    uint64_t            bix;
+    uint64_t            i;
+    uint64_t            last_slot;
+    swimcap2_bucket_t  *cur;
+    swimcap2_contents_t contents;
+    void               *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -442,15 +466,17 @@ swimcap2_store_remove(swimcap2_store_t *self,
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (cur->deleted) {
+            contents = atomic_read(&cur->contents);
+            if (contents.info & SWIMCAP2_F_DELETED) {
                 if (found) {
                     *found = false;
                 }
                 return NULL;
             }
 
-            ret          = cur->item;
-            cur->deleted = true;
+            ret           = contents.item;
+            contents.info = SWIMCAP2_F_DELETED;
+            atomic_store(&cur->contents, contents);
             --top->item_count;
 
             if (found) {
@@ -472,14 +498,15 @@ swimcap2_store_remove(swimcap2_store_t *self,
 static void
 swimcap2_migrate(swimcap2_t *self)
 {
-    swimcap2_store_t  *cur_store;
-    swimcap2_store_t  *new_store;
-    swimcap2_bucket_t *cur;
-    swimcap2_bucket_t *target;
-    uint64_t           new_size;
-    uint64_t           cur_last_slot;
-    uint64_t           new_last_slot;
-    uint64_t           i, n, bix;
+    swimcap2_store_t   *cur_store;
+    swimcap2_store_t   *new_store;
+    swimcap2_bucket_t  *cur;
+    swimcap2_bucket_t  *target;
+    swimcap2_contents_t contents;
+    uint64_t            new_size;
+    uint64_t            cur_last_slot;
+    uint64_t            new_last_slot;
+    uint64_t            i, n, bix;
 
     cur_store     = self->store;
     cur_last_slot = cur_store->last_slot;
@@ -488,18 +515,18 @@ swimcap2_migrate(swimcap2_t *self)
     new_store     = swimcap2_store_new(new_size);
 
     for (n = 0; n <= cur_last_slot; n++) {
-        cur = &cur_store->buckets[n];
-        if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+        cur      = &cur_store->buckets[n];
+        contents = atomic_read(&cur->contents);
+        if ((contents.info == SWIMCAP2_F_DELETED)
+            || hatrack_bucket_unreserved(&cur->hv)) {
             continue;
         }
         bix = hatrack_bucket_index(&cur->hv, new_last_slot);
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
             if (hatrack_bucket_unreserved(&target->hv)) {
-                target->hv.w1 = cur->hv.w1;
-                target->hv.w2 = cur->hv.w2;
-                target->item  = cur->item;
-                target->epoch = cur->epoch;
+                target->hv = cur->hv;
+                atomic_store(&target->contents, contents);
                 break;
             }
             bix = (bix + 1) & new_last_slot;

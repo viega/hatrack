@@ -118,8 +118,6 @@ hatrack_pflag_clear(void *ptr, uint64_t flags)
     return (void *)(((uint64_t)ptr) & ~flags);
 }
 
-#ifndef HATRACK_DONT_SORT
 int hatrack_quicksort_cmp(const void *, const void *);
-#endif
 
 #endif

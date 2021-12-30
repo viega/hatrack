@@ -131,11 +131,12 @@ mmm_retire(void *ptr)
 {
     mmm_header_t *cell = mmm_get_header(ptr);
 
+#ifdef HATRACK_DEBUG
+// Don't need this check when not debugging algorithms.
     if (!cell->write_epoch) {
 	DEBUG_MMM(ptr, "No write epoch??");
 	abort();
     }
-#ifdef HATRACK_DEBUG
 // Algorithms that steal bits from pointers might steal up to
 // three bits, thus the mask of 0x07.
     if (hatrack_pflag_test(ptr, 0x07)) {

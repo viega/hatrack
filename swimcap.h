@@ -23,7 +23,12 @@
  *                  amount of time-- enough time to grab a pointer to
  *                  the current store, and to increment a reference
  *                  count in that store.  The lock does not need to
- *                  be held when readers exit.
+ *                  be held through the exit.
+ *
+ *                  On architectures without an atomic 128-bit load
+ *                  instruction, bucket access will be implemented
+ *                  under the hood using locks, thanks to C-11
+ *                  atomics.
  *
  *  Author:         John Viega, john@zork.org
  *
@@ -37,20 +42,28 @@
 #include <pthread.h>
 
 // clang-format off
+enum : uint64_t {
+    SWIMCAP_F_DELETED = 0x8000000000000000,
+    SWIMCAP_F_USED    = 0x4000000000000000
+};
+
 typedef struct {
-    hatrack_hash_t      hv;
-    void               *item;
-    bool                deleted;
-#ifndef HATRACK_DONT_SORT
-    uint64_t            epoch;
-#endif
+    void    *item;
+    uint64_t info;
+} swimcap_contents_t;
+
+typedef struct {
+    alignas(16)
+    _Atomic swimcap_contents_t contents;
+    hatrack_hash_t             hv;
 } swimcap_bucket_t;
 
 typedef struct {
+    alignas(8)
+    _Atomic uint64_t    readers;
     uint64_t            last_slot;
     uint64_t            threshold;
     uint64_t            used_count;
-    _Atomic uint64_t    readers;
     swimcap_bucket_t    buckets[];
 } swimcap_store_t;
 
@@ -58,10 +71,7 @@ typedef struct {
     uint64_t            item_count;
     swimcap_store_t    *store;
     pthread_mutex_t     write_mutex;
-
-#ifndef HATRACK_DONT_SORT
     uint64_t            next_epoch;
-#endif
 } swimcap_t;
 // clang-format on
 

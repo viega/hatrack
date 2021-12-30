@@ -30,9 +30,7 @@ typedef struct {
     hatrack_hash_t hv;
     void          *item;
     bool           deleted;
-#ifndef HATRACK_DONT_SORT
     uint64_t       epoch;
-#endif
 } refhat0_bucket_t;
 
 typedef struct {
@@ -42,9 +40,7 @@ typedef struct {
     uint64_t          used_count;
     uint64_t          item_count;
     refhat0_bucket_t *buckets;
-#ifndef HATRACK_DONT_SORT
     uint64_t          next_epoch;
-#endif
 } refhat0_t;
 
 void            refhat0_init   (refhat0_t *);

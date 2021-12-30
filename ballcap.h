@@ -49,7 +49,7 @@ typedef struct {
     ballcap_record_t    *record;
     bool                 record_retired;
     bool                 migrated;
-    pthread_mutex_t      write_mutex;
+    pthread_mutex_t      mutex;
 } ballcap_bucket_t;
 
 typedef struct {

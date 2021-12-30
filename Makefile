@@ -16,7 +16,7 @@ all: ${PROGNAME} Makefile
 SRCFILES := refhat0.c testhat.c hatrack_common.c lohat0.c counters.c swimcap2.c woolhat.c hihat64.c swimcap.c hihat1a.c debug.c xxhash.c hihat1.c lohat2.c test.c mmm.c witchhat.c newshat.c ballcap.c lohat1.c
 OBJFILES := ${SRCFILES:c=o}
 refhat0.o: refhat0.c refhat0.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h 
-testhat.o: testhat.c testhat.h refhat0.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h swimcap.h swimcap2.h newshat.h hihat1.h hihat64.h lohat0.h lohat_common.h lohat1.h lohat2.h witchhat.h woolhat.h 
+testhat.o: testhat.c testhat.h hatvtable.h refhat0.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h swimcap.h swimcap2.h newshat.h ballcap.h hihat1.h hihat64.h lohat0.h lohat_common.h lohat1.h lohat2.h witchhat.h woolhat.h 
 hatrack_common.o: hatrack_common.c hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h 
 lohat0.o: lohat0.c lohat0.h lohat_common.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h 
 counters.o: counters.c counters.h 
@@ -29,7 +29,7 @@ debug.o: debug.c debug.h config.h
 xxhash.o: xxhash.c xxhash.h 
 hihat1.o: hihat1.c hihat1.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h 
 lohat2.o: lohat2.c lohat2.h lohat_common.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h 
-test.o: test.c hash.h xxhash.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h testhat.h refhat0.h swimcap.h swimcap2.h newshat.h hihat1.h hihat64.h lohat0.h lohat_common.h lohat1.h lohat2.h witchhat.h woolhat.h 
+test.o: test.c hash.h xxhash.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h testhat.h hatvtable.h refhat0.h swimcap.h swimcap2.h newshat.h ballcap.h hihat1.h hihat64.h lohat0.h lohat_common.h lohat1.h lohat2.h witchhat.h woolhat.h 
 mmm.o: mmm.c mmm.h config.h debug.h counters.h hatomic.h hatrack_common.h 
 witchhat.o: witchhat.c witchhat.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h 
 newshat.o: newshat.c newshat.h hatrack_common.h mmm.h config.h debug.h counters.h hatomic.h 

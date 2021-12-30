@@ -886,8 +886,6 @@ char *st_dicts[]      = {
     NULL
 };
 
-
-
 #ifndef DEFAULT_ITERS
 #define DEFAULT_ITERS 1000000
 #endif

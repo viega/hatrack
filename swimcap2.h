@@ -39,11 +39,20 @@
 #include <pthread.h>
 
 // clang-format off
+enum : uint64_t {
+    SWIMCAP2_F_DELETED = 0x8000000000000000,
+    SWIMCAP2_F_USED    = 0x4000000000000000
+};
+
 typedef struct {
-    hatrack_hash_t      hv;
-    void               *item;
-    uint64_t            epoch;
-    bool                deleted;
+    void    *item;
+    uint64_t info;
+} swimcap2_contents_t;
+
+typedef struct {
+    alignas(16)
+    _Atomic swimcap2_contents_t contents;
+    hatrack_hash_t              hv;
 } swimcap2_bucket_t;
 
 typedef struct {

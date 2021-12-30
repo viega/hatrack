@@ -38,7 +38,7 @@ typedef struct {
     bool                 deleted;
     bool                 migrated;
     uint64_t             epoch;
-    pthread_mutex_t      write_mutex;
+    pthread_mutex_t      mutex;
 } newshat_bucket_t;
 
 typedef struct {
