@@ -892,11 +892,12 @@ char *threadsafe_dicts[] = {
     "newshat",
     "hihat1", "hihat1a", "hihat64",
     "witchhat", 
-    "tophat-cst",
+    "tophat-fast",    
     "ballcap",
     "lohat0", "lohat1",
     /*"lohat2",*/
     "woolhat",
+    "tophat-cst",
     NULL
 };
 char *all_dicts[]     = {
@@ -905,11 +906,12 @@ char *all_dicts[]     = {
     "newshat",
     "hihat1", "hihat1a", "hihat64",
     "witchhat",    
-    "tophat-cst",        
+    "tophat-fast",    
     "ballcap",
     "lohat0", "lohat1",
     /*"lohat2",*/
     "woolhat",    
+    "tophat-cst",        
     NULL
 };
 char *st_dicts[]      = {

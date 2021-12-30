@@ -47,6 +47,7 @@ static void tophat_migrate_to_ballcap (tophat_t *, refhat1_t *);
 static void tophat_migrate_to_newshat (tophat_t *, refhat1_t *);
 
 extern ballcap_store_t *ballcap_store_new(uint64_t);
+extern newshat_store_t *newshat_store_new(uint64_t);
 
 static hatrack_vtable_t cst_vtable = {
     .init    = (hatrack_init_func)ballcap_init,
@@ -401,7 +402,7 @@ static void
 tophat_migrate_to_ballcap(tophat_t *tophat, refhat1_t *rhobj)
 {
     ballcap_t         *new_table;
-    uint64_t           i;
+    uint64_t           i, n, bix;
     refhat_bucket_t   *cur;
     ballcap_bucket_t  *target;
     ballcap_record_t  *record;
@@ -410,18 +411,27 @@ tophat_migrate_to_ballcap(tophat_t *tophat, refhat1_t *rhobj)
     new_table        = (ballcap_t *)malloc(sizeof(ballcap_t));
     new_table->store = ballcap_store_new(rhobj->last_slot + 1);
 
-    for (i = 0; i <= rhobj->last_slot; i++) {
-	cur = &rhobj->buckets[i];
+    for (n = 0; n <= rhobj->last_slot; n++) {
+	cur = &rhobj->buckets[n];
 	if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
 	    continue;
 	}
-	target           = &new_table->store->buckets[i];
-	target->hv       = cur->hv;
-	record           = mmm_alloc_committed(sizeof(ballcap_record_t));
-	record->item     = cur->item;
-	target->migrated = false;
-	target->record   = record;
-	mmm_set_create_epoch(record, cur->epoch);
+	bix = hatrack_bucket_index(&cur->hv, rhobj->last_slot);	
+	for (i = 0; i <= rhobj->last_slot; i++) {
+	    target = &new_table->store->buckets[bix];
+	    
+	    if (hatrack_bucket_unreserved(&target->hv)) {	    
+		    target->hv       = cur->hv;
+		    record           = mmm_alloc_committed(sizeof(ballcap_record_t));
+		    record->item     = cur->item;
+		    target->migrated = false;
+		    target->record   = record;
+		    mmm_set_create_epoch(record, cur->epoch);
+		    break;
+	    }
+	    bix = (bix + 1) & rhobj->last_slot;
+		
+	}
     }
 
     new_table->store->used_count = rhobj->item_count;
@@ -437,17 +447,53 @@ tophat_migrate_to_ballcap(tophat_t *tophat, refhat1_t *rhobj)
 static void
 tophat_migrate_to_newshat(tophat_t *tophat, refhat1_t *rhobj)
 {
-    printf("%p\n", &fast_vtable);
-    #if 0
+    newshat_t         *new_table;
+    uint64_t           n, i, bix;
+    refhat_bucket_t   *cur;
+    newshat_bucket_t  *target;
+    tophat_algo_info_t implementation;
+
+    new_table        = (newshat_t *)malloc(sizeof(newshat_t));
+    new_table->store = newshat_store_new(rhobj->last_slot + 1);
+
+    for (n = 0; n <= rhobj->last_slot; n++) {
+	cur = &rhobj->buckets[n];
+	if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+	    continue;
+	}
+	bix = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
+	for (i = 0; i <= rhobj->last_slot; i++) {
+	    target = &new_table->store->buckets[bix];
+	    
+	    if (hatrack_bucket_unreserved(&target->hv)) {
+		target->hv       = cur->hv;
+		target->item     = cur->item;
+		target->epoch    = cur->epoch;
+		target->migrated = false;
+		break;
+	    }
+	    bix = (bix + 1) & rhobj->last_slot;
+	}
+    }
+
+    new_table->store->used_count = rhobj->item_count;
+    new_table->item_count        = rhobj->item_count;
+    new_table->next_epoch        = rhobj->next_epoch;
+    pthread_mutex_init(&new_table->migrate_mutex, NULL);
+    mmm_retire(rhobj);
+    implementation.htable = new_table;
+    implementation.vtable = &fast_vtable;
+    atomic_store(&tophat->implementation, implementation);
+}
+
+#else
+
+    
     epoch                        = atomic_read(&mmm_epoch);
     
     if (epoch < rhobj->next_epoch) {
 	atomic_fetch_add(&mmm_epoch, rhobj->next_epoch - epoch);
     }
-    #endif
-}
-
-#else
 
 static void
 tophat_migrate_to_woolhat(tophat_t *tophat, refhat1_t *rhobj)

@@ -28,7 +28,9 @@
 
 // clang-format off
 
-static newshat_store_t *newshat_store_new    (uint64_t);
+// Not static, because tophat needs to call it, but nonetheless, don't
+// stick it in our public prototypes.
+       newshat_store_t *newshat_store_new    (uint64_t);
 static void             newshat_store_delete (newshat_store_t *);
 static void            *newshat_store_get    (newshat_store_t *, newshat_t *,
 					      hatrack_hash_t *, bool *);
@@ -201,7 +203,7 @@ newshat_view(newshat_t *self, uint64_t *num, bool sort)
     return view;
 }
 
-static newshat_store_t *
+newshat_store_t *
 newshat_store_new(uint64_t size)
 {
     newshat_store_t *ret;
@@ -622,8 +624,7 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
             if (hatrack_bucket_unreserved(&target->hv)) {
-                target->hv.w1 = cur->hv.w1;
-                target->hv.w2 = cur->hv.w2;
+                target->hv    = cur->hv;
                 target->item  = cur->item;
                 target->epoch = cur->epoch;
                 break;
