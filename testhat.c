@@ -104,16 +104,16 @@ testhat_new(char *name)
 
 // clang-format off
 
-hatrack_vtable_t refhat0_vtable = {
-    .init    = (hatrack_init_func)refhat0_init,
-    .get     = (hatrack_get_func)refhat0_get,
-    .put     = (hatrack_put_func)refhat0_put,
-    .replace = (hatrack_replace_func)refhat0_replace,    
-    .add     = (hatrack_add_func)refhat0_add,
-    .remove  = (hatrack_remove_func)refhat0_remove,
-    .delete  = (hatrack_delete_func)refhat0_delete,
-    .len     = (hatrack_len_func)refhat0_len,
-    .view    = (hatrack_view_func)refhat0_view
+hatrack_vtable_t refhat_vtable = {
+    .init    = (hatrack_init_func)refhat_init,
+    .get     = (hatrack_get_func)refhat_get,
+    .put     = (hatrack_put_func)refhat_put,
+    .replace = (hatrack_replace_func)refhat_replace,    
+    .add     = (hatrack_add_func)refhat_add,
+    .remove  = (hatrack_remove_func)refhat_remove,
+    .delete  = (hatrack_delete_func)refhat_delete,
+    .len     = (hatrack_len_func)refhat_len,
+    .view    = (hatrack_view_func)refhat_view
 };
 
 hatrack_vtable_t swimcap_vtable = {
@@ -265,7 +265,7 @@ hatrack_vtable_t woolhat_vtable = {
 static void
 testhat_init_default_algorithms()
 {
-    testhat_register_algorithm("refhat0", &refhat0_vtable, sizeof(refhat0_t));
+    testhat_register_algorithm("refhat", &refhat_vtable, sizeof(refhat_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
     testhat_register_algorithm("swimcap2",
                                &swimcap2_vtable,

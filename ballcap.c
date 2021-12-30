@@ -32,7 +32,9 @@
 
 // clang-format off
 
-static ballcap_store_t *ballcap_store_new    (uint64_t);
+// Not static, because tophat needs to call it, but nonetheless, don't
+// stick it in our public prototypes.
+       ballcap_store_t *ballcap_store_new    (uint64_t);
 static void            *ballcap_store_get    (ballcap_store_t *, ballcap_t *,
 					      hatrack_hash_t *, bool *);
 static void            *ballcap_store_put    (ballcap_store_t *, ballcap_t *,
@@ -241,7 +243,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
     return view;
 }
 
-static ballcap_store_t *
+ballcap_store_t *
 ballcap_store_new(uint64_t size)
 {
     ballcap_store_t *ret;
@@ -681,8 +683,7 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
             if (hatrack_bucket_unreserved(&target->hv)) {
-                target->hv.w1  = cur->hv.w1;
-                target->hv.w2  = cur->hv.w2;
+                target->hv     = cur->hv;
                 target->record = cur->record;
                 break;
             }

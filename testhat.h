@@ -31,7 +31,7 @@
 // Pull in the various implementations.
 
 #include "hatvtable.h"
-#include "refhat0.h"
+#include "refhat.h"
 #include "swimcap.h"
 #include "swimcap2.h"
 #include "newshat.h"
@@ -43,6 +43,7 @@
 #include "lohat2.h"
 #include "witchhat.h"
 #include "woolhat.h"
+#include "tophat.h"
 
 typedef struct {
     hatrack_vtable_t vtable;

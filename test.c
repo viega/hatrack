@@ -858,6 +858,7 @@ uint32_t            del_rate[]      = {100, 10, 3, 0};
 uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 //  clang-format on
 
+#if 0
 char *threadsafe_dicts[] = {
     "swimcap", "swimcap2",
     "newshat",
@@ -870,7 +871,7 @@ char *threadsafe_dicts[] = {
     NULL
 };
 char *all_dicts[]     = {
-    "refhat0",
+    "refhat",
     "swimcap", "swimcap2",
     "newshat",
     "witchhat", 
@@ -882,9 +883,40 @@ char *all_dicts[]     = {
     NULL
 };
 char *st_dicts[]      = {
-    "refhat0",
+    "refhat",
     NULL
 };
+#else
+char *threadsafe_dicts[] = {
+    NULL,
+    "swimcap", "swimcap2",
+    "newshat",
+    "witchhat", 
+    "hihat1", "hihat1a", "hihat64",
+    "ballcap",
+    "woolhat",
+    "lohat0", "lohat1",
+    /*"lohat2",*/
+    NULL
+};
+char *all_dicts[]     = {
+    "refhat",
+    "swimcap", "swimcap2",
+    "newshat",
+    "witchhat", 
+    "hihat1", "hihat1a", "hihat64",
+    "ballcap",
+    "woolhat",    
+    "lohat0", "lohat1",
+    /*"lohat2",*/
+    NULL
+};
+char *st_dicts[]      = {
+    "refhat",
+    NULL
+};
+
+#endif
 
 #ifndef DEFAULT_ITERS
 #define DEFAULT_ITERS 1000000

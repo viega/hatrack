@@ -13,19 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           refhat0.c
+ *  Name:           refhat.c
  *  Description:    A reference hashtable that only works single-threaded.
  *
  *  Author:         John Viega, john@zork.org
  *
  */
 
-#include "refhat0.h"
+#include "refhat.h"
 
-static void refhat0_migrate(refhat0_t *);
+static void refhat_migrate(refhat_t *);
 
 void
-refhat0_init(refhat0_t *self)
+refhat_init(refhat_t *self)
 {
     uint64_t size;
 
@@ -35,15 +35,15 @@ refhat0_init(refhat0_t *self)
     self->used_count = 0;
     self->item_count = 0;
     self->next_epoch = 0;
-    self->buckets = (refhat0_bucket_t *)calloc(size, sizeof(refhat0_bucket_t));
+    self->buckets = (refhat_bucket_t *)calloc(size, sizeof(refhat_bucket_t));
 }
 
 void *
-refhat0_get(refhat0_t *self, hatrack_hash_t *hv, bool *found)
+refhat_get(refhat_t *self, hatrack_hash_t *hv, bool *found)
 {
     uint64_t          bix;
     uint64_t          i;
-    refhat0_bucket_t *cur;
+    refhat_bucket_t *cur;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
 
@@ -73,11 +73,11 @@ refhat0_get(refhat0_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
+refhat_put(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     uint64_t          bix;
     uint64_t          i;
-    refhat0_bucket_t *cur;
+    refhat_bucket_t *cur;
     void             *ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
@@ -105,8 +105,8 @@ refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
-                refhat0_migrate(self);
-                return refhat0_put(self, hv, item, found);
+                refhat_migrate(self);
+                return refhat_put(self, hv, item, found);
             }
             self->used_count++;
             self->item_count++;
@@ -125,11 +125,11 @@ refhat0_put(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 void *
-refhat0_replace(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
+refhat_replace(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     uint64_t          bix;
     uint64_t          i;
-    refhat0_bucket_t *cur;
+    refhat_bucket_t *cur;
     void             *ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
@@ -161,11 +161,11 @@ refhat0_replace(refhat0_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-refhat0_add(refhat0_t *self, hatrack_hash_t *hv, void *item)
+refhat_add(refhat_t *self, hatrack_hash_t *hv, void *item)
 {
     uint64_t          bix;
     uint64_t          i;
-    refhat0_bucket_t *cur;
+    refhat_bucket_t *cur;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
 
@@ -184,8 +184,8 @@ refhat0_add(refhat0_t *self, hatrack_hash_t *hv, void *item)
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
-                refhat0_migrate(self);
-                return refhat0_add(self, hv, item);
+                refhat_migrate(self);
+                return refhat_add(self, hv, item);
             }
             self->used_count++;
             self->item_count++;
@@ -201,11 +201,11 @@ refhat0_add(refhat0_t *self, hatrack_hash_t *hv, void *item)
 }
 
 void *
-refhat0_remove(refhat0_t *self, hatrack_hash_t *hv, bool *found)
+refhat_remove(refhat_t *self, hatrack_hash_t *hv, bool *found)
 {
     uint64_t          bix;
     uint64_t          i;
-    refhat0_bucket_t *cur;
+    refhat_bucket_t *cur;
     void             *ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
@@ -241,25 +241,25 @@ refhat0_remove(refhat0_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void
-refhat0_delete(refhat0_t *self)
+refhat_delete(refhat_t *self)
 {
     free(self->buckets);
     free(self);
 }
 
 uint64_t
-refhat0_len(refhat0_t *self)
+refhat_len(refhat_t *self)
 {
     return self->item_count;
 }
 
 hatrack_view_t *
-refhat0_view(refhat0_t *self, uint64_t *num, bool sort)
+refhat_view(refhat_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t   *view;
     hatrack_view_t   *p;
-    refhat0_bucket_t *cur;
-    refhat0_bucket_t *end;
+    refhat_bucket_t *cur;
+    refhat_bucket_t *end;
 
     view = (hatrack_view_t *)malloc(sizeof(hatrack_view_t) * self->item_count);
     p    = view;
@@ -292,11 +292,11 @@ refhat0_view(refhat0_t *self, uint64_t *num, bool sort)
 }
 
 static void
-refhat0_migrate(refhat0_t *self)
+refhat_migrate(refhat_t *self)
 {
-    refhat0_bucket_t *new_buckets;
-    refhat0_bucket_t *cur;
-    refhat0_bucket_t *target;
+    refhat_bucket_t *new_buckets;
+    refhat_bucket_t *cur;
+    refhat_bucket_t *target;
     uint64_t          new_size;
     uint64_t          new_last_slot;
     uint64_t          i, n, bix;
@@ -305,7 +305,7 @@ refhat0_migrate(refhat0_t *self)
     new_last_slot = new_size - 1;
 
     new_buckets
-        = (refhat0_bucket_t *)calloc(new_size, sizeof(refhat0_bucket_t));
+        = (refhat_bucket_t *)calloc(new_size, sizeof(refhat_bucket_t));
 
     for (n = 0; n <= self->last_slot; n++) {
         cur = &self->buckets[n];
