@@ -47,7 +47,6 @@ struct ballcap_record_st {
 typedef struct {
     hatrack_hash_t       hv;
     ballcap_record_t    *record;
-    bool                 record_retired;
     bool                 migrated;
     pthread_mutex_t      mutex;
 } ballcap_bucket_t;

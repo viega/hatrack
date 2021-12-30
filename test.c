@@ -888,27 +888,28 @@ char *st_dicts[]      = {
 };
 #else
 char *threadsafe_dicts[] = {
-    NULL,
     "swimcap", "swimcap2",
     "newshat",
-    "witchhat", 
     "hihat1", "hihat1a", "hihat64",
+    "witchhat", 
+    "tophat-cst",
     "ballcap",
-    "woolhat",
     "lohat0", "lohat1",
     /*"lohat2",*/
+    "woolhat",
     NULL
 };
 char *all_dicts[]     = {
     "refhat",
     "swimcap", "swimcap2",
     "newshat",
-    "witchhat", 
     "hihat1", "hihat1a", "hihat64",
+    "witchhat",    
+    "tophat-cst",        
     "ballcap",
-    "woolhat",    
     "lohat0", "lohat1",
     /*"lohat2",*/
+    "woolhat",    
     NULL
 };
 char *st_dicts[]      = {

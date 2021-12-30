@@ -165,18 +165,18 @@ newshat_view(newshat_t *self, uint64_t *num, bool sort)
             abort();
         }
         if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
-            if(pthread_mutex_unlock(&cur->mutex)) {
-		abort();
-	    }
+            if (pthread_mutex_unlock(&cur->mutex)) {
+                abort();
+            }
             cur++;
             continue;
         }
         p->hv         = cur->hv;
         p->item       = cur->item;
         p->sort_epoch = cur->epoch;
-	if (pthread_mutex_unlock(&cur->mutex)) {
-	    abort();
-	}
+        if (pthread_mutex_unlock(&cur->mutex)) {
+            abort();
+        }
         count++;
         p++;
         cur++;
@@ -257,16 +257,16 @@ newshat_store_get(newshat_store_t *self,
                     *found = false;
                 }
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return NULL;
             }
             if (found) {
                 *found = true;
             }
             if (pthread_mutex_unlock(&cur->mutex)) {
-		abort();
-	    }
+                abort();
+            }
             return cur->item;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -306,8 +306,8 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return newshat_store_put(top->store, top, hv, item, found);
             }
             if (cur->deleted) {
@@ -319,8 +319,8 @@ check_bucket_again:
                     *found = false;
                 }
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return NULL;
             }
             ret       = cur->item;
@@ -329,8 +329,8 @@ check_bucket_again:
                 *found = true;
             }
             if (pthread_mutex_unlock(&cur->mutex)) {
-		abort();
-	    }
+                abort();
+            }
             return ret;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -339,20 +339,20 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return newshat_store_put(top->store, top, hv, item, found);
             }
             if (!hatrack_bucket_unreserved(&cur->hv)) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 goto check_bucket_again;
             }
             if (self->used_count == self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 self = newshat_store_migrate(self, top);
                 return newshat_store_put(self, top, hv, item, found);
             }
@@ -365,8 +365,8 @@ check_bucket_again:
                 *found = false;
             }
             if (pthread_mutex_unlock(&cur->mutex)) {
-		abort();
-	    }
+                abort();
+            }
             return NULL;
         }
         bix = (bix + 1) & last_slot;
@@ -399,8 +399,8 @@ newshat_store_replace(newshat_store_t *self,
             }
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return newshat_store_put(top->store, top, hv, item, found);
             }
             if (cur->deleted) {
@@ -408,8 +408,8 @@ newshat_store_replace(newshat_store_t *self,
                     *found = false;
                 }
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return NULL;
             }
             ret       = cur->item;
@@ -418,8 +418,8 @@ newshat_store_replace(newshat_store_t *self,
                 *found = true;
             }
             if (pthread_mutex_unlock(&cur->mutex)) {
-		abort();
-	    }
+                abort();
+            }
             return ret;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -456,8 +456,8 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return newshat_store_add(top->store, top, hv, item);
             }
             if (cur->deleted) {
@@ -466,13 +466,13 @@ check_bucket_again:
                 cur->epoch   = top->next_epoch++;
                 top->item_count++;
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return true;
             }
             if (pthread_mutex_unlock(&cur->mutex)) {
-		abort();
-	    }
+                abort();
+            }
             return false;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -481,20 +481,20 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return newshat_store_add(top->store, top, hv, item);
             }
             if (!hatrack_bucket_unreserved(&cur->hv)) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 goto check_bucket_again;
             }
             if (self->used_count == self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 self = newshat_store_migrate(self, top);
                 return newshat_store_add(self, top, hv, item);
             }
@@ -504,8 +504,8 @@ check_bucket_again:
             cur->item  = item;
             cur->epoch = top->next_epoch++;
             if (pthread_mutex_unlock(&cur->mutex)) {
-		abort();
-	    }
+                abort();
+            }
             return true;
         }
         bix = (bix + 1) & last_slot;
@@ -542,8 +542,8 @@ newshat_store_remove(newshat_store_t *self,
             }
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return newshat_store_remove(top->store, top, hv, found);
             }
             if (cur->deleted) {
@@ -551,8 +551,8 @@ newshat_store_remove(newshat_store_t *self,
                     *found = false;
                 }
                 if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                    abort();
+                }
                 return NULL;
             }
 
@@ -564,8 +564,8 @@ newshat_store_remove(newshat_store_t *self,
                 *found = true;
             }
             if (pthread_mutex_unlock(&cur->mutex)) {
-		abort();
-	    }
+                abort();
+            }
             return ret;
         }
         bix = (bix + 1) & last_slot;
@@ -593,8 +593,8 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
         // write.
         new_store = top->store;
         if (pthread_mutex_unlock(&top->migrate_mutex)) {
-	    abort();
-	}
+            abort();
+        }
         return new_store;
     }
     cur_last_slot = store->last_slot;
@@ -639,13 +639,13 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];
         if (pthread_mutex_unlock(&cur->mutex)) {
-	    abort();
-	}
+            abort();
+        }
     }
 
     mmm_retire(store);
     if (pthread_mutex_unlock(&top->migrate_mutex)) {
-	abort();
+        abort();
     }
 
     return new_store;

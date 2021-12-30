@@ -35,14 +35,14 @@ refhat_init(refhat_t *self)
     self->used_count = 0;
     self->item_count = 0;
     self->next_epoch = 0;
-    self->buckets = (refhat_bucket_t *)calloc(size, sizeof(refhat_bucket_t));
+    self->buckets    = (refhat_bucket_t *)calloc(size, sizeof(refhat_bucket_t));
 }
 
 void *
 refhat_get(refhat_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t          bix;
-    uint64_t          i;
+    uint64_t         bix;
+    uint64_t         i;
     refhat_bucket_t *cur;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
@@ -75,10 +75,10 @@ refhat_get(refhat_t *self, hatrack_hash_t *hv, bool *found)
 void *
 refhat_put(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
-    uint64_t          bix;
-    uint64_t          i;
+    uint64_t         bix;
+    uint64_t         i;
     refhat_bucket_t *cur;
-    void             *ret;
+    void            *ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
 
@@ -127,10 +127,10 @@ refhat_put(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 void *
 refhat_replace(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
-    uint64_t          bix;
-    uint64_t          i;
+    uint64_t         bix;
+    uint64_t         i;
     refhat_bucket_t *cur;
-    void             *ret;
+    void            *ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
 
@@ -163,8 +163,8 @@ refhat_replace(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 bool
 refhat_add(refhat_t *self, hatrack_hash_t *hv, void *item)
 {
-    uint64_t          bix;
-    uint64_t          i;
+    uint64_t         bix;
+    uint64_t         i;
     refhat_bucket_t *cur;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
@@ -203,10 +203,10 @@ refhat_add(refhat_t *self, hatrack_hash_t *hv, void *item)
 void *
 refhat_remove(refhat_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t          bix;
-    uint64_t          i;
+    uint64_t         bix;
+    uint64_t         i;
     refhat_bucket_t *cur;
-    void             *ret;
+    void            *ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
 
@@ -256,8 +256,8 @@ refhat_len(refhat_t *self)
 hatrack_view_t *
 refhat_view(refhat_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t   *view;
-    hatrack_view_t   *p;
+    hatrack_view_t  *view;
+    hatrack_view_t  *p;
     refhat_bucket_t *cur;
     refhat_bucket_t *end;
 
@@ -297,15 +297,14 @@ refhat_migrate(refhat_t *self)
     refhat_bucket_t *new_buckets;
     refhat_bucket_t *cur;
     refhat_bucket_t *target;
-    uint64_t          new_size;
-    uint64_t          new_last_slot;
-    uint64_t          i, n, bix;
+    uint64_t         new_size;
+    uint64_t         new_last_slot;
+    uint64_t         i, n, bix;
 
     new_size      = hatrack_new_size(self->last_slot, self->item_count + 1);
     new_last_slot = new_size - 1;
 
-    new_buckets
-        = (refhat_bucket_t *)calloc(new_size, sizeof(refhat_bucket_t));
+    new_buckets = (refhat_bucket_t *)calloc(new_size, sizeof(refhat_bucket_t));
 
     for (n = 0; n <= self->last_slot; n++) {
         cur = &self->buckets[n];

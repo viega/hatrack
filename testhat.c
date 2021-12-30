@@ -260,6 +260,30 @@ hatrack_vtable_t woolhat_vtable = {
     .view    = (hatrack_view_func)woolhat_view
 };
 
+hatrack_vtable_t tophat_cst_vtable = {
+    .init    = (hatrack_init_func)tophat_init_cst,
+    .get     = (hatrack_get_func)tophat_get,
+    .put     = (hatrack_put_func)tophat_put,
+    .replace = (hatrack_replace_func)tophat_replace,    
+    .add     = (hatrack_add_func)tophat_add,
+    .remove  = (hatrack_remove_func)tophat_remove,
+    .delete  = (hatrack_delete_func)tophat_delete,
+    .len     = (hatrack_len_func)tophat_len,
+    .view    = (hatrack_view_func)tophat_view
+};
+
+hatrack_vtable_t tophat_fast_vtable = {
+    .init    = (hatrack_init_func)tophat_init_fast,
+    .get     = (hatrack_get_func)tophat_get,
+    .put     = (hatrack_put_func)tophat_put,
+    .replace = (hatrack_replace_func)tophat_replace,    
+    .add     = (hatrack_add_func)tophat_add,
+    .remove  = (hatrack_remove_func)tophat_remove,
+    .delete  = (hatrack_delete_func)tophat_delete,
+    .len     = (hatrack_len_func)tophat_len,
+    .view    = (hatrack_view_func)tophat_view
+};
+
 // clang-format on
 
 static void
@@ -282,4 +306,10 @@ testhat_init_default_algorithms()
                                &witchhat_vtable,
                                sizeof(witchhat_t));
     testhat_register_algorithm("woolhat", &woolhat_vtable, sizeof(woolhat_t));
+    testhat_register_algorithm("tophat-cst",
+                               &tophat_cst_vtable,
+                               sizeof(tophat_t));
+    testhat_register_algorithm("tophat-fast",
+                               &tophat_fast_vtable,
+                               sizeof(tophat_t));
 }

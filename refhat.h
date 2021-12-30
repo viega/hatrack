@@ -53,9 +53,11 @@ typedef struct {
     uint64_t           next_epoch;
 
     // These are additions to support tophat. They're not used w/in
-    // refhat, but are used by tophat.
+    // refhat, but are used by tophat. The first is a mutex we use
+    // around the hash table, just to protect for when a second
+    // concurrent thread comes along.
+
     pthread_mutex_t    mutex;
-    uint64_t           thread_id;
     // This is used to recover the original tophat instance, when
     // we're dealing w/ a refhat and realize we need to switch to
     // another table type.

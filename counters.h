@@ -173,7 +173,7 @@ void counters_output_alltime(void);
 
 #define HATRACK_CTR_ON(id) atomic_fetch_add(&hatrack_counters[id], 1)
 #define HATRACK_CTR_OFF(id)
-#define HATRACK_YN_ON(x, id) ((x) ? hatrack_yn_ctr_t(id) : hatrack_yn_ctr_f(id))
+#define HATRACK_YN_ON(x, id)  ((x) ? hatrack_yn_ctr_t(id) : hatrack_yn_ctr_f(id))
 #define HATRACK_YN_OFF(x, id) (x)
 
 #else

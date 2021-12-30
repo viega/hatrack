@@ -209,7 +209,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
         }
 
         if (!record || sort_epoch > target_epoch || record->deleted) {
-	    pthread_mutex_unlock(&cur->mutex);
+            pthread_mutex_unlock(&cur->mutex);
             cur++;
             continue;
         }
