@@ -191,7 +191,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
             cur++;
             continue;
         }
-        if (!pthread_mutex_lock(&cur->mutex)) {
+        if (pthread_mutex_lock(&cur->mutex)) {
             abort();
         }
         record = cur->record;
@@ -207,6 +207,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
         }
 
         if (!record || sort_epoch > target_epoch || record->deleted) {
+	    pthread_mutex_unlock(&cur->mutex);
             cur++;
             continue;
         }
