@@ -26,7 +26,10 @@
 #include "witchhat.h"
 
 // clang-format off
-static witchhat_store_t  *witchhat_store_new    (uint64_t);
+
+// Needs to be non-static because tophat needs it; nonetheless, do not
+// export this explicitly; it's effectively a "friend" function not public.
+       witchhat_store_t  *witchhat_store_new    (uint64_t);
 static void              *witchhat_store_get    (witchhat_store_t *,
 						 witchhat_t *,
 						 hatrack_hash_t *, bool *);
@@ -199,7 +202,7 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
     return view;
 }
 
-static witchhat_store_t *
+witchhat_store_t *
 witchhat_store_new(uint64_t size)
 {
     witchhat_store_t *store;

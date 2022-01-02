@@ -25,7 +25,9 @@
 
 // clang-format off
 
-static woolhat_store_t *woolhat_store_new    (uint64_t);
+// Needs to be non-static because tophat needs it; nonetheless, do not
+// export this explicitly; it's effectively a "friend" function not public.
+       woolhat_store_t *woolhat_store_new    (uint64_t);
 static void             woolhat_retire_store (woolhat_store_t *);
 static void            *woolhat_store_get    (woolhat_store_t *, woolhat_t *,
 					      hatrack_hash_t *, bool *);
@@ -248,7 +250,7 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
     return view;
 }
 
-static woolhat_store_t *
+woolhat_store_t *
 woolhat_store_new(uint64_t size)
 {
     woolhat_store_t *store;

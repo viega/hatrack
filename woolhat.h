@@ -49,7 +49,7 @@ enum : uint64_t
 
 typedef struct {
     alignas(16)
-    _Atomic hatrack_hash_t    hv;
+    _Atomic hatrack_hash_t      hv;
     _Atomic(woolhat_record_t *) head;
 } woolhat_history_t;
 

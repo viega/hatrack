@@ -5,8 +5,8 @@ LIBS     :=
 #LIBS     := -L/opt/homebrew/lib -lhoard
 # Needed for linux.
 #LIBS    := -latomic -pthread -lrt -lhoard
-UNUSED   :=  -DHATRACK_MMMALLOC_CTRS  -DHATRACK_COUNTERS 
-#EXTRAS   :=  -DHATRACK_MMM_DEBUG -g
+UNUSED   :=  -DHATRACK_MMMALLOC_CTRS  -DHATRACK_COUNTERS -DHATRACK_MMM_DEBUG -g
+EXTRAS   :=  
 CFLAGS   :=  -std=c11 -Wall -Werror ${OPT} -I../include ${EXTRAS}
 PROGNAME := test
 

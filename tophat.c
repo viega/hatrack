@@ -43,7 +43,6 @@ static uint64_t        tophat_st_len             (refhat1_t *);
 static hatrack_view_t *tophat_st_view            (refhat1_t *, uint64_t *,
 						  bool);
 
-#define TOPHAT_USE_LOCKING_ALGORITHMS
 #ifdef TOPHAT_USE_LOCKING_ALGORITHMS
 
 #include "ballcap.h"
@@ -83,8 +82,12 @@ static hatrack_vtable_t fast_vtable = {
 static void tophat_migrate_to_woolhat (tophat_t *, refhat1_t *);
 static void tophat_migrate_to_witchhat(tophat_t *, refhat1_t *);
 
+
+extern woolhat_store_t  *woolhat_store_new (uint64_t);
+extern witchhat_store_t *witchhat_store_new(uint64_t);
+
 static hatrack_vtable_t cst_vtable = {
-n    .init    = (hatrack_init_func)woolhat_init,
+    .init    = (hatrack_init_func)woolhat_init,
     .get     = (hatrack_get_func)woolhat_get,
     .put     = (hatrack_put_func)woolhat_put,
     .replace = (hatrack_replace_func)woolhat_replace,    
@@ -96,15 +99,15 @@ n    .init    = (hatrack_init_func)woolhat_init,
 };
 
 static hatrack_vtable_t fast_vtable = {
-    .init    = (hatrack_init_func)woolhat_init,
-    .get     = (hatrack_get_func)woolhat_get,
-    .put     = (hatrack_put_func)woolhat_put,
-    .replace = (hatrack_replace_func)woolhat_replace,    
-    .add     = (hatrack_add_func)woolhat_add,
-    .remove  = (hatrack_remove_func)woolhat_remove,
-    .delete  = (hatrack_delete_func)woolhat_delete,
-    .len     = (hatrack_len_func)woolhat_len,
-    .view    = (hatrack_view_func)woolhat_view
+    .init    = (hatrack_init_func)witchhat_init,
+    .get     = (hatrack_get_func)witchhat_get,
+    .put     = (hatrack_put_func)witchhat_put,
+    .replace = (hatrack_replace_func)witchhat_replace,    
+    .add     = (hatrack_add_func)witchhat_add,
+    .remove  = (hatrack_remove_func)witchhat_remove,
+    .delete  = (hatrack_delete_func)witchhat_delete,
+    .len     = (hatrack_len_func)witchhat_len,
+    .view    = (hatrack_view_func)witchhat_view
 };
 
 #endif
@@ -428,7 +431,7 @@ static void
 tophat_migrate_to_ballcap(tophat_t *tophat, refhat1_t *rhobj)
 {
     ballcap_t         *new_table;
-    uint64_t           i, n, bix;
+    uint64_t           i, n, bix, record_len;
     refhat_bucket_t   *cur;
     ballcap_bucket_t  *target;
     ballcap_record_t  *record;
@@ -436,6 +439,7 @@ tophat_migrate_to_ballcap(tophat_t *tophat, refhat1_t *rhobj)
 
     new_table        = (ballcap_t *)malloc(sizeof(ballcap_t));
     new_table->store = ballcap_store_new(rhobj->last_slot + 1);
+    record_len       = sizeof(ballcap_record_t);
 
     for (n = 0; n <= rhobj->last_slot; n++) {
 	cur = &rhobj->buckets[n];
@@ -448,7 +452,7 @@ tophat_migrate_to_ballcap(tophat_t *tophat, refhat1_t *rhobj)
 	    
 	    if (hatrack_bucket_unreserved(&target->hv)) {	    
 		    target->hv       = cur->hv;
-		    record           = mmm_alloc_committed(sizeof(ballcap_record_t));
+		    record           = mmm_alloc_committed(record_len);
 		    record->item     = cur->item;
 		    target->migrated = false;
 		    target->record   = record;
@@ -456,17 +460,19 @@ tophat_migrate_to_ballcap(tophat_t *tophat, refhat1_t *rhobj)
 		    break;
 	    }
 	    bix = (bix + 1) & rhobj->last_slot;
-		
 	}
     }
 
     new_table->store->used_count = rhobj->item_count;
     new_table->item_count        = rhobj->item_count;
     new_table->next_epoch        = rhobj->next_epoch;
+    implementation.htable        = new_table;
+    implementation.vtable        = &cst_vtable;
+    
     pthread_mutex_init(&new_table->migrate_mutex, NULL);
-    implementation.htable = new_table;
-    implementation.vtable = &cst_vtable;
+    
     atomic_store(&tophat->implementation, implementation);
+    
     tophat_st_delete(rhobj);
 }
 
@@ -505,36 +511,109 @@ tophat_migrate_to_newshat(tophat_t *tophat, refhat1_t *rhobj)
     new_table->store->used_count = rhobj->item_count;
     new_table->item_count        = rhobj->item_count;
     new_table->next_epoch        = rhobj->next_epoch;
+    
     pthread_mutex_init(&new_table->migrate_mutex, NULL);
+    
     implementation.htable = new_table;
     implementation.vtable = &fast_vtable;
+    
     atomic_store(&tophat->implementation, implementation);
+    
     tophat_st_delete(rhobj);    
 }
 
 #else
 
-    
-    epoch                        = atomic_read(&mmm_epoch);
-    
-    if (epoch < rhobj->next_epoch) {
-	atomic_fetch_add(&mmm_epoch, rhobj->next_epoch - epoch);
-    }
-
 static void
 tophat_migrate_to_woolhat(tophat_t *tophat, refhat1_t *rhobj)
 {
     woolhat_t         *new_table;
-    uint64_t           n, i, bix;
+    uint64_t           n, i, bix, record_len;
+    hatrack_hash_t     hv;
     refhat_bucket_t   *cur;
-    woolhat_bucket_t  *target;
+    woolhat_history_t *target;
+    woolhat_record_t  *record;
     tophat_algo_info_t implementation;
+
+    new_table                = (woolhat_t *)malloc(sizeof(woolhat_t));
+    new_table->store_current = woolhat_store_new(rhobj->last_slot + 1);
+    record_len               = sizeof(woolhat_record_t);
+    atomic_store(&new_table->help_needed, 0);
+
+    for (n = 0; n <= rhobj->last_slot; n++) {
+	cur = &rhobj->buckets[n];
+	if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+	    continue;
+	}
+	bix = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
+	for (i = 0; i <= rhobj->last_slot; i++) {
+	    target = &new_table->store_current->hist_buckets[bix];
+	    hv     = atomic_load(&target->hv);
+	    
+	    if (hatrack_bucket_unreserved(&hv)) {
+		record         = (woolhat_record_t *)mmm_alloc(record_len);
+		record->item   = cur->item;
+		record->next   = hatrack_pflag_set(NULL, WOOLHAT_F_USED);
+		mmm_set_create_epoch(record, cur->epoch);
+		atomic_store(&target->hv, cur->hv);
+		atomic_store(&target->head, record);
+		break;
+	    }
+	    bix = (bix + 1) & rhobj->last_slot;
+	}
+    }
+    new_table->store_current->used_count = rhobj->item_count;
+    implementation.htable                = new_table;
+    implementation.vtable                = &cst_vtable;
     
+    atomic_store(&tophat->implementation, implementation);
+    
+    tophat_st_delete(rhobj);
 }
 
 static void
 tophat_migrate_to_witchhat(tophat_t *tophat, refhat1_t *rhobj)
 {
+    witchhat_t        *new_table;
+    uint64_t           n, i, bix;
+    hatrack_hash_t     hv;    
+    refhat_bucket_t   *cur;
+    witchhat_bucket_t *target;
+    witchhat_record_t  record;
+    tophat_algo_info_t implementation;
+
+    new_table                = (witchhat_t *)malloc(sizeof(witchhat_t));
+    new_table->store_current = witchhat_store_new(rhobj->last_slot + 1);
+
+    for (n = 0; n <= rhobj->last_slot; n++) {
+	cur = &rhobj->buckets[n];
+	if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+	    continue;
+	}
+	bix         = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
+	record.item = cur->item;
+	record.info = cur->epoch | WITCHHAT_F_USED;
+	
+	for (i = 0; i <= rhobj->last_slot; i++) {
+	    target = &new_table->store_current->buckets[bix];
+	    hv     = atomic_load(&target->hv);
+	    
+	    if (hatrack_bucket_unreserved(&hv)) {
+		atomic_store(&target->hv, cur->hv);
+		atomic_store(&target->record, record);
+		break;
+	    }
+	    bix = (bix + 1) & rhobj->last_slot;
+	}
+    }
+    new_table->store_current->used_count = rhobj->item_count;
+    implementation.htable                = new_table;
+    implementation.vtable                = &fast_vtable;
+    new_table->epoch                     = rhobj->next_epoch;
+    atomic_store(&new_table->help_needed, 0);
+    atomic_store(&tophat->implementation, implementation);
+    
+    tophat_st_delete(rhobj);
 }
 
 #endif

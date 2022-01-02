@@ -188,6 +188,3 @@ have a lot of work remaining:
 
 6) I'm going to write a long document describing the algorithms, that
    will be available in the doc/ directory.
-
-7) I plan to add a lock-free malloc/free implementation to help remove
-   malloc implementation locks as a potential bottleneck when testing.
