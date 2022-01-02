@@ -1042,6 +1042,9 @@ lohat2_store_migrate(lohat2_store_t *self, lohat2_t *top)
                      &old_head,
                      hatrack_pflag_set(old_head, LOHAT_F_MOVED),
                      LOHAT2_CTR_F_MOVED2)) {
+                // Need to not mmm_retire() something without a write epoch
+                // when something is still referencing it.
+                mmm_help_commit(deflagged);
                 mmm_retire(deflagged);
             }
             cur++;

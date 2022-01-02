@@ -23,9 +23,9 @@
 #ifndef __HATRACK_DEBUG_H__
 #define __HATRACK_DEBUG_H__
 
-#ifdef HATRACK_DEBUG
-
 #include "config.h"
+
+#ifdef HATRACK_DEBUG
 
 #include <stdatomic.h>
 #include <string.h>

@@ -24,6 +24,10 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
+#if defined(HATRACK_MMM_DEBUG) && !defined(HATRACK_DEBUG)
+#define HATRACK_DEBUG
+#endif
+
 #ifdef HATRACK_DEBUG
 #ifndef HATRACK_DEBUG_MSG_SIZE
 #define HATRACK_DEBUG_MSG_SIZE 128
@@ -109,6 +113,7 @@
 // Off by default. Uncommment, or turn them on via the compiler.
 // #define HATRACK_ALLOW_TID_GIVEBACKS
 // #define HATRACK_DEBUG
+// #define HATRACK_MMM_DEBUG
 // #define HATRACK_MMMALLOC_CTRS  (requires counters to be turned on).
 // #define SWIMCAP_INCONSISTENT_VIEW_IS_OKAY
 // #define HIHAT64_USE_FULL_HASH

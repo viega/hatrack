@@ -26,16 +26,22 @@
 #include "tophat.h"
 
 // clang-format off
-static void  tophat_init_base         (tophat_t *, bool);
-static void *tophat_st_get            (refhat1_t *, hatrack_hash_t *, bool *);
-static void *tophat_st_put            (refhat1_t *, hatrack_hash_t *, void *,
-				       bool *);
-static void *tophat_st_replace        (refhat1_t *, hatrack_hash_t *, void *,
-				       bool *);
-static bool tophat_st_add             (refhat1_t *, hatrack_hash_t *, void *);
-static void *tophat_st_remove         (refhat1_t *, hatrack_hash_t *, bool *);
-static void tophat_st_delete          (refhat1_t *);
-static void tophat_st_delete_store    (refhat1_t *);
+static void             tophat_init_base         (tophat_t *, bool);
+static void            *tophat_st_get            (refhat1_t *, hatrack_hash_t *,
+						  bool *);
+static void            *tophat_st_put            (refhat1_t *, hatrack_hash_t *,
+						  void *, bool *);
+static void            *tophat_st_replace        (refhat1_t *, hatrack_hash_t *,
+						  void *, bool *);
+static bool            tophat_st_add             (refhat1_t *, hatrack_hash_t *,
+						  void *);
+static void           *tophat_st_remove          (refhat1_t *, hatrack_hash_t *,
+						  bool *);
+static void            tophat_st_delete          (refhat1_t *);
+static void            tophat_st_delete_store    (refhat1_t *);
+static uint64_t        tophat_st_len             (refhat1_t *);
+static hatrack_view_t *tophat_st_view            (refhat1_t *, uint64_t *,
+						  bool);
 
 #define TOPHAT_USE_LOCKING_ALGORITHMS
 #ifdef TOPHAT_USE_LOCKING_ALGORITHMS
@@ -78,7 +84,7 @@ static void tophat_migrate_to_woolhat (tophat_t *, refhat1_t *);
 static void tophat_migrate_to_witchhat(tophat_t *, refhat1_t *);
 
 static hatrack_vtable_t cst_vtable = {
-    .init    = (hatrack_init_func)woolhat_init,
+n    .init    = (hatrack_init_func)woolhat_init,
     .get     = (hatrack_get_func)woolhat_get,
     .put     = (hatrack_put_func)woolhat_put,
     .replace = (hatrack_replace_func)woolhat_replace,    
@@ -110,8 +116,8 @@ static hatrack_vtable_t st_vtable = {
     .add     = (hatrack_add_func)tophat_st_add,
     .remove  = (hatrack_remove_func)tophat_st_remove,
     .delete  = (hatrack_delete_func)tophat_st_delete,
-    .len     = (hatrack_len_func)refhat_len,
-    .view    = (hatrack_view_func)refhat_view
+    .len     = (hatrack_len_func)tophat_st_len,
+    .view    = (hatrack_view_func)tophat_st_view
 };
 
 
@@ -280,7 +286,6 @@ tophat_init_base(tophat_t *self, bool cst)
     info.vtable   = &st_vtable;
     
     refhat_init((refhat_t *)initial_table);
-    
     initial_table->backref   = (void *)self;
 
     pthread_mutex_init(&initial_table->mutex, NULL);
@@ -301,11 +306,9 @@ tophat_st_get(refhat1_t *rhobj, hatrack_hash_t *hv, bool *found)
 {
     void *ret;
 
-    //    pthread_mutex_lock(&rhobj->mutex);
-
+    pthread_mutex_lock(&rhobj->mutex);
     ret = refhat_get((refhat_t *)rhobj, hv, found);
-    
-    //    pthread_mutex_unlock(&rhobj->mutex);
+    pthread_mutex_unlock(&rhobj->mutex);
     
     return ret;
 }
@@ -393,7 +396,30 @@ tophat_st_delete(refhat1_t *rhobj)
 static void
 tophat_st_delete_store(refhat1_t *rhobj)
 {
-    free(rhobj->buckets);   
+    free(rhobj->buckets);
+    pthread_mutex_destroy(&rhobj->mutex);
+}
+
+static uint64_t
+tophat_st_len(refhat1_t *rhobj) {
+    uint64_t ret;
+    
+    pthread_mutex_lock(&rhobj->mutex);
+    ret = refhat_len((refhat_t *)rhobj);
+    pthread_mutex_unlock(&rhobj->mutex);
+
+    return ret;
+}
+
+static hatrack_view_t *
+tophat_st_view(refhat1_t *rhobj, uint64_t *num, bool sort) {
+    hatrack_view_t *ret;
+    
+    pthread_mutex_lock(&rhobj->mutex);
+    ret = refhat_view((refhat_t *)rhobj, num, sort);
+    pthread_mutex_unlock(&rhobj->mutex);
+
+    return ret;
 }
 
 #ifdef TOPHAT_USE_LOCKING_ALGORITHMS
@@ -438,10 +464,10 @@ tophat_migrate_to_ballcap(tophat_t *tophat, refhat1_t *rhobj)
     new_table->item_count        = rhobj->item_count;
     new_table->next_epoch        = rhobj->next_epoch;
     pthread_mutex_init(&new_table->migrate_mutex, NULL);
-    mmm_retire(rhobj);
     implementation.htable = new_table;
     implementation.vtable = &cst_vtable;
     atomic_store(&tophat->implementation, implementation);
+    tophat_st_delete(rhobj);
 }
 
 static void
@@ -480,10 +506,10 @@ tophat_migrate_to_newshat(tophat_t *tophat, refhat1_t *rhobj)
     new_table->item_count        = rhobj->item_count;
     new_table->next_epoch        = rhobj->next_epoch;
     pthread_mutex_init(&new_table->migrate_mutex, NULL);
-    mmm_retire(rhobj);
     implementation.htable = new_table;
     implementation.vtable = &fast_vtable;
     atomic_store(&tophat->implementation, implementation);
+    tophat_st_delete(rhobj);    
 }
 
 #else
@@ -498,6 +524,12 @@ tophat_migrate_to_newshat(tophat_t *tophat, refhat1_t *rhobj)
 static void
 tophat_migrate_to_woolhat(tophat_t *tophat, refhat1_t *rhobj)
 {
+    woolhat_t         *new_table;
+    uint64_t           n, i, bix;
+    refhat_bucket_t   *cur;
+    woolhat_bucket_t  *target;
+    tophat_algo_info_t implementation;
+    
 }
 
 static void

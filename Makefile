@@ -1,11 +1,12 @@
 ENV      := /usr/bin/env
 CC       := cc
-#OPT      := -Ofast -flto 
+OPT      := -Ofast -flto 
 LIBS     := 
+#LIBS     := -L/opt/homebrew/lib -lhoard
 # Needed for linux.
-#LIBS    := -latomic -pthread -lrt
-UNUSED   :=  
-EXTRAS   :=  -DHATRACK_MMMALLOC_CTRS  -DHATRACK_COUNTERS -DHATRACK_DEBUG  -g
+#LIBS    := -latomic -pthread -lrt -lhoard
+UNUSED   :=  -DHATRACK_MMMALLOC_CTRS  -DHATRACK_COUNTERS 
+#EXTRAS   :=  -DHATRACK_MMM_DEBUG -g
 CFLAGS   :=  -std=c11 -Wall -Werror ${OPT} -I../include ${EXTRAS}
 PROGNAME := test
 

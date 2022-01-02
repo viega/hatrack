@@ -649,12 +649,8 @@ found_history_bucket:
         // committed before committing our write.
         atomic_fetch_sub(&self->del_count, 1);
         mmm_help_commit(head);
-
         mmm_commit_write(candidate);
-
-        if (head) {
-            mmm_retire(head);
-        }
+        mmm_retire(head);
     }
     else {
         mmm_commit_write(candidate);
@@ -871,6 +867,9 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
                      &old_head,
                      hatrack_pflag_set(old_head, WOOLHAT_F_MOVED),
                      WOOLHAT_CTR_F_MOVED2)) {
+                // Need to not mmm_retire() something without a write epoch
+                // when something is still referencing it.
+                mmm_help_commit(deflagged);
                 mmm_retire(deflagged);
             }
             continue;

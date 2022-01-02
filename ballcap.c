@@ -321,15 +321,15 @@ ballcap_store_put(ballcap_store_t *self,
     uint64_t          last_slot;
     ballcap_bucket_t *cur;
     ballcap_record_t *record;
+    ballcap_record_t *old_record;
     void             *ret;
 
     last_slot = self->last_slot;
 
     bix = hatrack_bucket_index(hv, last_slot);
 
-    record          = mmm_alloc(sizeof(ballcap_record_t));
-    record->item    = item;
-    record->deleted = false;
+    record       = mmm_alloc(sizeof(ballcap_record_t));
+    record->item = item;
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
@@ -343,12 +343,13 @@ check_bucket_again:
                 mmm_retire_unused(record);
                 return ballcap_store_put(top->store, top, hv, item, found);
             }
+            old_record = cur->record;
             /* Because we're using locks, there should always be a
              * record here. We may have to revisit this in the future
              * if we decide to handle killed threads that are holding
              * locks when killed.
              */
-            if (cur->record->deleted) {
+            if (old_record->deleted) {
                 ret = NULL;
                 if (found) {
                     *found = false;
@@ -356,19 +357,18 @@ check_bucket_again:
                 top->item_count++;
             }
             else {
-                ret = cur->record->item;
+                ret = old_record->item;
                 if (found) {
                     *found = true;
                 }
+                record->next = cur->record;
                 // Since we're overwriting a pre-existing record, we should
                 // inherit its creation time, in terms of our sort order.
                 mmm_copy_create_epoch(record, cur->record);
             }
-            DEBUG_MMM(cur->record, "retired in put");
-            mmm_retire(cur->record);
-            record->next = cur->record;
-            cur->record  = record;
+            cur->record = record;
             mmm_commit_write(record);
+            mmm_retire(old_record);
             pthread_mutex_unlock(&cur->mutex);
 
             return ret;
@@ -380,7 +380,6 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->mutex);
-
                 mmm_retire_unused(record);
                 return ballcap_store_put(top->store, top, hv, item, found);
             }
@@ -406,7 +405,6 @@ check_bucket_again:
             cur->record = record;
             mmm_commit_write(record);
             pthread_mutex_unlock(&cur->mutex);
-
             return ret;
         }
         bix = (bix + 1) & last_slot;
@@ -471,11 +469,10 @@ ballcap_store_replace(ballcap_store_t *self,
             // Since we're overwriting a pre-existing record, we should
             // inherit its creation time, in terms of our sort order.
             mmm_copy_create_epoch(record, cur->record);
-            DEBUG_MMM(cur->record, "retired in replace");
-            mmm_retire(cur->record);
             record->next = cur->record;
             cur->record  = record;
             mmm_commit_write(record);
+            mmm_retire(record->next);
             pthread_mutex_unlock(&cur->mutex);
 
             return ret;
@@ -516,9 +513,6 @@ check_bucket_again:
                 pthread_mutex_unlock(&cur->mutex);
                 return false;
             }
-            DEBUG_PTR(cur->record, "retired in store_add");
-            mmm_retire(cur->record);
-
             goto fill_record;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
@@ -549,6 +543,9 @@ fill_record:
             record->deleted = false;
             cur->record     = record;
             mmm_commit_write(record);
+            if (record->next) {
+                mmm_retire(record->next);
+            }
             pthread_mutex_unlock(&cur->mutex);
 
             return true;
@@ -606,7 +603,6 @@ ballcap_store_remove(ballcap_store_t *self,
             cur->record     = record;
 
             mmm_commit_write(record);
-            DEBUG_PTR(record->next, "Retired in remove");
             mmm_retire(record->next);
 
             --top->item_count;
@@ -615,7 +611,6 @@ ballcap_store_remove(ballcap_store_t *self,
                 *found = true;
             }
             pthread_mutex_unlock(&cur->mutex);
-
             return ret;
         }
         bix = (bix + 1) & last_slot;

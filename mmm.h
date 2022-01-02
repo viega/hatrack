@@ -97,8 +97,14 @@ void mmm_clean_up_before_exit(void);
 static inline void hatrack_debug_mmm(void *, char *);
 
 #define DEBUG_MMM(x, y) hatrack_debug_mmm((void *)(x), y)
+#ifdef HATRACK_MMM_DEBUG
+#define DEBUG_MMM_INTERNAL(x, y) DEBUG_MMM(x, y)
+#else
+#define DEBUG_MMM_INTERNAL(x, y)
+#endif
 #else
 #define DEBUG_MMM(x, y)
+#define DEBUG_MMM_INTERNAL(x, y)
 #endif
 
 #ifdef HATRACK_MMMALLOC_CTRS
@@ -499,7 +505,7 @@ mmm_alloc(uint64_t size)
     mmm_header_t *item        = (mmm_header_t *)calloc(1, actual_size);
 
     HATRACK_MALLOC_CTR();
-    DEBUG_MMM(item->data, "mmm_alloc");
+    DEBUG_MMM_INTERNAL(item->data, "mmm_alloc");
     return (void *)item->data;
 }
 
@@ -511,7 +517,7 @@ mmm_alloc_committed(uint64_t size)
 
     atomic_store(&item->write_epoch, atomic_fetch_add(&mmm_epoch, 1) + 1);
     HATRACK_MALLOC_CTR();
-    DEBUG_MMM(item->data, "mmm_alloc_committed");
+    DEBUG_MMM_INTERNAL(item->data, "mmm_alloc_committed");
     return (void *)item->data;
 }
 
@@ -543,6 +549,7 @@ mmm_commit_write(void *ptr)
      * Either way, we're safe to ignore the return value.
      */
     LCAS(&item->write_epoch, &expected_value, cur_epoch, HATRACK_CTR_COMMIT);
+    DEBUG_MMM_INTERNAL(ptr, "committed");
 }
 
 static inline void
@@ -573,7 +580,7 @@ mmm_help_commit(void *ptr)
 static inline void
 mmm_retire_unused(void *ptr)
 {
-    DEBUG_MMM(ptr, "mmm_retire_unused");
+    DEBUG_MMM_INTERNAL(ptr, "mmm_retire_unused");
     free(mmm_get_header(ptr));
     HATRACK_RETIRE_UNUSED_CTR();
 }

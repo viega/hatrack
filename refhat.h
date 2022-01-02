@@ -49,7 +49,7 @@ typedef struct {
     uint64_t           threshold;
     uint64_t           used_count;
     uint64_t           item_count;
-    refhat_bucket_t  *buckets;
+    refhat_bucket_t   *buckets;
     uint64_t           next_epoch;
 
     // These are additions to support tophat. They're not used w/in

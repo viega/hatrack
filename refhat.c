@@ -305,7 +305,6 @@ refhat_migrate(refhat_t *self)
     new_last_slot = new_size - 1;
 
     new_buckets = (refhat_bucket_t *)calloc(new_size, sizeof(refhat_bucket_t));
-
     for (n = 0; n <= self->last_slot; n++) {
         cur = &self->buckets[n];
         if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
