@@ -19,7 +19,17 @@
  *                  This is a lock-free, and wait freehash table,
  *                  without consistency / full ordering.
  *
- *  Author:         John Viega, john@zork.org
+ *                  Note that witchhat is based on hihat1, with a
+ *                  helping mechanism in place to ensure wait freedom.
+ *                  There are only a few places in hihat1 where we
+ *                  need such a mechanism, so we will only comment on
+ *                  those places.
+ *
+ *                  Refer to hihat1.h and hihat1.c for more detail on
+ *                  the core algorithm, as here, we only comment on
+ *                  the things that are different about witchhat.
+ *
+ *  Author: John Viega, john@zork.org
  *
  */
 
@@ -35,11 +45,9 @@ typedef struct {
 
 enum : uint64_t
 {
-    WITCHHAT_F_USED   = 0x8000000000000000,
-    WITCHHAT_F_MOVING = 0x4000000000000000,
-    WITCHHAT_F_MOVED  = 0x2000000000000000,
-    WITCHHAT_F_RMD    = 0x1000000000000000,
-    WITCHHAT_F_MASK   = 0x8fffffffffffffff
+    WITCHHAT_F_MOVING   = 0x8000000000000000,
+    WITCHHAT_F_MOVED    = 040000000000000000,
+    WITCHHAT_EPOCH_MASK = 0x3fffffffffffffff
 };
 
 typedef struct {
@@ -55,7 +63,7 @@ struct witchhat_store_st {
     uint64_t                    last_slot;
     uint64_t                    threshold;
     _Atomic uint64_t            used_count;
-    _Atomic uint64_t            del_count;
+    _Atomic uint64_t            item_count;
     _Atomic(witchhat_store_t *) store_next;
     alignas(16)
     witchhat_bucket_t           buckets[];
@@ -65,7 +73,7 @@ typedef struct {
     alignas(8)
     _Atomic(witchhat_store_t *) store_current;
     _Atomic uint64_t            help_needed;
-            uint64_t            epoch;
+            uint64_t            next_epoch;
 
 } witchhat_t;
 

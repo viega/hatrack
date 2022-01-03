@@ -70,7 +70,7 @@ swimcap2_init(swimcap2_t *self)
 {
     swimcap2_store_t *store = swimcap2_store_new(HATRACK_MIN_SIZE);
     self->item_count        = 0;
-    self->next_epoch        = 1;
+    self->next_epoch        = 1; // 0 is reserved for empty buckets.
     self->store             = store;
     pthread_mutex_init(&self->write_mutex, NULL);
 
@@ -111,6 +111,11 @@ swimcap2_init(swimcap2_t *self)
  *
  * There are more options with mmm, that we don't use in swimcap. See
  * mmm.c for more details on the algorithm, and options.
+ *
+ * Once the reference is required, we delegate to newshat_store_get()
+ * to do the work. Note that the API (including use of the found
+ * parameter) works as with every other hash table; see refhat.c or
+ * swimcap.c for more details if needed.
  */
 void *
 swimcap2_get(swimcap2_t *self, hatrack_hash_t *hv, bool *found)

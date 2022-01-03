@@ -592,7 +592,7 @@ tophat_migrate_to_witchhat(tophat_t *tophat, refhat1_t *rhobj)
 	}
 	bix         = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
 	record.item = cur->item;
-	record.info = cur->epoch | WITCHHAT_F_USED;
+	record.info = cur->epoch;
 	
 	for (i = 0; i <= rhobj->last_slot; i++) {
 	    target = &new_table->store_current->buckets[bix];
@@ -609,7 +609,7 @@ tophat_migrate_to_witchhat(tophat_t *tophat, refhat1_t *rhobj)
     new_table->store_current->used_count = rhobj->item_count;
     implementation.htable                = new_table;
     implementation.vtable                = &fast_vtable;
-    new_table->epoch                     = rhobj->next_epoch;
+    new_table->next_epoch                = rhobj->next_epoch;
     atomic_store(&new_table->help_needed, 0);
     atomic_store(&tophat->implementation, implementation);
     

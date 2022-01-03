@@ -86,24 +86,25 @@ typedef struct {
 
 /* swimcap2_bucket_t
  *
- * This is also unchanged from swimcap_contents_t.
+ * This is also unchanged from swimcap_bucket_t.
  *
  * Writers will have a write-lock on the hash table before writing to
  * the items in a bucket, but will still need to update the contents
  * field atomically, due to the possiblity of readers operating in
  * parallel to the write. 
  * 
- * We force alignment to 128-bits, for the sake * of performance of
- * atomic operations.
+ * We force alignment to 128-bits, for the sake of performance of
+ * atomic operations, just in case some C compiler somewhere gets it
+ * wrong (Clang certainly does not).
  *
  * Note that the hash value does not need to be updated atomically,
  * even though it is 128 bits. If the hash value is half-stored,
  * readers will experience a 'miss', which is the correct outcome, as
  * if the hash had not been written at all yet.
  *
- * contents -- The contents, per above.
+ * contents -- The contents, per swimcap2_record_t above.
  *
- * hv       -- the hash value associated with the contents / bucket, 
+ * hv       -- The hash value associated with the contents / bucket, 
  *             if any.  Note that the all-zero value maps to "bucket 
  *             is empty". But, as long as the hash function is 
  *             sufficiently random, the hash function doesn't have to 
