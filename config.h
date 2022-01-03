@@ -24,6 +24,18 @@
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
+/* Doing the macro this way forces you to pick a power-of-two boundary
+ * for the hash table size, which is best for alignment, and allows us
+ * to use an & to calculate bucket indicies, instead of the more
+ * expensive mod operator.
+ */
+#if !defined(HATRACK_MIN_SIZE_LOG) || (HATRACK_MIN_SIZE_LOG < 3)
+#define HATRACK_MIN_SIZE_LOG 3
+#endif
+
+#undef HATRACK_MIN_SIZE
+#define HATRACK_MIN_SIZE (1 << HATRACK_MIN_SIZE_LOG)
+
 #if defined(HATRACK_MMM_DEBUG) && !defined(HATRACK_DEBUG)
 #define HATRACK_DEBUG
 #endif
@@ -90,18 +102,6 @@
 #define HATRACK_EPOCH_DEBUG_LEN 8
 #endif
 
-/* Doing the macro this way forces you to pick a power-of-two boundary
- * for the hash table size, which is best for alignment, and allows us
- * to use an & to calculate bucket indicies, instead of the more
- * expensive mod operator.
- */
-#ifndef HATRACK_MIN_SIZE_LOG
-#define HATRACK_MIN_SIZE_LOG 3
-#endif
-
-#undef HATRACK_MIN_SIZE
-#define HATRACK_MIN_SIZE (1 << HATRACK_MIN_SIZE_LOG)
-
 #ifndef HIHAT1a_MIGRATE_SLEEP_TIME_NS
 #define HIHAT1a_MIGRATE_SLEEP_TIME_NS 500000
 #endif
@@ -115,7 +115,7 @@
 // #define HATRACK_DEBUG
 // #define HATRACK_MMM_DEBUG
 // #define HATRACK_MMMALLOC_CTRS  (requires counters to be turned on).
-// #define SWIMCAP_INCONSISTENT_VIEW_IS_OKAY
+// #define SWIMCAP_CONSISTENT_VIEWS
 // #define HIHAT64_USE_FULL_HASH
 // #define HATRACK_MMMALLOC_CTRS
 // #define HATRACK_EXPAND_THRESHOLD

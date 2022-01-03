@@ -162,6 +162,71 @@ O(1) insertions, lookups and deletes.
 Right now, there's no high-level interfaces yet. Each algorithm has a
 low-level interface you can use.
 
+### Logical order of the tables
+
+If you're looking to understand the implementation details better,
+then you can review the source code for the different tables, in
+logical order (I'd built the hihats and the lohats first, and then the
+locking tables to be able to directly compare performance). Generally,
+start with the .h file to get a sense of the data structures, then
+scan the comments in the associated .c file.
+
+1) **refhat**   A simple, fast, single-threaded reference hash table.
+
+2) **swimcap**  A multiple-reader, single writer hash table, using locks,
+                but with optimized locking for readers.
+		
+3) **swimcap2** Like swimcap, but readers do not use locking, and are
+                wait-free. This implementation previews some of the
+		memory management primitives we use in our lock-free
+		implementations.
+		
+4) **newshat**  Also a lock-based implementation, but one that supports
+                multiple readers and multiple writers, using a lock
+                for each bucket. Note that, in this implementation,
+                there is still a single write lock for all writers for
+		when tables resize.
+		
+5) **hihat1**   A mostly-wait free hash table, except when resizing, at
+                which point most operations become lock-free instead.
+		
+6) **hihat64**  A version of hihat1 that doesn't require a 128-bit
+                compare-and-swap operation. Note that, on architectures
+		w/o this operation, hihat1 still works, but C implements
+		the operation using fine-grained locking.
+		
+7) **ballcap**  Uses locks like newshat, but with consistent views,
+                meaning that when you ask for a view (e.g., to
+                iterate), you will get a moment-in-time snapshot with
+                all of the items, that can be sorted reliably by their
+                insertion order.
+		
+8) **lohat0**   A lock-free hash table, that also has consistent,
+                order-preserving views.
+		
+9) **lohat1**   Like lohat0, but trades off space to improve the
+                computational complexity of getting an order-preserving
+		view.
+		
+10) **lohat2**  Like lohat1, but also trades off O(1) lookups to get
+                near-O(n) views (note: I do not generally recommend this
+		trade-off).
+		
+11) **witchhat** A fully wait-free version of hihat1.
+
+12) **woolhat** A fully wait-free version of lohat0.
+
+13) **tophat** A proof of concept illustrating how language
+               implementations can get single-threaded performance
+               until a second thread starts, by waiting until that
+               time to migrate the table to a different
+               implementation. Note, however, that, for general
+               purpose use, witchhat and woolhat both perform
+               admirably, even for single-threaded applications
+               (especially witchhat, when multi-threaded order
+               preservation and consistency are unimportant).
+		
+
 ## Status of this work
 
 Right now, I'm making this available for early comment, but I still

@@ -46,50 +46,94 @@ static void            *swimcap_store_remove (swimcap_store_t *, swimcap_t *,
 static void             swimcap_migrate      (swimcap_t *);
 // clang-format on
 
-/* These macros clean up swimcap_view() to make it more readable.  It
- * uses the configuration variable SWIMCAP_INCONSISTENT_VIEW_IS_OKAY
- * to select whether the function should act as a reader or a writer.
+/* These macros clean up swimcap_view() to make it more readable.  With
+ * swimcap, we allow compile-time configuration to determine whether
+ * views are consistent or not (this is set in stone for all our other
+ * algorithms, except for tophat, where it's runtime selectable).
  *
- * By default, we register as a reader, and live with potential
- * inconsistency.
+ * With consistent views, the results of a call to swimcap_view() are
+ * guaranteed to be a moment-in-time result. To do this, we act like a
+ * writer, grabbing the write-lock to keep the table from mutating
+ * while we are using it.
+ *
+ * Otherwise, we act like a reader, and call the inline functions
+ * swimcap_reader_enter() and swimcap_reader_exit() (defined in
+ * swimcap.h).
+ *
+ * This behavior is controlled with the configuration variable
+ * SWIMCAP_CONSISTENT_VIEWS. Inconsistent views are the default.
  */
-#ifdef SWIMCAP_INCONSISTENT_VIEW_IS_OKAY
+#ifndef SWIMCAP_CONSISTENT_VIEWS
 #define swimcap_viewer_enter(self)       swimcap_reader_enter(self)
 #define swimcap_viewer_exit(self, store) swimcap_reader_exit(store)
 #else
 static inline swimcap_store_t *
 swimcap_viewer_enter(swimcap_t *self)
 {
-    if (pthread_mutex_lock(&self->write_mutex)) {
+    if (pthread_mutex_lock(&self->mutex)) {
         abort();
     }
 
-    return self->store;
+    return self->store_current;
 }
 
 static inline void
 swimcap_viewer_exit(swimcap_t *self, swimcap_store_t *unused)
 {
-    if (pthread_mutex_unlock(&self->write_mutex)) {
+    if (pthread_mutex_unlock(&self->mutex)) {
         abort();
     }
 }
 #endif
 
+/* swimcap_init()
+ * 
+ * It's expected that swimcap instances will be created via the
+ * default malloc.  This function cannot rely on zero-initialization
+ * of its own object.
+ *
+ * For the definition of HATRACK_MIN_SIZE, this is computed in
+ * config.h, since we require hash table buckets to always be sized to
+ * a power of two. To set the size, you instead set the preprocessor
+ * variable HATRACK_MIN_SIZE_LOG.
+ */
 void
 swimcap_init(swimcap_t *self)
 {
     swimcap_store_t *store;
-    store            = swimcap_store_new(HATRACK_MIN_SIZE);
-    self->store      = store;
-    self->item_count = 0;
-    self->next_epoch = 0;
+    store               = swimcap_store_new(HATRACK_MIN_SIZE);
+    self->store_current = store;
+    self->item_count    = 0;
+    self->next_epoch    = 0;
 
-    pthread_mutex_init(&self->write_mutex, NULL);
+    pthread_mutex_init(&self->mutex, NULL);
 
     return;
 }
 
+/* swimcap_get()
+ *
+ * The function atomically acquires the lock for the current store in
+ * order to get a reference to the store and register itself. Then it
+ * releases the lock, and calls the private function
+ * swimcap_store_get() on the store, in order to do the rest of the
+ * work. Note that a writer might change the store before we are done,
+ * but that's okay-- new readers might end up in the new store, but
+ * we'll still get a consistent view of the table, and the memory will
+ * not be freed out from under us while we are reading (see
+ * swimcap_migrate).
+ *
+ * This function takes the hash value of the item to look up, but you
+ * do NOT pass the actual key to this API. There's no need, because we
+ * aren't storing it, and it isn't being used in any identity test
+ * (the hash value itself is sufficient).
+ *
+ * Since we accept any values when inserting into the table, the
+ * caller might need to be able to differentiate whether or not the
+ * item was in the table. If so, you can pass a non-null address in
+ * the found parameter, and the memory location will be set to true if
+ * the item was in the table, and false if it was not.
+ */
 void *
 swimcap_get(swimcap_t *self, hatrack_hash_t *hv, bool *found)
 {
@@ -103,96 +147,204 @@ swimcap_get(swimcap_t *self, hatrack_hash_t *hv, bool *found)
     return ret;
 }
 
+/* swimcap_put()
+ *
+ * Lock the hash table for writing, and when we get ownership of the
+ * lock, perform a 'put' operation in the current store (via
+ * swimcap_store_put()), migrating the store if needed.
+ *
+ * 'Put' inserts into the table, whether or not the associated hash
+ * value already has a stored item. If it does have a stored item, the
+ * old value will be returned (so that it can be deleted, if
+ * necessary; the table does not do memory management for the actual
+ * contents). Also, if you pass a memory address in the found
+ * parameter, the associated memory location will get the value true
+ * if the item was already in the table, and false otherwise.
+ *
+ * Note that, if you're using a key and a value, pass them together
+ * in a single object in the item parameter.
+ */
 void *
 swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
 
-    if (pthread_mutex_lock(&self->write_mutex)) {
+    if (pthread_mutex_lock(&self->mutex)) {
         abort();
     }
 
-    ret = swimcap_store_put(self->store, self, hv, item, found);
+    ret = swimcap_store_put(self->store_current, self, hv, item, found);
 
-    if (pthread_mutex_unlock(&self->write_mutex)) {
+    if (pthread_mutex_unlock(&self->mutex)) {
         abort();
     }
 
     return ret;
 }
 
+/* swimcap_replace()
+ *
+ * Lock the hash table for writing, and when we get ownership of the
+ * lock, perform a 'replace' operation in the current store (via
+ * swimcap_store_replace()). This cannot lead to a store migration.
+ *
+ * The 'replace' operation swaps out the old value for the new value
+ * provided, returning the old value, for purposes of the caller doing
+ * any necessary memory allocation.  If there was not already an
+ * associated item with the correct hash in the table, then NULL will
+ * be returned, and the memory location referred to in the found
+ * parameter will, if not NULL, be set to false.
+ *
+ * If you want the value to be set, whether or not the item was in the
+ * table, then use swimcap_put().
+ *
+ * Note that, if you're using a key and a value, pass them together
+ * in a single object in the item parameter.
+ */
 void *
 swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
 
-    if (pthread_mutex_lock(&self->write_mutex)) {
+    if (pthread_mutex_lock(&self->mutex)) {
         abort();
     }
 
-    ret = swimcap_store_replace(self->store, self, hv, item, found);
+    ret = swimcap_store_replace(self->store_current, self, hv, item, found);
 
-    if (pthread_mutex_unlock(&self->write_mutex)) {
+    if (pthread_mutex_unlock(&self->mutex)) {
         abort();
     }
 
     return ret;
 }
 
+/* swimcap_add()
+ *
+ * Lock the hash table for writing, and when we get ownership of the
+ * lock, perform a 'add' operation in the current store (via
+ * swimcap_store_add()).
+ *
+ * The 'add' operation adds an item to the hash table, but only if
+ * there isn't currently an item stored with the associated hash
+ * value.  If the item would lead to 75% of the buckets being in use,
+ * then a table migration will occur (via swimhat_migrate())
+ *
+ * If an item previously existed, but has since been deleted, the 
+ * add operation will still succeed.
+ *
+ * Returns true if the insertion is succesful, and false otherwise.
+ */
 bool
 swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
 {
     bool ret;
-    if (pthread_mutex_lock(&self->write_mutex)) {
+    if (pthread_mutex_lock(&self->mutex)) {
         abort();
     }
 
-    ret = swimcap_store_add(self->store, self, hv, item);
+    ret = swimcap_store_add(self->store_current, self, hv, item);
 
-    if (pthread_mutex_unlock(&self->write_mutex)) {
+    if (pthread_mutex_unlock(&self->mutex)) {
         abort();
     }
 
     return ret;
 }
 
+/* swimcap_remove()
+ *
+ * Lock the hash table for writing, and when we get ownership of the
+ * lock, perform a 'remove' operation in the current store (via
+ * swimcap_store_remove()).
+ *
+ * The 'remove' operation removes an item to the hash table, if it is
+ * already present (i.e., if there is currently an item stored with
+ * the associated hash value, at the time of the operation).  If the
+ * item would lead to 75% of the buckets being in use, then a table
+ * migration will occur (via swimhat_migrate())
+ *
+ * If an item was successfully removed, the old item will be returned
+ * (for purposes of memory management), and the value true will be
+ * written to the memory address provided in the 'found' parameter, if
+ * appropriate.  If the item wasn't in the table at the time of the
+ * operation, then NULL gets returned, and 'found' gets set to false,
+ * when a non-NULL address is provided.
+ *
+ * If an item previously existed, but has since been deleted, the
+ * behavior is the same as if the item was never in the table.
+ */
 void *
 swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
 {
     void *ret;
 
-    if (pthread_mutex_lock(&self->write_mutex)) {
+    if (pthread_mutex_lock(&self->mutex)) {
         abort();
     }
 
-    ret = swimcap_store_remove(self->store, self, hv, found);
+    ret = swimcap_store_remove(self->store_current, self, hv, found);
 
-    if (pthread_mutex_unlock(&self->write_mutex)) {
+    if (pthread_mutex_unlock(&self->mutex)) {
         abort();
     }
 
     return ret;
 }
 
+/*
+ * swimcap_delete()
+ *
+ * Deletes a swimcap object. Generally, you should be confident that
+ * all threads except the one from which you're calling this have
+ * stopped using the table (generally meaning they no longer hold a
+ * reference to the store).  
+ *
+ * Note that this function assumes the swimcap object was allocated
+ * via the default malloc. If it wasn't, don't call this directly, but
+ * do note that the stores were created via the system malloc, and the
+ * most recent store will need to be freed (and the mutex destroyed).
+ *
+ * This is particularly important, not just because you might use
+ * memory after freeing it (a reliability and security concern), but
+ * also because using a mutex after it's destroyed is undefined. In
+ * practice, there's a good chance that any thread waiting on this
+ * mutex when it's destroyed will hang indefinitely.
+ */
 void
 swimcap_delete(swimcap_t *self)
 {
-    // Wait for all the readers to exit the store.
-    while (atomic_load(&self->store->readers))
-        ;
-    pthread_mutex_destroy(&self->write_mutex);
-    free(self->store);
+    pthread_mutex_destroy(&self->mutex);
+    free(self->store_current);
     free(self);
 
     return;
 }
 
+/* swimcap_len()
+ *
+ * Returns the approximate number of items currently in the
+ * table. Note that we strongly discourage using this call, since it
+ * is close to meaningless in multi-threaded programs, as the value at
+ * the time of check could be dramatically different by the time of
+ * use.
+ */
 uint64_t
 swimcap_len(swimcap_t *self)
 {
     return self->item_count;
 }
 
+/* swimcap_view()
+ * 
+ * This returns an array of hatrack_view_t items, representing all of
+ * the items in the hash table, for the purposes of iterating over the
+ * items, for any reason. The number of items in the view will be
+ * stored in the memory address pointed to by the second parameter,
+ * num. If the third parameter (sort) is set to true, then quicksort
+ * will be used to sort the items in the view, based on the insertion
+ * order.
+ */
 hatrack_view_t *
 swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 {
@@ -247,6 +399,21 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
     return view;
 }
 
+static swimcap_store_t *
+swimcap_store_new(uint64_t size)
+{
+    swimcap_store_t *ret;
+    uint64_t         alloc_len;
+
+    alloc_len      = sizeof(swimcap_store_t);
+    alloc_len     += size * sizeof(swimcap_bucket_t);
+    ret            = (swimcap_store_t *)calloc(1, alloc_len);
+    ret->last_slot = size - 1;
+    ret->threshold = hatrack_compute_table_threshold(size);
+
+    return ret;
+}
+
 static void *
 swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
 {
@@ -262,9 +429,11 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
-            // It's possible the hash has been written, but no item
-            // has yet, so we need to load atomically, then make sure
-            // there's something to return.
+	    /* Since readers can run concurrently to writers, it is
+	     * possible the hash has been written, but no item has
+	     * been written yet. So we need to load atomically, then
+	     * make sure there's something to return.
+	     */
             contents = atomic_read(&cur->contents);
             if (contents.info & SWIMCAP_F_USED) {
                 if (found) {
@@ -290,20 +459,6 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
     __builtin_unreachable();
 }
 
-static swimcap_store_t *
-swimcap_store_new(uint64_t size)
-{
-    swimcap_store_t *ret;
-
-    ret            = (swimcap_store_t *)calloc(1,
-                                    sizeof(swimcap_store_t)
-                                        + size * sizeof(swimcap_bucket_t));
-    ret->last_slot = size - 1;
-    ret->threshold = hatrack_compute_table_threshold(size);
-
-    return ret;
-}
-
 static void *
 swimcap_store_put(swimcap_store_t *self,
                   swimcap_t       *top,
@@ -325,6 +480,13 @@ swimcap_store_put(swimcap_store_t *self,
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
             contents = atomic_load(&cur->contents);
+	    /* If the item has never existed (or at least, hasn't
+	     * existed since the last migration operation),
+	     * contents.info will be 0. But if it has existed, but has
+	     * been deleted, this flag will be set. From the point of
+	     * view of the caller, both scenarios are the same thing--
+	     * the item was not in the table.
+	     */
             if (contents.info & SWIMCAP_F_DELETED) {
                 if (found) {
                     *found = false;
@@ -332,6 +494,8 @@ swimcap_store_put(swimcap_store_t *self,
                 contents.info = top->next_epoch++ | SWIMCAP_F_USED;
                 ret           = NULL;
                 top->item_count++;
+		// The bucket has already been used, so we do NOT bump
+		// used_count in this case.
             }
             else {
                 if (found) {
@@ -348,7 +512,11 @@ swimcap_store_put(swimcap_store_t *self,
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
-                return swimcap_store_put(top->store, top, hv, item, found);
+                return swimcap_store_put(top->store_current,
+					 top,
+					 hv,
+					 item,
+					 found);
             }
             self->used_count++;
             top->item_count++;
@@ -389,7 +557,17 @@ swimcap_store_replace(swimcap_store_t *self,
         if (hatrack_hashes_eq(hv, &cur->hv)) {
             contents = atomic_read(&cur->contents);
 
-            if (contents.info & SWIMCAP_F_DELETED) {
+	    /* If the item has never existed (or at least, hasn't
+	     * existed since the last migration operation),
+	     * contents.info will be 0. If it's previously been in the
+	     * table and deleted, SWIMCAP_F_USED will be off, and
+	     * SWIMCAP_F_DELETED will be on. Since we only want to add
+	     * if the item isn't in the table, we simply have to check
+	     * to see if SWIMCAP_F_USED is set; if it isn't, we don't
+	     * care which of the other two cases apply; they're
+	     * basically the same to us.
+	     */
+            if (!(contents.info & SWIMCAP_F_USED)) {
                 if (found) {
                     *found = false;
                 }
@@ -432,9 +610,20 @@ swimcap_store_add(swimcap_store_t *self,
     bix       = hatrack_bucket_index(hv, last_slot);
 
     for (i = 0; i <= last_slot; i++) {
-        cur = &self->buckets[bix];
+        cur = &self->buckets[bix];	
         if (hatrack_hashes_eq(hv, &cur->hv)) {
             contents = atomic_read(&cur->contents);
+
+	    /* If the item has never existed (or at least, hasn't
+	     * existed since the last migration operation),
+	     * contents.info will be 0. If it's previously been in the
+	     * table and deleted, SWIMCAP_F_USED will be off, and
+	     * SWIMCAP_F_DELETED will be on. Since we only want to add
+	     * if the item isn't in the table, we simply have to check
+	     * to see if SWIMCAP_F_USED is set; if it isn't, we don't
+	     * care which of the other two cases apply; they're
+	     * basically the same to us.
+	     */
             if (contents.info & SWIMCAP_F_USED) {
                 return false;
             }
@@ -444,10 +633,13 @@ swimcap_store_add(swimcap_store_t *self,
             atomic_store(&cur->contents, contents);
             return true;
         }
+
+	// In this branch, there's definitely nothing there at the
+	// time of the operation, and we should add.
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
-                return swimcap_store_add(top->store, top, hv, item);
+                return swimcap_store_add(top->store_current, top, hv, item);
             }
             self->used_count++;
             top->item_count++;
@@ -483,7 +675,9 @@ swimcap_store_remove(swimcap_store_t *self,
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
             contents = atomic_read(&cur->contents);
-            if (contents.info & SWIMCAP_F_DELETED) {
+
+	    // If the used flag isn't set, there's no item to remove.
+            if (!(contents.info & SWIMCAP_F_USED)) {
                 if (found) {
                     *found = false;
                 }
@@ -511,6 +705,13 @@ swimcap_store_remove(swimcap_store_t *self,
     __builtin_unreachable();
 }
 
+/* swimcap_migrate()
+ *
+ * When we call this, we will have a write lock on the table, so it's
+ * mostly straightforward to migrate. We only need to make sure that
+ * all reader are done reading out of the old store, before we delete
+ * it.
+ */
 static void
 swimcap_migrate(swimcap_t *self)
 {
@@ -524,7 +725,7 @@ swimcap_migrate(swimcap_t *self)
     uint64_t           new_last_slot;
     uint64_t           i, n, bix;
 
-    cur_store     = self->store;
+    cur_store     = self->store_current;
     cur_last_slot = cur_store->last_slot;
 
     new_size = hatrack_new_size(cur_store->last_slot, swimcap_len(self) + 1);
@@ -535,8 +736,7 @@ swimcap_migrate(swimcap_t *self)
     for (n = 0; n <= cur_last_slot; n++) {
         cur      = &cur_store->buckets[n];
         contents = atomic_read(&cur->contents);
-        if ((contents.info == SWIMCAP_F_DELETED)
-            || hatrack_bucket_unreserved(&cur->hv)) {
+        if (!(contents.info & SWIMCAP_F_USED)) {
             continue;
         }
         bix = hatrack_bucket_index(&cur->hv, new_last_slot);
@@ -552,9 +752,10 @@ swimcap_migrate(swimcap_t *self)
     }
 
     new_store->used_count = self->item_count;
-    self->store           = new_store;
+    self->store_current   = new_store;
 
-    // Wait for all the readers to exit the store.
+    // Busy-wait for all the readers to exit the old store, before
+    // releasing the old store's memory.
     while (atomic_load(&cur_store->readers))
         ;
     free(cur_store);
