@@ -51,7 +51,7 @@ hihat1a_init(hihat1_t *self)
     hihat1_store_t *store;
 
     store       = hihat1a_store_new(HATRACK_MIN_SIZE);
-    self->epoch = 0;
+    self->epoch = 1;
     atomic_store(&self->store_current, store);
 }
 
@@ -77,7 +77,7 @@ hihat1a_put(hihat1_t *self, hatrack_hash_t *hv, void *item, bool *found)
 
     mmm_start_basic_op();
     store = atomic_read(&self->store_current);    
-    ret = hihat1a_store_put(store, self, hv, item, found);
+    ret   = hihat1a_store_put(store, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -135,7 +135,7 @@ hihat1a_delete(hihat1_t *self)
 uint64_t
 hihat1a_len(hihat1_t *self)
 {
-    return self->store_current->used_count - self->store_current->del_count;
+    return self->store_current->item_count;
 }
 
 // This version cannot be linearized.
@@ -166,7 +166,7 @@ hihat1a_view(hihat1_t *self, uint64_t *num, bool sort)
         record        = atomic_read(&cur->record);
         p->hv         = hv;
         p->item       = record.item;
-        p->sort_epoch = record.info & HIHAT_F_MASK;
+        p->sort_epoch = record.info & HIHAT_EPOCH_MASK;
 
         p++;
         cur++;
@@ -205,7 +205,7 @@ hihat1a_store_new(uint64_t size)
     store->last_slot  = size - 1;
     store->threshold  = hatrack_compute_table_threshold(size);
     store->used_count = ATOMIC_VAR_INIT(0);
-    store->del_count  = ATOMIC_VAR_INIT(0);
+    store->item_count = ATOMIC_VAR_INIT(0);
     store->store_next = ATOMIC_VAR_INIT(NULL);
 
     return store;
@@ -237,7 +237,7 @@ hihat1a_store_get(hihat1_store_t *self,
         }
 
         record = atomic_read(&bucket->record);
-        if (record.info & HIHAT_F_USED) {
+        if (record.info & HIHAT_EPOCH_MASK) {
             if (found) {
                 *found = true;
             }
@@ -260,6 +260,7 @@ hihat1a_store_put(hihat1_store_t *self,
                  bool           *found)
 {
     void            *old_item;
+    bool             new_item;    
     uint64_t         bix;
     uint64_t         i;
     hatrack_hash_t   hv2;
@@ -296,22 +297,28 @@ found_bucket:
 	goto migrate_and_retry;
     }
 
-    if (found) {
-        if (record.info & HIHAT_F_USED) {
+    if (record.info & HIHAT_EPOCH_MASK) {
+	if (found) {
             *found = true;
         }
-        else {
+	old_item       = record.item;
+	new_item       = false;
+	candidate.info = record.info;
+    }
+    else {
+        if (found) {
             *found = false;
         }
+	old_item = NULL;
+	new_item = true;
+	candidate.info = top->epoch++;
     }
 
-    old_item       = record.item;
     candidate.item = item;
-    candidate.info = top->epoch++ | HIHAT_F_USED;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT1_CTR_REC_INSTALL)) {
-        if (record.info & HIHAT_F_RMD) {
-            atomic_fetch_sub(&self->del_count, 1);
+	if (new_item) {
+            atomic_fetch_add(&self->item_count, 1);
         }
         return old_item;
     }
@@ -366,17 +373,13 @@ hihat1a_store_replace(hihat1_store_t *self,
 	return hihat1a_store_replace(self, top, hv1, item, found);
     }
 
-    if (!(record.info & HIHAT_F_USED)) {
+    if (!record.info) {
 	goto not_found;
     }
 
-    if (found) {
-	*found = true;
-    }
-    
     old_item       = record.item;
     candidate.item = item;
-    candidate.info = top->epoch++ | HIHAT_F_USED;
+    candidate.info = record.info;
 
     /* If we lose the compare and swap, since we're not storing
      * history data, we have two options; we can pretend we overwrote
@@ -400,11 +403,9 @@ hihat1a_store_replace(hihat1_store_t *self,
 	if (record.info & HIHAT_F_MOVING) {
 	    goto migrate_and_retry;
 	}
-	candidate.info = top->epoch++ | HIHAT_F_USED;
-    }
-
-    if (record.info & HIHAT_F_RMD) {
-	goto not_found;
+	if (!record.info) {
+	    goto not_found;
+	}
     }
 
     if (found) {
@@ -417,9 +418,9 @@ hihat1a_store_replace(hihat1_store_t *self,
 
 static bool
 hihat1a_store_add(hihat1_store_t *self,
-                          hihat1_t       *top,
-                          hatrack_hash_t *hv1,
-                          void           *item)
+		  hihat1_t       *top,
+		  hatrack_hash_t *hv1,
+		  void           *item)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -458,17 +459,15 @@ found_bucket:
     if (record.info & HIHAT_F_MOVING) {
 	goto migrate_and_retry;
     }
-    if (record.info & HIHAT_F_USED) {
+    if (record.info) {
         return false;
     }
 
     candidate.item = item;
-    candidate.info = top->epoch++ | HIHAT_F_USED;
+    candidate.info = top->epoch++;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT1_CTR_REC_INSTALL)) {
-        if (record.info & HIHAT_F_RMD) {
-            atomic_fetch_sub(&self->del_count, 1);
-        }
+	atomic_fetch_add(&self->item_count, 1);
         return true;
     }
     if (record.info & HIHAT_F_MOVING) {
@@ -521,7 +520,7 @@ found_bucket:
 	self = hihat1a_store_migrate(self, top);
         return hihat1a_store_remove(self, top, hv1, found);
     }
-    if (!(record.info & HIHAT_F_USED)) {
+    if (!record.info) {
         if (found) {
             *found = false;
         }
@@ -531,10 +530,10 @@ found_bucket:
 
     old_item       = record.item;
     candidate.item = NULL;
-    candidate.info = HIHAT_F_RMD;
+    candidate.info = 0;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT1_CTR_DEL)) {
-        atomic_fetch_add(&self->del_count, 1);
+        atomic_fetch_sub(&self->item_count, 1);
 
         if (found) {
             *found = true;
@@ -614,12 +613,17 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
             if (record.info & HIHAT_F_MOVING) {
                 break;
             }
+	    if (record.info) {
+		candidate_record.info = record.info | HIHAT_F_MOVING;
+	    } else {
+		candidate_record.info = HIHAT_F_MOVING | HIHAT_F_MOVED;
+	    }
         } while (!LCAS(&bucket->record,
                        &record,
                        candidate_record,
                        HIHAT1_CTR_F_MOVING));
 
-        if (record.info & HIHAT_F_USED) {
+        if (record.info & HIHAT_EPOCH_MASK) {
             new_used++;
         }
     }
@@ -674,18 +678,9 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
         if (record.info & HIHAT_F_MOVED) {
             continue;
         }
-
-        // If the bucket has been rm'd, or has never been used...
-        if ((record.info & HIHAT_F_RMD) || !(record.info & HIHAT_F_USED)) {
-            candidate_record.info = record.info | HIHAT_F_MOVED;
-            candidate_record.item = record.item;
-            LCAS(&bucket->record,
-                 &record,
-                 candidate_record,
-                 HIHAT1_CTR_F_MOVED1);
-            continue;
-        }
-
+	
+	// If it hasn't been moved, there's definitely an item in it,
+	// as empty buckets got MOVED set in the first loop.
         hv  = atomic_read(&bucket->hv);
         bix = hatrack_bucket_index(&hv, new_store->last_slot);
 
@@ -705,7 +700,7 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
             break;
         }
 
-        candidate_record.info = record.info & HIHAT_F_MASK;
+        candidate_record.info = record.info & HIHAT_EPOCH_MASK;
         candidate_record.item = record.item;
         expected_record.info  = 0;
         expected_record.item  = NULL;

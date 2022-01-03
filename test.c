@@ -622,7 +622,10 @@ test_condput(test_info_t *info)
     }
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
-            fprintf(stderr, "Get != put\n");
+            fprintf(stderr,
+                    "Get != put (%d != %llu)\n",
+                    test_get(info->dict, i + 1),
+                    i + 1);
             return false;
         }
     }

@@ -32,13 +32,46 @@
 #include <pthread.h>
 
 // clang-format off
+
+/* newshat_record_t
+ *
+ * Each newshat bucket is individually locked, so that only one thread
+ * can be writing to the bucket at a time. However, there may be
+ * multiple readers in parallel. The things a reader might need should
+ * be updated atomically, and are stored in newshat_record_t.
+ *
+ * item -- The item passed to the hash table, usually a key : value
+ *         pair of some sort.
+ *
+ * info -- If the field is 0, then it indicates a deleted item.
+ *         Otherwise, it represents the "epoch"-- an indication of the
+ *         creation time of the item, relative to other items. Note
+ *         that, since this table does not provide fully consistent
+ *         views, the epoch is not quite as accurate as with other
+ *         table implementations in the hatrack. In particular, bumps
+ *         to the newshat_t data structure's next_epoch value (see
+ *         below), are racy, so multiple data items can definitely get
+ *         the same epoch value, meaning we have no linearization
+ *         point on which to construct a consistent sort order.
+ */
+
 typedef struct {
-    hatrack_hash_t       hv;
+    void                *item;
+    uint64_t             info;
+} newshat_record_t;
+
+#if 0
     void                *item;
     bool                 deleted;
-    bool                 migrated;
     uint64_t             epoch;
-    pthread_mutex_t      mutex;
+#endif
+
+typedef struct {
+    alignas(16)
+    _Atomic newshat_record_t contents;
+    hatrack_hash_t           hv;
+    bool                     migrated;
+    pthread_mutex_t          mutex;
 } newshat_bucket_t;
 
 typedef struct {

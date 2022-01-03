@@ -40,13 +40,7 @@
 
 // clang-format off
 
-// These flags are used in the swimcap algorithm for accounting.
-enum : uint64_t {
-    SWIMCAP2_F_DELETED = 0x8000000000000000,
-    SWIMCAP2_F_USED    = 0x4000000000000000
-};
-
-/* swimcap2_contents_t
+/* swimcap2_record_t
  *
  * This is unchanged from swimcap_contents_t.
  *
@@ -74,22 +68,21 @@ enum : uint64_t {
  * item -- The item passed to the hash table, usually a key : value
  *         pair of some sort.
  *
- * info -- The topmost two bits are a bitfield; see the two flags
- *         above.  The rest of the field represents the "epoch"-- an
- *         indication of the creation time of the item, relative to
- *         other items. Note that, since this table does not provide
- *         fully consistent views, the epoch is not quite as accurate
- *         as with other table implementations in the hatrack. In
- *         particular, bumps to the swimcap_t data structure's
- *         next_epoch value (see below), are racy, so multiple data
- *         items can definitely get the same epoch value, meaning we
- *         have no linearization point on which to construct a
- *         consistent sort order.
+ * info -- If the field is 0, then it indicates a deleted item.
+ *         Otherwise, it represents the "epoch"-- an indication of the
+ *         creation time of the item, relative to other items. Note
+ *         that, since this table does not provide fully consistent
+ *         views, the epoch is not quite as accurate as with other
+ *         table implementations in the hatrack. In particular, bumps
+ *         to the swimcap_t data structure's next_epoch value (see
+ *         below), are racy, so multiple data items can definitely get
+ *         the same epoch value, meaning we have no linearization
+ *         point on which to construct a consistent sort order.
  */
 typedef struct {
     void    *item;
     uint64_t info;
-} swimcap2_contents_t;
+} swimcap2_record_t;
 
 /* swimcap2_bucket_t
  *
@@ -120,8 +113,8 @@ typedef struct {
  */
 typedef struct {
     alignas(16)
-    _Atomic swimcap2_contents_t contents;
-    hatrack_hash_t              hv;
+    _Atomic swimcap2_record_t contents;
+    hatrack_hash_t            hv;
 } swimcap2_bucket_t;
 
 /* swimcap2_store_t

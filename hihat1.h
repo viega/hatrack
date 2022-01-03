@@ -29,16 +29,23 @@
 
 #include "hatrack_common.h"
 
-/* The info field consists of the following:
+/* hihat1_record_t
  *
- * - The high bit signals whether this is a used item or not.
- * - The next big signals whether we're migrating.
- * - The third most significant bit signals that migration is done.
- * - The fourth signals that the bucket is not only empty, but deleted.
+ * hihat records are atomically compare-and-swapped.
  *
- * - The rest is currently an structure-specific epoch counter // to
- *   help with sorting (note there are no consistency guarantees the
- *   way there are with lohat).
+ * The item field is the item passed to the hash table, usually
+ * a key : value pair or some sort.
+ *
+ * The top two bits of the info field are used for carrying status
+ * information about migrations. The rest is an epoch field, used for
+ * sorting. If the epoch portion is zero, then it indicates the item
+ * either has not been set, or has been deleted.
+ *
+ * Note that there are no consistency guarantees the way there are
+ * with lohat.
+ *
+ * The high bit signals whether this is a used item or not (HIHAT_F_MOVING).
+ * The next big signals whether we're migrating (HIHAT_F_MOVED).
  */
 typedef struct {
     void    *item;
@@ -47,11 +54,9 @@ typedef struct {
 
 enum : uint64_t
 {
-    HIHAT_F_USED   = 0x8000000000000000,
-    HIHAT_F_MOVING = 0x4000000000000000,
-    HIHAT_F_MOVED  = 0x2000000000000000,
-    HIHAT_F_RMD    = 0x1000000000000000,
-    HIHAT_F_MASK   = 0x8fffffffffffffff
+    HIHAT_F_MOVING   = 0x8000000000000000,
+    HIHAT_F_MOVED    = 0x4000000000000000,
+    HIHAT_EPOCH_MASK = 0x3fffffffffffffff
 };
 
 typedef struct {
@@ -67,7 +72,7 @@ struct hihat1_store_st {
     uint64_t                   last_slot;
     uint64_t                   threshold;
     _Atomic uint64_t           used_count;
-    _Atomic uint64_t           del_count;
+    _Atomic uint64_t           item_count;
     _Atomic(hihat1_store_t *)  store_next;
     alignas(16)
     hihat1_bucket_t            buckets[];

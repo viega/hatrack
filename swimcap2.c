@@ -53,7 +53,7 @@ static void              swimcap2_migrate     (swimcap2_t *);
 // clang-format on
 
 /* swimcap2_init()
- * 
+ *
  * This is identical to swimcap_init().
  *
  * It's expected that swimcap instances will be created via the
@@ -70,6 +70,7 @@ swimcap2_init(swimcap2_t *self)
 {
     swimcap2_store_t *store = swimcap2_store_new(HATRACK_MIN_SIZE);
     self->item_count        = 0;
+    self->next_epoch        = 1;
     self->store             = store;
     pthread_mutex_init(&self->write_mutex, NULL);
 
@@ -128,7 +129,7 @@ swimcap2_get(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
  * Note that, since this implementation does not have competing
  * writers, the current thread is the only thread that can possibly do
  * a delete operation. Therefore, this thread does not need to
- * "register" an epoch with mmm to prevent deletions. 
+ * "register" an epoch with mmm to prevent deletions.
  *
  * We do need to acquire the write mutex, to make sure we don't
  * have simultaneous writers, though.
@@ -205,14 +206,14 @@ swimcap2_replace(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
 /* swimcap2_add()
  *
  * As with swimcap2_put(), we need to acquire the write lock, but do not
- * need to register an mmm epoch. 
+ * need to register an mmm epoch.
  *
  * The 'add' operation adds an item to the hash table, but only if
  * there isn't currently an item stored with the associated hash
  * value.  If the item would lead to 75% of the buckets being in use,
  * then a table migration will occur (via swimhat_migrate())
  *
- * If an item previously existed, but has since been deleted, the 
+ * If an item previously existed, but has since been deleted, the
  * add operation will still succeed.
  *
  * Returns true if the insertion is succesful, and false otherwise.
@@ -231,7 +232,7 @@ swimcap2_add(swimcap2_t *self, hatrack_hash_t *hv, void *item)
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
     }
-    
+
     return ret;
 }
 
@@ -282,7 +283,7 @@ swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
  * Deletes a swimcap2 object. Generally, you should be confident that
  * all threads except the one from which you're calling this have
  * stopped using the table (generally meaning they no longer hold a
- * reference to the store).  
+ * reference to the store).
  *
  * Note that this function assumes the swimcap object was allocated
  * via the default malloc. If it wasn't, don't call this directly, but
@@ -322,7 +323,7 @@ swimcap2_len(swimcap2_t *self)
 }
 
 /* swimcap_view()
- * 
+ *
  * This returns an array of hatrack_view_t items, representing all of
  * the items in the hash table, for the purposes of iterating over the
  * items, for any reason. The number of items in the view will be
@@ -339,24 +340,24 @@ swimcap2_len(swimcap2_t *self)
 hatrack_view_t *
 swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t     *view;
-    swimcap2_store_t   *store;
-    swimcap2_contents_t contents;
-    hatrack_view_t     *p;
-    swimcap2_bucket_t  *cur;
-    swimcap2_bucket_t  *end;
-    uint64_t            count;
-    uint64_t            last_slot;
-    uint64_t            alloc_len;
+    hatrack_view_t    *view;
+    swimcap2_store_t  *store;
+    swimcap2_record_t  contents;
+    hatrack_view_t    *p;
+    swimcap2_bucket_t *cur;
+    swimcap2_bucket_t *end;
+    uint64_t           count;
+    uint64_t           last_slot;
+    uint64_t           alloc_len;
 
 #ifdef SWIMCAP_CONSISTENT_VIEWS
     if (pthread_mutex_lock(&self->write_mutex)) {
-	abort();
+        abort();
     }
-#else    
+#else
     mmm_start_basic_op();
 #endif
-    
+
     store     = self->store;
     last_slot = store->last_slot;
     alloc_len = sizeof(hatrack_view_t) * (last_slot + 1);
@@ -368,13 +369,13 @@ swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
 
     while (cur < end) {
         contents = atomic_read(&cur->contents);
-        if (!(contents.info & SWIMCAP2_F_USED)) {
+        if (!contents.info) {
             cur++;
             continue;
         }
         p->hv         = cur->hv;
         p->item       = contents.item;
-        p->sort_epoch = contents.info & ~SWIMCAP2_F_USED;
+        p->sort_epoch = contents.info;
         count++;
         p++;
         cur++;
@@ -384,10 +385,10 @@ swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
     if (!count) {
         free(view);
 #ifdef SWIMCAP_CONSISTENT_VIEWS
-	pthread_mutex_unlock(&self->write_mutex);
-#else	
+        pthread_mutex_unlock(&self->write_mutex);
+#else
         mmm_end_op();
-#endif	
+#endif
         return NULL;
     }
 
@@ -399,9 +400,9 @@ swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
 
 #ifdef SWIMCAP_CONSISTENT_VIEWS
     pthread_mutex_unlock(&self->write_views);
-#else    
+#else
     mmm_end_op();
-#endif    
+#endif
     return view;
 }
 
@@ -429,11 +430,11 @@ swimcap2_store_new(uint64_t size)
 static void *
 swimcap2_store_get(swimcap2_store_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t            bix;
-    uint64_t            last_slot;
-    uint64_t            i;
-    swimcap2_bucket_t  *cur;
-    swimcap2_contents_t contents;
+    uint64_t           bix;
+    uint64_t           last_slot;
+    uint64_t           i;
+    swimcap2_bucket_t *cur;
+    swimcap2_record_t  contents;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -441,13 +442,13 @@ swimcap2_store_get(swimcap2_store_t *self, hatrack_hash_t *hv, bool *found)
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
-	    /* Since readers can run concurrently to writers, it is
-	     * possible the hash has been written, but no item has
-	     * been written yet. So we need to load atomically, then
-	     * make sure there's something to return.
-	     */
+            /* Since readers can run concurrently to writers, it is
+             * possible the hash has been written, but no item has
+             * been written yet. So we need to load atomically, then
+             * make sure there's something to return.
+             */
             contents = atomic_read(&cur->contents);
-            if (contents.info & SWIMCAP2_F_USED) {
+            if (contents.info) {
                 if (found) {
                     *found = true;
                 }
@@ -478,12 +479,12 @@ swimcap2_store_put(swimcap2_store_t *self,
                    void             *item,
                    bool             *found)
 {
-    uint64_t            bix;
-    uint64_t            i;
-    uint64_t            last_slot;
-    swimcap2_bucket_t  *cur;
-    swimcap2_contents_t contents;
-    void               *ret;
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
+    swimcap2_bucket_t *cur;
+    swimcap2_record_t  contents;
+    void              *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -492,22 +493,18 @@ swimcap2_store_put(swimcap2_store_t *self,
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, &cur->hv)) {
             contents = atomic_load(&cur->contents);
-	    /* If the item has never existed (or at least, hasn't
-	     * existed since the last migration operation),
-	     * contents.info will be 0. But if it has existed, but has
-	     * been deleted, this flag will be set. From the point of
-	     * view of the caller, both scenarios are the same thing--
-	     * the item was not in the table.
-	     */
-            if (contents.info & SWIMCAP2_F_DELETED) {
+            /* If no epoch is set, it's either deleted or has never
+             * been stored.  Either way, no worries.
+             */
+            if (!contents.info) {
                 if (found) {
                     *found = false;
                 }
-                contents.info = top->next_epoch++ | SWIMCAP2_F_USED;
+                contents.info = top->next_epoch++;
                 ret           = NULL;
                 top->item_count++;
-		// The bucket has already been used, so we do NOT bump
-		// used_count in this case.
+                // The bucket has already been used, so we do NOT bump
+                // used_count in this case.
             }
             else {
                 if (found) {
@@ -530,7 +527,7 @@ swimcap2_store_put(swimcap2_store_t *self,
             top->item_count++;
             cur->hv       = *hv;
             contents.item = item;
-            contents.info = top->next_epoch++ | SWIMCAP2_F_USED;
+            contents.info = top->next_epoch++;
             atomic_store(&cur->contents, contents);
 
             if (found) {
@@ -550,12 +547,12 @@ swimcap2_store_replace(swimcap2_store_t *self,
                        void             *item,
                        bool             *found)
 {
-    uint64_t            bix;
-    uint64_t            i;
-    uint64_t            last_slot;
-    swimcap2_bucket_t  *cur;
-    swimcap2_contents_t contents;
-    void               *ret;
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
+    swimcap2_bucket_t *cur;
+    swimcap2_record_t  contents;
+    void              *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -565,17 +562,7 @@ swimcap2_store_replace(swimcap2_store_t *self,
         if (hatrack_hashes_eq(hv, &cur->hv)) {
             contents = atomic_read(&cur->contents);
 
-	    /* If the item has never existed (or at least, hasn't
-	     * existed since the last migration operation),
-	     * contents.info will be 0. If it's previously been in the
-	     * table and deleted, SWIMCAP_F_USED will be off, and
-	     * SWIMCAP_F_DELETED will be on. Since we only want to add
-	     * if the item isn't in the table, we simply have to check
-	     * to see if SWIMCAP_F_USED is set; if it isn't, we don't
-	     * care which of the other two cases apply; they're
-	     * basically the same to us.
-	     */
-            if (!(contents.info & SWIMCAP2_F_USED)) {
+            if (!contents.info) {
                 if (found) {
                     *found = false;
                 }
@@ -608,11 +595,11 @@ swimcap2_store_add(swimcap2_store_t *self,
                    hatrack_hash_t   *hv,
                    void             *item)
 {
-    uint64_t            bix;
-    uint64_t            i;
-    uint64_t            last_slot;
-    swimcap2_bucket_t  *cur;
-    swimcap2_contents_t contents;
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
+    swimcap2_bucket_t *cur;
+    swimcap2_record_t  contents;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -622,28 +609,18 @@ swimcap2_store_add(swimcap2_store_t *self,
         if (hatrack_hashes_eq(hv, &cur->hv)) {
             contents = atomic_read(&cur->contents);
 
-	    /* If the item has never existed (or at least, hasn't
-	     * existed since the last migration operation),
-	     * contents.info will be 0. If it's previously been in the
-	     * table and deleted, SWIMCAP_F_USED will be off, and
-	     * SWIMCAP_F_DELETED will be on. Since we only want to add
-	     * if the item isn't in the table, we simply have to check
-	     * to see if SWIMCAP_F_USED is set; if it isn't, we don't
-	     * care which of the other two cases apply; they're
-	     * basically the same to us.
-	     */
-            if (contents.info & SWIMCAP2_F_USED) {
+            if (contents.info) {
                 return false;
             }
             contents.item = item;
-            contents.info = top->next_epoch++ | SWIMCAP2_F_USED;
+            contents.info = top->next_epoch++;
             top->item_count++;
             atomic_store(&cur->contents, contents);
             return true;
         }
 
-	// In this branch, there's definitely nothing there at the
-	// time of the operation, and we should add.
+        // In this branch, there's definitely nothing there at the
+        // time of the operation, and we should add.
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap2_migrate(top);
@@ -653,7 +630,7 @@ swimcap2_store_add(swimcap2_store_t *self,
             top->item_count++;
             cur->hv       = *hv;
             contents.item = item;
-            contents.info = top->next_epoch++ | SWIMCAP2_F_USED;
+            contents.info = top->next_epoch++;
             atomic_store(&cur->contents, contents);
 
             return true;
@@ -669,12 +646,12 @@ swimcap2_store_remove(swimcap2_store_t *self,
                       hatrack_hash_t   *hv,
                       bool             *found)
 {
-    uint64_t            bix;
-    uint64_t            i;
-    uint64_t            last_slot;
-    swimcap2_bucket_t  *cur;
-    swimcap2_contents_t contents;
-    void               *ret;
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
+    swimcap2_bucket_t *cur;
+    swimcap2_record_t  contents;
+    void              *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -684,8 +661,7 @@ swimcap2_store_remove(swimcap2_store_t *self,
         if (hatrack_hashes_eq(hv, &cur->hv)) {
             contents = atomic_read(&cur->contents);
 
-	    // If the used flag isn't set, there's no item to remove.	    
-            if (!(contents.info & SWIMCAP2_F_USED)) {
+            if (!contents.info) {
                 if (found) {
                     *found = false;
                 }
@@ -693,7 +669,7 @@ swimcap2_store_remove(swimcap2_store_t *self,
             }
 
             ret           = contents.item;
-            contents.info = SWIMCAP2_F_DELETED;
+            contents.info = 0;
             atomic_store(&cur->contents, contents);
             --top->item_count;
 
@@ -716,15 +692,15 @@ swimcap2_store_remove(swimcap2_store_t *self,
 static void
 swimcap2_migrate(swimcap2_t *self)
 {
-    swimcap2_store_t   *cur_store;
-    swimcap2_store_t   *new_store;
-    swimcap2_bucket_t  *cur;
-    swimcap2_bucket_t  *target;
-    swimcap2_contents_t contents;
-    uint64_t            new_size;
-    uint64_t            cur_last_slot;
-    uint64_t            new_last_slot;
-    uint64_t            i, n, bix;
+    swimcap2_store_t  *cur_store;
+    swimcap2_store_t  *new_store;
+    swimcap2_bucket_t *cur;
+    swimcap2_bucket_t *target;
+    swimcap2_record_t  contents;
+    uint64_t           new_size;
+    uint64_t           cur_last_slot;
+    uint64_t           new_last_slot;
+    uint64_t           i, n, bix;
 
     cur_store     = self->store;
     cur_last_slot = cur_store->last_slot;
@@ -735,7 +711,7 @@ swimcap2_migrate(swimcap2_t *self)
     for (n = 0; n <= cur_last_slot; n++) {
         cur      = &cur_store->buckets[n];
         contents = atomic_read(&cur->contents);
-        if (!(contents.info == SWIMCAP2_F_USED)) {
+        if (!contents.info) {
             continue;
         }
         bix = hatrack_bucket_index(&cur->hv, new_last_slot);

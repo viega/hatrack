@@ -25,7 +25,7 @@
 static void refhat_migrate(refhat_t *);
 
 /* refhat_init()
- * 
+ *
  * It's expected that refhat instances will be created via the default
  * malloc.  This function cannot rely on zero-initialization of its
  * own object, though it does zero-initialize the buckets it allocates
@@ -86,8 +86,8 @@ refhat_init(refhat_t *self)
  *                   selected.
  *
  * hatrack_view_t -- A data type that provides all items in the hash
- *                   table (usually at a given moment in time), in 
- *                   insertion order, if requested (returned from 
+ *                   table (usually at a given moment in time), in
+ *                   insertion order, if requested (returned from
  *                   the hashtable_view() function).
  *
  * Functions to examine and compare hash values, to calculate the
@@ -141,8 +141,8 @@ refhat_get(refhat_t *self, hatrack_hash_t *hv, bool *found)
  * be returned, for the sake of memory management.
  *
  * If an address is provided in the found parameter, the associated
- * memory location will get the value true if the item was already
- * in the table, and false otherwise.
+ * memory location will get the value true if the item was already in
+ * the table, and false otherwise.
  *
  * Note that, if you're using a key and a value, pass them together
  * in a single object in the item parameter.
@@ -250,11 +250,11 @@ refhat_replace(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 /* refhat_add()
- * 
+ *
  * This function adds an item to the hash table, but only if there
  * isn't currently an item stored with the associated hash value.
  *
- * If an item previously existed, but has since been deleted, the 
+ * If an item previously existed, but has since been deleted, the
  * add operation will still succeed.
  *
  * Returns true if the insertion is succesful, and false otherwise.
@@ -345,10 +345,10 @@ refhat_remove(refhat_t *self, hatrack_hash_t *hv, bool *found)
     __builtin_unreachable();
 }
 
-/* refhat_delete() 
+/* refhat_delete()
  *
  * This deallocates a table allocated with the default malloc.  The
- * buckets will always be allocated by the default malloc, so if, 
+ * buckets will always be allocated by the default malloc, so if,
  * for some reason, you use a different allocator, use the default
  * malloc on the buckets, and delete the object yourself.
  */
@@ -364,7 +364,7 @@ refhat_delete(refhat_t *self)
  * Returns the number of items currently in the table. Note that we
  * strongly discourage using this call, since it is close to
  * meaningless in multi-threaded programs, as the value at the time
- * of check could be dramatically different by the time of use. 
+ * of check could be dramatically different by the time of use.
  */
 uint64_t
 refhat_len(refhat_t *self)
@@ -373,7 +373,7 @@ refhat_len(refhat_t *self)
 }
 
 /* refhat_view()
- * 
+ *
  * This returns an array of hatrack_view_t items, representing all of
  * the items in the hash table, for the purposes of iterating over the
  * items, for any reason. The number of items in the view will be
@@ -457,7 +457,7 @@ refhat_migrate(refhat_t *self)
     num_buckets   = hatrack_new_size(self->last_slot, self->item_count + 1);
     new_last_slot = num_buckets - 1;
     new_buckets   = (refhat_bucket_t *)calloc(num_buckets, bucket_size);
-    
+
     for (n = 0; n <= self->last_slot; n++) {
         cur = &self->buckets[n];
         if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
