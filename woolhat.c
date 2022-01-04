@@ -790,6 +790,15 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
     uint64_t           new_used      = 0;
     uint64_t           expected_used = ~0;
 
+    /* If we're a late-enough writer, let's just double check to see if
+     * we need to help at all.
+     */
+    new_store = atomic_read(&top->store_current);
+
+    if (new_store != self) {
+        return new_store;
+    }
+
     /* Quickly run through every history bucket, and mark any bucket
      * that doesn't already have F_MOVING set.  Note that the CAS
      * could fail due to some other updater, so we keep CASing until

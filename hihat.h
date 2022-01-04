@@ -94,8 +94,22 @@ typedef struct hihat_store_st hihat_store_t;
 
 /* hihat_store_t
  *
- * The data type representing our current store. We migrate between stores
- * whenever our table gets too cluttered, at which point we might also
+ * The data type representing our current store.  When we need to
+ * resize or clean out our table, the top-level hihat_t object will
+ * stay the same; we instead replace the internal storage (we call
+ * this migrating the table).
+ *
+ * All of our tables use the same metrics for when to perform a table
+ * migration. We do it when approximately 3/4 of the total number of
+ * buckets have a RECORD in them, even if that record corresponds to
+ * an item that was deleted.
+ *
+ * We then use a different metric to figure out how big to make the
+ * next store-- if about 25% of the current buckets (or fewer) have an
+ * item in it, we will shrink the table size by 50%.  If about 50% of
+ * the current buckets (or more) have an item in it, we will double
+ * the table size.  Otherwise, we will use the same size, and just
+ * clear out the dead entries, to make room for more inserts.
  * resize the store.
  *
  * last_slot  -- The array index of the last bucket, so this will be
@@ -143,14 +157,14 @@ struct hihat_store_st {
     uint64_t                   threshold;
     _Atomic uint64_t           used_count;
     _Atomic uint64_t           item_count;
-    _Atomic(hihat_store_t *)  store_next;
+    _Atomic(hihat_store_t *)   store_next;
     alignas(16)
     hihat_bucket_t            buckets[];
 };
 
 /* hihat_t
  *
- * The top-level newshat object.
+ * The top-level hihat object.
  *
  * store_current -- The current store to use. When we migrate the
  *                  table, this will change at the very end of the

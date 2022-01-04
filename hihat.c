@@ -59,28 +59,55 @@ hihat_init(hihat_t *self)
 
 /* hihat_get(), _put(), _replace(), _add(), _remove()
  *
- * These functions need to safely acquire a reference to the current
+ * Our core operations need to safely acquire a reference to the current
  * store, before looking for the hash value in the store, to make sure
  * they don't end up dereferencing a pointer to memory that's been
  * freed. We do so, by using our memory management implementation,
- * mmm.
+ * MMM.
  *
- * Essentially, mmm keeps a global, atomically updated counter of
- * memory "epochs". Each write operation starts a new epoch. Each
- * memory object records its "write" epoch, as well as its "retire"
- * epoch, meaning the epoch in which mmm_retire() was called.
+ * Specifically, for the sake of hihat, MMM makes sure that, when
+ * stores are "retired", they are not freed until all threads are done
+ * with them.
+ *
+ * This works by the thread registering a "reservation" via
+ * mmm_start_basic_op().  This essentially tells the memory management
+ * system that any record created by MMM that is CURRENTLY alive might
+ * be held by this thread, along with any future record created.
+ *
+ * As long as the thread holds a reservation, nothing allocated via
+ * mmm will get freed out from under it.  It does need to be a good
+ * citizen, and let go of the reservation when it's done with the
+ * operation.
+ *
+ * This has the same impact as hazard pointers, but is faster, and
+ * less error-prone. We primarily need to make sure to always
+ * register/de-register, and to not "retire" things before we've
+ * installed a replacement.
+ *
+ * A bit more detail, for the interested: 
+ *
+ * MMM keeps a global, atomically updated counter of memory
+ * "epochs". Each write operation starts a new epoch. Each memory
+ * object records its "write" epoch, as well as its "retire" epoch,
+ * meaning the epoch in which mmm_retire() was called.
  *
  * The way mmm protects from freeing data that might be in use by
  * parallel threads, is as follows:
  *
  * 1) All threads "register" by writing the current epoch into a
- *    special array, when they start an operation.  This is done via
- *    mmm_start_basic_op(), which is inlined and defined in mmm.h.
- *    Essentially, the algorithm will ensure that, if a thread has
+ *    special array, when they start an operation.  This happens when
+ *    calling mmm_start_basic_op(), which is inlined and defined in
+ *    mmm.h. Again, the algorithm will ensure that, if a thread has
  *    registered for an epoch, no values from that epoch onward will
- *    be deleted.
+ *    be deleted, while that reservation is held. It does this by
+ *    walking the reservations before beginning to free things, and
+ *    only freeing those things older than any current registration.
  *
  * 2) When the operation is done, they "unregister", via mmm_end_op().
+ *    Obviously, if this is forgotten, you can end up leaking records
+ *    that never get cleaned up (they're not technically leaked, but
+ *    they're still live, and taking up memory that will never again
+ *    get used).
  *
  * 3) When mmm_retire() is called on a pointer, the "retire" epoch is
  *    stored (in a hidden header). The cell is placed on a thread
@@ -91,15 +118,15 @@ hihat_init(hihat_t *self)
  *    have registered an epoch requiring the pointer to be alive, then
  *    the value can be safely freed.
  *
- * There are more options with mmm, that we don't use in hihat. See
- * mmm.c for more details on the algorithm, and options.
+ * There are more options with mmm, that we don't use in this
+ * algorithm. See mmm.h and mmm.c for more details on the algorithm,
+ * and options (start with the .h file).
  *
  * Once the reference is required, we delegate to the function
  * hihat_store_<whatever_is_appropriate>() to do the work. Note that
  * the API (including use of the found parameter) works as with every
  * other hash table; see refhat.c or swimcap.c for more details on the
  * parameters, if needed.
- *
  */
 void *
 hihat_get(hihat_t *self, hatrack_hash_t *hv, bool *found)
@@ -215,10 +242,10 @@ hihat_len(hihat_t *self)
  * will be used to sort the items in the view, based on the insertion
  * order.
  *
- * Note that the view provided in hihat_view could be an
- * "inconsistent" view, meaning that it might not capture the state of
- * the hash table at a given moment in time. In the case of heavy
- * writes, it probably will not.
+ * Note that the view provided here could be an "inconsistent" view,
+ * meaning that it might not capture the state of the hash table at a
+ * given moment in time. In the case of heavy writes, it probably will
+ * not.
  *
  * The contents of individual buckets will always be independently
  * consistent; we will see them atomically.  But relative to each
@@ -266,9 +293,9 @@ hihat_view(hihat_t *self, uint64_t *num, bool sort)
     uint64_t         alloc_len;
     hihat_store_t  *store;
 
-    /* Again, we need to do this before grabbing our pointer to the store,
-     * to make sure it doesn't get deallocated out from under us. We also
-     * have to call mmm_end_op() when done.
+    /* Again, we need to do this before grabbing our pointer to the
+     * store, to make sure it doesn't get deallocated out from under
+     * us. We also have to call mmm_end_op() when done.
      *
      * That is to say, a migration could be in progress at any time
      * during this view operation.  As a reader, we can safely ignore
@@ -323,7 +350,7 @@ hihat_view(hihat_t *self, uint64_t *num, bool sort)
     return view;
 }
 
-/* Here, new stores being allocated with mmm_alloc_committed, the
+/* New stores get allocated with mmm_alloc_committed. As a result, the
  * underlying memory is zeroed out, so we only need to initialize
  * non-zero items.
  */
@@ -885,13 +912,13 @@ found_bucket:
  * around and waiting for the migration to occur, writer threads
  * attempt to help with the migration.
  *
- * We do this, because threads can stall due to the scheduler, and we
- * don't want any thread to be dependent on any other thread's
- * progress. Therefore, every thread that notices that a migration is
- * in progress, goes through the ENTIRE process of attempting to
- * migrate. If they see that some other thread completed some work,
- * they abandon that particular piece of the migration, and move on to
- * the next piece.
+ * We have all writer threads help with the migration because threads
+ * can stall due to the scheduler, and we don't want any thread to be
+ * dependent on any other thread's progress. Therefore, every thread
+ * that notices that a migration is in progress, goes through the
+ * ENTIRE process of attempting to migrate. If they see that some
+ * other thread completed some work, they abandon that particular
+ * piece of the migration, and move on to the next piece.
  *
  * In practice (in my testing), when multiple threads are writing
  * simultaneously, they generally do end up all contributing. Let's
@@ -937,8 +964,11 @@ found_bucket:
  * table.
  * 
  * A major difference here is that, when there are many simultaneous
- * writers, he only has the writers help a bit, then go work in the
- * new table. 
+ * writers, Click only has late writers help a bit, then go work in
+ * the new table. That's valid, but is more likely to invert intended
+ * insertion orders, and make the job harder for readers, as they
+ * might need to switch stores (I believe he has readers jump stores
+ * if the item gets a new insertion in the newer table).
  *
  * That leads to a much more complicated algorithm. Even though our
  * approach might seem like it's duplicating a lot more effort, it
@@ -969,7 +999,7 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
     hatrack_hash_t   hv;
     uint64_t         i, j;
     uint64_t         bix;
-    uint64_t         new_used      = 0;
+    uint64_t         new_used;
     uint64_t         expected_used;
 
     
@@ -982,10 +1012,29 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
 	return new_store;
     }
     
+    new_used  = 0;
+    
     /* Quickly run through every history bucket, and mark any bucket
      * that doesn't already have F_MOVING set.  Note that the CAS
      * could fail due to some other updater, so we keep CASing until
      * we know it was successful.
+     *
+     * Note that we COULD go bucket-by-bucket, lock the bucket, and
+     * migrate this bucket, before locking the next bucket. That would
+     * be an equally valid approach that doesn't spoil the consistency
+     * of anything, and we'd only make one pass through the array,
+     * instead of two passes (we mark buckets as migrated in the same
+     * pass as the one where we do the actual migration).
+     *
+     * However, as with the Click algorithm, that would lead to some
+     * explicit inversion of write order. With our approach, writers
+     * that migrate will tend to caravan together, and the resulting
+     * writes will be less inverted; closer to random.
+     *
+     * I may explore the performance impact of moving this to one pass
+     * at some future date, but for now, I'm going to continue to
+     * assume that the most of migration will amortize out to
+     * something pretty low in all cases.
      */
     for (i = 0; i <= self->last_slot; i++) {
         bucket                = &self->buckets[i];
@@ -1012,6 +1061,17 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
                        candidate_record,
                        HIHAT_CTR_F_MOVING));
 
+	/* Here, whether we installed our record or not, we look at
+	 * the old record to count how many items we're going to
+	 * migrate, so we can try to install the value in the new
+	 * store when we're done, as used_count.
+	 *
+	 * Since used_count is part of our resize metric, we want this
+	 * to stay as accurate as possible, which is why we don't just
+	 * read item_count from the top-level... late writers might get
+	 * suspended before bumping the count, leading us to under-count
+	 * the items in the next table.
+	 */
         if (record.info & HIHAT_EPOCH_MASK) {
             new_used++;
         }
@@ -1055,9 +1115,18 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
         }
     }
 
-    // At this point, we're sure that any late writers will help us
-    // with the migration. Therefore, we can go through each item,
-    // and, if it's not fully migrated, we can attempt to migrate it.
+    /* At this point, we're sure that any late writers will help us
+     * with the migration. Therefore, we can go through each item,
+     * and, if it's not fully migrated, we can attempt to migrate it.
+     *
+     * Of course, other migrating threads may race ahead of us.
+     *
+     * Note that, since the table has resized, the bucket index our
+     * hash value maps to may change, and there may be new
+     * collisions. So we can't just copy a record to the same index in
+     * the new table; we need to go through the bucket allocation
+     * process again (including the linear probing).
+     */
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[i];
         record = atomic_read(&bucket->record);
@@ -1132,7 +1201,7 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
 
     /* Now that the new store is fully set up, with all its buckets in
      * place, and all other data correct, we can 'turn it on' for
-     * writes, by overwriting the toplevel object's store pointer.
+     * writes, by overwriting the top-level object's store pointer.
      *
      * Of course, multiple threads might be trying to do this. If we
      * fail, it's because someone else succeeded, and we move on.
@@ -1142,14 +1211,15 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
      * that we don't free the store before all threads currently using
      * the store are done with it.
      */
-    
     if (LCAS(&top->store_current, &self, new_store, HIHAT_CTR_STORE_INSTALL)) {
         mmm_retire(self);
     }
 
-    // Instead of returning new_store here, we accept that we might
-    // have been suspended for a while at some point, and there might
-    // be an even later migration. So we grab the top-most store, even
-    // though it's generally going to be the same as next_store.
+    /* Instead of returning new_store here, we accept that we might
+     * have been suspended for a while at some point, and there might
+     * be an even later migration. So we grab the top-most store, even
+     * though we expect that it's generally going to be the same as
+     * next_store.
+     */
     return top->store_current;
 }

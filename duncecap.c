@@ -137,7 +137,7 @@ duncecap_init(duncecap_t *self)
 void *
 duncecap_get(duncecap_t *self, hatrack_hash_t *hv, bool *found)
 {
-    void            *ret;
+    void             *ret;
     duncecap_store_t *store;
 
     store = duncecap_reader_enter(self);
@@ -348,15 +348,15 @@ duncecap_len(duncecap_t *self)
 hatrack_view_t *
 duncecap_view(duncecap_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t   *view;
+    hatrack_view_t    *view;
     duncecap_store_t  *store;
-    hatrack_view_t   *p;
+    hatrack_view_t    *p;
     duncecap_bucket_t *cur;
     duncecap_bucket_t *end;
     duncecap_record_t  contents;
-    uint64_t          count;
-    uint64_t          last_slot;
-    uint64_t          alloc_len;
+    uint64_t           count;
+    uint64_t           last_slot;
+    uint64_t           alloc_len;
 
     store     = duncecap_viewer_enter(self);
     last_slot = store->last_slot;
@@ -404,7 +404,7 @@ static duncecap_store_t *
 duncecap_store_new(uint64_t size)
 {
     duncecap_store_t *ret;
-    uint64_t         alloc_len;
+    uint64_t          alloc_len;
 
     alloc_len = sizeof(duncecap_store_t);
     alloc_len += size * sizeof(duncecap_bucket_t);
@@ -418,9 +418,9 @@ duncecap_store_new(uint64_t size)
 static void *
 duncecap_store_get(duncecap_store_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t          bix;
-    uint64_t          last_slot;
-    uint64_t          i;
+    uint64_t           bix;
+    uint64_t           last_slot;
+    uint64_t           i;
     duncecap_bucket_t *cur;
     duncecap_record_t  contents;
 
@@ -463,17 +463,17 @@ duncecap_store_get(duncecap_store_t *self, hatrack_hash_t *hv, bool *found)
 
 static void *
 duncecap_store_put(duncecap_store_t *self,
-                  duncecap_t       *top,
-                  hatrack_hash_t  *hv,
-                  void            *item,
-                  bool            *found)
+                   duncecap_t       *top,
+                   hatrack_hash_t   *hv,
+                   void             *item,
+                   bool             *found)
 {
-    uint64_t          bix;
-    uint64_t          i;
-    uint64_t          last_slot;
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
     duncecap_bucket_t *cur;
     duncecap_record_t  contents;
-    void             *ret;
+    void              *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -509,10 +509,10 @@ duncecap_store_put(duncecap_store_t *self,
             if (self->used_count + 1 == self->threshold) {
                 duncecap_migrate(top);
                 return duncecap_store_put(top->store_current,
-                                         top,
-                                         hv,
-                                         item,
-                                         found);
+                                          top,
+                                          hv,
+                                          item,
+                                          found);
             }
             self->used_count++;
             top->item_count++;
@@ -533,17 +533,17 @@ duncecap_store_put(duncecap_store_t *self,
 
 static void *
 duncecap_store_replace(duncecap_store_t *self,
-                      duncecap_t       *top,
-                      hatrack_hash_t  *hv,
-                      void            *item,
-                      bool            *found)
+                       duncecap_t       *top,
+                       hatrack_hash_t   *hv,
+                       void             *item,
+                       bool             *found)
 {
-    uint64_t          bix;
-    uint64_t          i;
-    uint64_t          last_slot;
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
     duncecap_bucket_t *cur;
     duncecap_record_t  contents;
-    void             *ret;
+    void              *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -582,13 +582,13 @@ duncecap_store_replace(duncecap_store_t *self,
 
 static bool
 duncecap_store_add(duncecap_store_t *self,
-                  duncecap_t       *top,
-                  hatrack_hash_t  *hv,
-                  void            *item)
+                   duncecap_t       *top,
+                   hatrack_hash_t   *hv,
+                   void             *item)
 {
-    uint64_t          bix;
-    uint64_t          i;
-    uint64_t          last_slot;
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
     duncecap_bucket_t *cur;
     duncecap_record_t  contents;
 
@@ -633,16 +633,16 @@ duncecap_store_add(duncecap_store_t *self,
 
 static void *
 duncecap_store_remove(duncecap_store_t *self,
-                     duncecap_t       *top,
-                     hatrack_hash_t  *hv,
-                     bool            *found)
+                      duncecap_t       *top,
+                      hatrack_hash_t   *hv,
+                      bool             *found)
 {
-    uint64_t          bix;
-    uint64_t          i;
-    uint64_t          last_slot;
+    uint64_t           bix;
+    uint64_t           i;
+    uint64_t           last_slot;
     duncecap_bucket_t *cur;
     duncecap_record_t  contents;
-    void             *ret;
+    void              *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -695,10 +695,10 @@ duncecap_migrate(duncecap_t *self)
     duncecap_bucket_t *cur;
     duncecap_bucket_t *target;
     duncecap_record_t  contents;
-    uint64_t          new_size;
-    uint64_t          cur_last_slot;
-    uint64_t          new_last_slot;
-    uint64_t          i, n, bix;
+    uint64_t           new_size;
+    uint64_t           cur_last_slot;
+    uint64_t           new_last_slot;
+    uint64_t           i, n, bix;
 
     cur_store     = self->store_current;
     cur_last_slot = cur_store->last_slot;

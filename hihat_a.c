@@ -569,8 +569,8 @@ hihat_a_store_migrate(hihat_store_t *self, hihat_t *top)
     hatrack_hash_t   hv;
     uint64_t         i, j;
     uint64_t         bix;
-    uint64_t         new_used      = 0;
-    uint64_t         expected_used = 0;
+    uint64_t         new_used;     
+    uint64_t         expected_used;
 
     /* We first check to see if there's already a new
      * store in place in the top level. If there is, we can succeed
@@ -588,6 +588,7 @@ hihat_a_store_migrate(hihat_store_t *self, hihat_t *top)
      * was absolutely for nothing.
      */
 
+    new_used  = 0;
     new_store = atomic_read(&top->store_current);
     
     if (new_store != self) {
@@ -718,13 +719,13 @@ hihat_a_store_migrate(hihat_store_t *self, hihat_t *top)
         LCAS(&bucket->record, &record, candidate_record, HIHAT_CTR_F_MOVED2);
     }
 
+    expected_used = 0;
+    
     LCAS(&new_store->used_count,
          &expected_used,
          new_used,
          HIHAT_CTR_LEN_INSTALL);
 
-    expected_used = 0;
-    
     if (LCAS(&top->store_current, &self, new_store, HIHAT_CTR_STORE_INSTALL)) {
         mmm_retire(self);
     }

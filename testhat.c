@@ -293,8 +293,8 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("oldhat", &oldhat_vtable, sizeof(oldhat_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
     testhat_register_algorithm("duncecap",
-			       &duncecap_vtable,
-			       sizeof(duncecap_t));
+                               &duncecap_vtable,
+                               sizeof(duncecap_t));
     testhat_register_algorithm("newshat", &newshat_vtable, sizeof(newshat_t));
     testhat_register_algorithm("ballcap", &ballcap_vtable, sizeof(ballcap_t));
     testhat_register_algorithm("hihat", &hihat_vtable, sizeof(hihat_t));

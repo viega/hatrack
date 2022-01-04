@@ -19,13 +19,13 @@
  *                  This is a lock-free, and wait freehash table,
  *                  without consistency / full ordering.
  *
- *                  Note that witchhat is based on hihat1, with a
+ *                  Note that witchhat is based on hihat, with a
  *                  helping mechanism in place to ensure wait freedom.
- *                  There are only a few places in hihat1 where we
+ *                  There are only a few places in hihat where we
  *                  need such a mechanism, so we will only comment on
  *                  those places.
  *
- *                  Refer to hihat1.h and hihat1.c for more detail on
+ *                  Refer to hihat.h and hihat.c for more detail on
  *                  the core algorithm, as here, we only comment on
  *                  the things that are different about witchhat.
  *
@@ -703,9 +703,10 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
     hatrack_hash_t   hv;
     uint64_t         i, j;
     uint64_t         bix;
-    uint64_t         new_used      = 0;
-    uint64_t         expected_used = 0;
+    uint64_t         new_used;
+    uint64_t         expected_used;
 
+    new_used  = 0;
     new_store = atomic_read(&top->store_current);
     
     if (new_store != self) {
@@ -840,13 +841,13 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
         LCAS(&bucket->record, &record, candidate_record, WITCHHAT_CTR_F_MOVED2);
     }
 
+    expected_used = 0;
+    
     LCAS(&new_store->used_count,
          &expected_used,
          new_used,
          WITCHHAT_CTR_LEN_INSTALL);
 
-    expected_used = 0;
-    
     if (LCAS(&top->store_current, &self, new_store, WITCHHAT_CTR_STORE_INSTALL)) {
         mmm_retire(self);
     }

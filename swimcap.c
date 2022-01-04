@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  *  Name:           swimcap.c
- *  Description:    Single Writer, Independent Multiple-readers, 
+ *  Description:    Single Writer, Independent Multiple-readers,
  *                  Crappy, Albeit Parallel.
  *
  *                  This uses a per-data structure lock that writers hold
@@ -70,9 +70,9 @@ void
 swimcap_init(swimcap_t *self)
 {
     swimcap_store_t *store = swimcap_store_new(HATRACK_MIN_SIZE);
-    self->item_count        = 0;
-    self->next_epoch        = 1; // 0 is reserved for empty buckets.
-    self->store             = store;
+    self->item_count       = 0;
+    self->next_epoch       = 1; // 0 is reserved for empty buckets.
+    self->store            = store;
     pthread_mutex_init(&self->write_mutex, NULL);
 
     return;
@@ -347,15 +347,15 @@ swimcap_len(swimcap_t *self)
 hatrack_view_t *
 swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t    *view;
+    hatrack_view_t   *view;
     swimcap_store_t  *store;
     swimcap_record_t  contents;
-    hatrack_view_t    *p;
+    hatrack_view_t   *p;
     swimcap_bucket_t *cur;
     swimcap_bucket_t *end;
-    uint64_t           count;
-    uint64_t           last_slot;
-    uint64_t           alloc_len;
+    uint64_t          count;
+    uint64_t          last_slot;
+    uint64_t          alloc_len;
 
 #ifdef SWIMCAP_CONSISTENT_VIEWS
     if (pthread_mutex_lock(&self->write_mutex)) {
@@ -423,7 +423,7 @@ static swimcap_store_t *
 swimcap_store_new(uint64_t size)
 {
     swimcap_store_t *ret;
-    uint64_t          alloc_len;
+    uint64_t         alloc_len;
 
     alloc_len = sizeof(swimcap_store_t);
     alloc_len += size * sizeof(swimcap_bucket_t);
@@ -438,9 +438,9 @@ swimcap_store_new(uint64_t size)
 static void *
 swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
 {
-    uint64_t           bix;
-    uint64_t           last_slot;
-    uint64_t           i;
+    uint64_t          bix;
+    uint64_t          last_slot;
+    uint64_t          i;
     swimcap_bucket_t *cur;
     swimcap_record_t  contents;
 
@@ -482,17 +482,17 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
 
 static void *
 swimcap_store_put(swimcap_store_t *self,
-                   swimcap_t       *top,
-                   hatrack_hash_t   *hv,
-                   void             *item,
-                   bool             *found)
+                  swimcap_t       *top,
+                  hatrack_hash_t  *hv,
+                  void            *item,
+                  bool            *found)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
+    uint64_t          bix;
+    uint64_t          i;
+    uint64_t          last_slot;
     swimcap_bucket_t *cur;
     swimcap_record_t  contents;
-    void              *ret;
+    void             *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -550,17 +550,17 @@ swimcap_store_put(swimcap_store_t *self,
 
 static void *
 swimcap_store_replace(swimcap_store_t *self,
-                       swimcap_t       *top,
-                       hatrack_hash_t   *hv,
-                       void             *item,
-                       bool             *found)
+                      swimcap_t       *top,
+                      hatrack_hash_t  *hv,
+                      void            *item,
+                      bool            *found)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
+    uint64_t          bix;
+    uint64_t          i;
+    uint64_t          last_slot;
     swimcap_bucket_t *cur;
     swimcap_record_t  contents;
-    void              *ret;
+    void             *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -599,13 +599,13 @@ swimcap_store_replace(swimcap_store_t *self,
 
 static bool
 swimcap_store_add(swimcap_store_t *self,
-                   swimcap_t       *top,
-                   hatrack_hash_t   *hv,
-                   void             *item)
+                  swimcap_t       *top,
+                  hatrack_hash_t  *hv,
+                  void            *item)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
+    uint64_t          bix;
+    uint64_t          i;
+    uint64_t          last_slot;
     swimcap_bucket_t *cur;
     swimcap_record_t  contents;
 
@@ -650,16 +650,16 @@ swimcap_store_add(swimcap_store_t *self,
 
 void *
 swimcap_store_remove(swimcap_store_t *self,
-                      swimcap_t       *top,
-                      hatrack_hash_t   *hv,
-                      bool             *found)
+                     swimcap_t       *top,
+                     hatrack_hash_t  *hv,
+                     bool            *found)
 {
-    uint64_t           bix;
-    uint64_t           i;
-    uint64_t           last_slot;
+    uint64_t          bix;
+    uint64_t          i;
+    uint64_t          last_slot;
     swimcap_bucket_t *cur;
     swimcap_record_t  contents;
-    void              *ret;
+    void             *ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -705,10 +705,10 @@ swimcap_migrate(swimcap_t *self)
     swimcap_bucket_t *cur;
     swimcap_bucket_t *target;
     swimcap_record_t  contents;
-    uint64_t           new_size;
-    uint64_t           cur_last_slot;
-    uint64_t           new_last_slot;
-    uint64_t           i, n, bix;
+    uint64_t          new_size;
+    uint64_t          cur_last_slot;
+    uint64_t          new_last_slot;
+    uint64_t          i, n, bix;
 
     cur_store     = self->store;
     cur_last_slot = cur_store->last_slot;
