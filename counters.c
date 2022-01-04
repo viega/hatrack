@@ -38,14 +38,6 @@ char *hatrack_counter_names[HATRACK_COUNTERS_NUM] = {
     "mmm used retires",
     "mmm unused retires",
     "stores shrunk",
-    "hi1a msleep 1a success",
-    "hi1a msleep 1a fail",
-    "hi1a msleep 1b success",
-    "hi1a msleep 1b fail",
-    "hi1a msleep 2a success",
-    "hi1a msleep 2a fail",
-    "hi1a msleep 2b success",
-    "hi1a msleep 2b fail",
     "wh help requests"
 };
 
@@ -98,54 +90,41 @@ char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
     "lh2 F_MOVED (migrate)",    // 45
     "lh2 hist ptr installed",   // 46
     "lh2 store installs",       // 47
-    "hi1 bucket acquires",      // 48
-    "hi1 record installs",      // 49
-    "hi1 record delete",        // 50
-    "hi1 store creates",        // 51
-    "hi1 F_MOVING set",         // 52
-    "hi1 F_MOVED (empty)",      // 53
-    "hi1 migrate hash",         // 54
-    "hi1 migrate record",       // 55
-    "hi1 F_MOVED (migrate)",    // 56
-    "hi1 len installed",        // 57
-    "hi1 store installs",       // 58
-    "hi1 woke up to no job",    // 59
-    "hi64 bucket acquires",     // 60
-    "hi64 bucket acquires 2",   // 61
-    "hi64 record installs",     // 62
-    "hi64 record deletes",      // 63
-    "hi64 store creates",       // 64
-    "hi64 store installs",      // 65    
-    "hi64 F_MOVING set",        // 66
-    "hi64 F_MOVED (empty)",     // 67
-    "hi64 migrate hash",        // 68
-    "hi64 migrate hash 2",      // 69
-    "hi64 migrate record",      // 70
-    "hi64 F_MOVE (migrate)",    // 71
-    "hi64 len installed",       // 72
-    "wh bucket acquires",       // 73
-    "wh record installs",       // 74
-    "wh record delete",         // 75
-    "wh store creates",         // 76
-    "wh F_MOVING set",          // 77
-    "wh F_MOVED (empty)",       // 78
-    "wh migrate hash",          // 79
-    "wh migrate record",        // 80
-    "wh F_MOVED (migrate)",     // 81
-    "wh len installed",         // 82
-    "wh store installs",        // 83
-    "wool bucket acquires",     // 84
-    "wool record installs",     // 85
-    "wool record delete",       // 86
-    "wool store creates",       // 87
-    "wool F_MOVING set",        // 88
-    "wool F_MOVED (empty)",     // 89
-    "wool F_MOVED (deleted)",   // 90
-    "wool migrate hash",        // 91
-    "wool migrate record",      // 92
-    "wool F_MOVED (migrate)",   // 93
-    "wool len installed",       // 94
-    "wool store installs",      // 95
+    "hih bucket acquires",      // 48
+    "hih record installs",      // 49
+    "hih record delete",        // 50
+    "hih store creates",        // 51
+    "hih F_MOVING set",         // 52
+    "hih F_MOVED (empty)",      // 53
+    "hih migrate hash",         // 54
+    "hih migrate record",       // 55
+    "hih F_MOVED (migrate)",    // 56
+    "hih len installed",        // 57
+    "hih store installs",       // 58
+    "hiha woke up to no job",   // 59
+    "wh bucket acquires",       // 60
+    "wh record installs",       // 61
+    "wh record delete",         // 62
+    "wh store creates",         // 63
+    "wh F_MOVING set",          // 64
+    "wh F_MOVED (empty)",       // 65
+    "wh migrate hash",          // 66
+    "wh migrate record",        // 67
+    "wh F_MOVED (migrate)",     // 68
+    "wh len installed",         // 69
+    "wh store installs",        // 70
+    "wool bucket acquires",     // 71
+    "wool record installs",     // 72
+    "wool record delete",       // 73
+    "wool store creates",       // 74
+    "wool F_MOVING set",        // 75
+    "wool F_MOVED (empty)",     // 76
+    "wool F_MOVED (deleted)",   // 77
+    "wool migrate hash",        // 78
+    "wool migrate record",      // 79
+    "wool F_MOVED (migrate)",   // 70
+    "wool len installed",       // 81
+    "wool store installs",      // 82
 };
 
 // clang-format on
@@ -204,11 +183,14 @@ counters_output_alltime(void)
 {
     uint64_t i;
     uint64_t total;
+    bool     unused_counters = false;
+    bool     print_comma     = false;
 
     fprintf(stderr, "----------- Counter TOTALS --------------\n");
 
     for (i = 0; i < HATRACK_COUNTERS_NUM; i++) {
         if (!hatrack_counters[i]) {
+            unused_counters = true;
             continue;
         }
         fprintf(stderr,
@@ -221,6 +203,7 @@ counters_output_alltime(void)
         total = hatrack_yn_counters[i][0] + hatrack_yn_counters[i][1];
 
         if (!total) {
+            unused_counters = true;
             continue;
         }
 
@@ -232,6 +215,35 @@ counters_output_alltime(void)
                 total,
                 (double)100.0
                     * (((double)hatrack_yn_counters[i][0]) / (double)total));
+    }
+
+    if (unused_counters) {
+        fprintf(stderr, "\nUnused counters: ");
+
+        for (i = 0; i < HATRACK_COUNTERS_NUM; i++) {
+            if (hatrack_counters[i]) {
+                continue;
+            }
+            if (print_comma) {
+                fprintf(stderr, ", %s", hatrack_counter_names[i]);
+            }
+            else {
+                fprintf(stderr, "%s", hatrack_counter_names[i]);
+            }
+        }
+
+        for (i = 0; i < HATRACK_YN_COUNTERS_NUM; i++) {
+            if (hatrack_yn_counters[i][0] || hatrack_yn_counters[i][1]) {
+                continue;
+            }
+            if (print_comma) {
+                fprintf(stderr, ", %s", hatrack_yn_counter_names[i]);
+            }
+            else {
+                fprintf(stderr, "%s", hatrack_yn_counter_names[i]);
+            }
+        }
+        fprintf(stderr, "\n");
     }
 }
 

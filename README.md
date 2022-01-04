@@ -48,7 +48,7 @@ From weakest guarantees to the strongest:
 avoid deadlock situations.  In practice, this means we use mutex locks
 that may lead to threads blocking waiting on a lock, but there are no
 cases where a lock in our code will be acquired without being
-released. Of our algorithms, *swimcap, swimcap2, newshat* and
+released. Of our algorithms, *duncecap, swimcap, newshat* and
 *ballcap* are deadlock free (but, using mutexes, do not provide
 stronger guarantees for most operations).  Most true hash tables we've
 seen in the real world that accept multiple concurrent writers, use
@@ -59,13 +59,13 @@ locks could be suspended for a long time, stalling threads that are
 running and could be doing work. With Lock Freedom, some thread is
 always able to get work done. And if a thread finds itself not getting
 work done, even though it's running, it's because other threads are
-being productive.  Of our algorithms, *hihat1, hihat64, lohat0,
-lohat1* and *lohat2* all provide lock freedom (and, in most cases,
-wait freedom).  We have found one other true hash table that is
-lock-free, written in Java by Cliff Click. Our lock-free tables are
-far simpler, works with C (Click doesn't have to worry about the hard
-task of parallel memory management, as he can simply depend on Java's
-garbage collection), and is more efficient.
+being productive.  Of our algorithms, *hihat, oldhat, lohat0, lohat1*
+and *lohat2* all provide lock freedom (and, in most cases, wait
+freedom).  We have found one other true hash table that is lock-free,
+written in Java by Cliff Click. Our lock-free tables are far simpler,
+work with C (Click doesn't have to worry about the hard task of
+parallel memory management, as he can simply depend on Java's garbage
+collection), and is more efficient.
 
 3). **Wait Freedom**. With lock freedom, individual threads can have
 operations that fail to make progress by "spinning" in the same
@@ -78,7 +78,7 @@ it's possible to have enough activity that individual threads get
 starved.  Wait freedom removes that restriction; all threads are
 guaranteed to make progress independent of the others.  Of our
 algorithms, *witchhat8 and *woolhat* are fully wait free.  Actually,
-all our hash tables except for swimcap have fully wait free read (get)
+all our hash tables except for duncecap have fully wait free read (get)
 operations.  And our lock free variants are mostly wait-free, except
 under exceptional conditions-- the work to convert them to full
 wait-freedom is small, and has no practical performance impact.
@@ -93,13 +93,12 @@ writers, in most cases:
 assumes there is never more than a single thread accessing the hash
 table at any time.
 
-1) The *swimcap* algorithms (*swimcap* and *swimcap2*) are multiple
-reader, but single writer only. The first, *swimcap*, cannot start
-reads while write operations in progress. However, a write operation
-can generally begin when read operations are in progress.  *Swimcap2*
-uses a global write lock to ensure a single writer, but reads are
-wait-free, and can always start and progress even if a writer is
-stalled.
+1) The algorithms *duncecap* and *swimcap* are multiple reader, but
+single writer only. The first, *duncecap*, cannot start reads while
+write operations in progress. However, a write operation can generally
+begin when read operations are in progress.  *Swimcap* uses a global
+write lock to ensure a single writer, but reads are wait-free, and can
+always start and progress even if a writer is stalled.
 
 2) *Newshat* and *ballcap* are multiple-reader, multiple-writer hash
 tables. Read operations are fully wait free, but write operations are
@@ -107,7 +106,7 @@ not. And, if the table needs to be resized, write operations will
 generally wait on a lock, while one thread performs the resizing.
 
 3) All other hash tables allow for multiple concurrent readers and
-writers, at all times, including the *hihats*, the *lohats*,
+writers, at all times, including the *hihats*, the *lohats*, *oldhat*,
 *witchhat* and *woolhat*.
 
 ### Order Insertion Preservation and consistent views.
@@ -131,18 +130,20 @@ Solving the consistent view problem also allows us to implement
 meaningful set operations, as they require consistency.
 
 Maintaining consistent views does have an performance penalty. Though,
-it's an O(1) penalty, and in practice our algorithms are still very
-fast.
+it's an O(1) penalty, that comes mainly from worse cache performance
+and more (relatively expensive) dynamic memory management
+operations. In practice, these algorithms are still very fast, in the
+grand scheme of things..
 
 Note that, in our tables that do not provide consistent views, we can
 still provide *approximate* insertion ordering.
 
 1) Tables without consistent views (and thus would not be good for set
-operations): *swimcap2, newshat, hihat1, hihat64, witchhat*.
+operations): *swimcap, newshat, hihat, oldhat, witchhat*.
 
 2) Tables with consistent views: *ballcap, lohat0, lohat1, lohat2, woolhat*.
 
-3) Table with a compile-time option for consistent views: *swimcap*.
+3) Table with a compile-time option for consistent views: *duncecap*.
 
 ## Performance
 
@@ -162,21 +163,39 @@ O(1) insertions, lookups and deletes.
 Right now, there's no high-level interfaces yet. Each algorithm has a
 low-level interface you can use.
 
+For general purpose use, witchhat is your best bet (at least when you
+have a 128-bit CAS operation; I've not yet tested it on legacy
+systems). It runs close enough in speed to refhat that I wouldn't
+hesitate to use it as a general-purpose table, even in the case of a
+single thread.
+
+If you care about sequential consistency (for instance, for set
+operations), woolhat is the best option.
+
+Note that woolhat should still be more than fast enough for most
+general-purpose use, but because it requires more dynamic memory
+management (and will have worse cache performance as a result), it's
+never going to be anywhere near as fast as witchhat.  In my early
+testing, woolhat tends to incur a penalty performance of 80-120% most
+of the time, though workloads with lots of writes in short succession
+will see this go up.
+
 ### Logical order of the tables
 
 If you're looking to understand the implementation details better,
 then you can review the source code for the different tables, in
 logical order (I'd built the hihats and the lohats first, and then the
-locking tables to be able to directly compare performance). Generally,
+locking tables to be able to directly compare performance; and woolhat
+and witchhat are the culmination of our lock-free tables). Generally,
 start with the .h file to get a sense of the data structures, then
 scan the comments in the associated .c file.
 
 1) **refhat**   A simple, fast, single-threaded reference hash table.
 
-2) **swimcap**  A multiple-reader, single writer hash table, using locks,
+2) *duncecap**  A multiple-reader, single writer hash table, using locks,
                 but with optimized locking for readers.
 		
-3) **swimcap2** Like swimcap, but readers do not use locking, and are
+3) **swimcap**  Like duncecap, but readers do not use locking, and are
                 wait-free. This implementation previews some of the
 		memory management primitives we use in our lock-free
 		implementations.
@@ -187,13 +206,18 @@ scan the comments in the associated .c file.
                 there is still a single write lock for all writers for
 		when tables resize.
 		
-5) **hihat1**   A mostly-wait free hash table, except when resizing, at
+5) **hihat**    A mostly-wait free hash table, except when resizing, at
                 which point most operations become lock-free instead.
+
+                There's also hihat-a, which is identical to hihat,
+                except that it uses a slightly different strategy for
+                migrating stores.
 		
-6) **hihat64**  A version of hihat1 that doesn't require a 128-bit
-                compare-and-swap operation. Note that, on architectures
-		w/o this operation, hihat1 still works, but C implements
-		the operation using fine-grained locking.
+6) **oldhat**   A mostly-wait free hash table that doesn't require a
+                128-bit compare-and-swap operation. Note that, on
+                architectures w/o this operation, hihat1 still works,
+                but C implements the operation using fine-grained
+                locking.
 		
 7) **ballcap**  Uses locks like newshat, but with consistent views,
                 meaning that when you ask for a view (e.g., to
@@ -212,19 +236,19 @@ scan the comments in the associated .c file.
                 near-O(n) views (note: I do not generally recommend this
 		trade-off).
 		
-11) **witchhat** A fully wait-free version of hihat1.
+11) **witchhat** A fully wait-free version of hihat.
 
-12) **woolhat** A fully wait-free version of lohat0.
+12) **woolhat**  A fully wait-free version of lohat0.
 
-13) **tophat** A proof of concept illustrating how language
-               implementations can get single-threaded performance
-               until a second thread starts, by waiting until that
-               time to migrate the table to a different
-               implementation. Note, however, that, for general
-               purpose use, witchhat and woolhat both perform
-               admirably, even for single-threaded applications
-               (especially witchhat, when multi-threaded order
-               preservation and consistency are unimportant).
+13) **tophat**  A proof of concept illustrating how language
+                implementations can get single-threaded performance
+                until a second thread starts, by waiting until that
+                time to migrate the table to a different
+                implementation. Note, however, that, for general
+                purpose use, witchhat and woolhat both perform
+                admirably, even for single-threaded applications
+                (especially witchhat, when multi-threaded order
+                preservation and consistency are unimportant).
 		
 
 ## Status of this work

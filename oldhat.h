@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,48 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           oldhat.h
- *  Description:    Half-Interesting HAsh Table w/ single-word CAS only.
+ *  Name:           oldhat.c
+ *  Description:    Old, Legacy, Dated Hardware-Acceptable Table
  *
- *                  This is somewhat like hihat1, except that we do
- *                  not use a double-word Compare-And-Swap, as it is
- *                  not natively available on all architectures (C11
- *                  atomics imitate this with locks, if not available,
- *                  but may warn about slow performance).
+ *                  This table stays away from 128-bit compare-and
+ *                  swap operations.  It does so by keeping all bucket
+ *                  information in a single structure, and only ever
+ *                  CASing a pointer to said structure.
  *
- *                  This constraint does lead to some real differences
- *                  in the algorithm, particularly:
- *
- *               1) Since we can't swap in a record consisting of two
- *                  64-bit values (one value being an item, and the
- *                  other being an epoch and flags), we instead swap
- *                  in a pointer to a record.
- *
- *                  We use mmm to allocate these records, and use the
- *                  global mmm "epoch" value for the epoch value,
- *                  which gets placed in a hidden mmm header (see
- *                  mmm.h and mmm.c).  And, we then steal bits from
- *                  the pointer to the record to track status (see
- *                  the flag enumeration below).
- *
- *                  This, of course, means that we need to worry about
- *                  memory management of these records, now.
- *
- *               2) We need to handle hash comparisons differently. We
- *                  can either assume that 64 bits of hash value is
- *                  enough for identity, in which case, we only use
- *                  the first 64 bits of any hatrack_hash_t passed in,
- *                  or we write out the hash value in two chunks.
- *
- *
- *                  Beyond those items, the algorithms are otherwise
- *                  similar.  In our comments, we try to limit
- *                  ourselves to the differences between the
- *                  algorithms, so it is good to start with hihat1
- *                  before attempting to wrap your head around this
- *                  version.
+ *                  The net result is we require a lot of dynamic
+ *                  memory allocation.
  *
  *  Author:         John Viega, john@zork.org
+ *
+ * TODO: Add a cleanup handler to retire all the old store records.
+ * TODO: Fix the hihat / witchhat expected_use = 0 assignment location.
  *
  */
 

@@ -13,14 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           swimcap2.h
- *  Description:    Single WrIter, Multiple-read, Crappy, Albeit Parallel, v2.
+ *  Name:           swimcap.h
+ *  Description:    Single Writer, Independent Multiple-readers.
+ *                  Crappy, Albeit Parallel.
  *
  *                  This uses a per-data structure lock that writers hold
  *                  for their entire operation.
  *
- *                  In this version, readers do NOT use the lock; in
- *                  fact, they are fully wait free.
+ *                  It is based on duncecap, but in this version,
+ *                  readers do NOT use the lock; in fact, they are
+ *                  fully wait free.
  *
  *                  Instead, we use an epoch-based memory management
  *                  scheme on our current data store, to make sure that
@@ -40,9 +42,9 @@
 
 // clang-format off
 
-/* swimcap2_record_t
+/* swimcap_record_t
  *
- * This is unchanged from swimcap_contents_t.
+ * This is unchanged from duncecap_contents_t.
  *
  * In this implementation, readers only use a mutex long enough to
  * register as a reader (to make sure no writer deletes the store
@@ -82,11 +84,11 @@
 typedef struct {
     void    *item;
     uint64_t info;
-} swimcap2_record_t;
+} swimcap_record_t;
 
-/* swimcap2_bucket_t
+/* swimcap_bucket_t
  *
- * This is also unchanged from swimcap_bucket_t.
+ * This is also unchanged from duncecap_bucket_t.
  *
  * Writers will have a write-lock on the hash table before writing to
  * the items in a bucket, but will still need to update the contents
@@ -102,7 +104,7 @@ typedef struct {
  * readers will experience a 'miss', which is the correct outcome, as
  * if the hash had not been written at all yet.
  *
- * contents -- The contents, per swimcap2_record_t above.
+ * contents -- The contents, per swimcap_record_t above.
  *
  * hv       -- The hash value associated with the contents / bucket, 
  *             if any.  Note that the all-zero value maps to "bucket 
@@ -114,16 +116,16 @@ typedef struct {
  */
 typedef struct {
     alignas(16)
-    _Atomic swimcap2_record_t contents;
-    hatrack_hash_t            hv;
-} swimcap2_bucket_t;
+    _Atomic swimcap_record_t contents;
+    hatrack_hash_t           hv;
+} swimcap_bucket_t;
 
-/* swimcap2_store_t
+/* swimcap_store_t
  *
  * The data type representing our current store. This is similar to
  * swimcap_store_t, except that we remove the 'readers' field, because
  * we use an alternative approach to ensuring that writers don't
- * delete stores that a reader might be using (see the swimcap2.c
+ * delete stores that a reader might be using (see the swimcap.c
  * source).
  *
  * last_slot --  The array index of the last bucket, so this will be
@@ -153,15 +155,15 @@ typedef struct {
  *               so that we can avoid an extra indirection.
  */
 typedef struct {
-    uint64_t            last_slot;
-    uint64_t            threshold;
-    uint64_t            used_count;
-    swimcap2_bucket_t   buckets[];
-} swimcap2_store_t;
+    uint64_t         last_slot;
+    uint64_t         threshold;
+    uint64_t         used_count;
+    swimcap_bucket_t buckets[];
+} swimcap_store_t;
 
-/* swimcap2_t
+/* swimcap_t
  *
- * This is the same as with swimcap_t
+ * This is the same as with duncecap_t
  *
  * item_count    -- The number of items in the table, approximately.
  *                  This value isn't used in anything critical, just
@@ -200,22 +202,20 @@ typedef struct {
  *                  operation, for the purposes of sort ordering.
  */
 typedef struct {
-    uint64_t            item_count;
-    uint64_t            next_epoch;
-    swimcap2_store_t   *store;
-    pthread_mutex_t     write_mutex;
-} swimcap2_t;
+    uint64_t           item_count;
+    uint64_t           next_epoch;
+    swimcap_store_t   *store;
+    pthread_mutex_t    write_mutex;
+} swimcap_t;
 
-void            swimcap2_init   (swimcap2_t *);
-void           *swimcap2_get    (swimcap2_t *, hatrack_hash_t *, bool *);
-void           *swimcap2_put    (swimcap2_t *, hatrack_hash_t *, void *,
-				 bool *);
-void           *swimcap2_replace(swimcap2_t *, hatrack_hash_t *, void *,
-				 bool *);
-bool            swimcap2_add    (swimcap2_t *, hatrack_hash_t *, void *);
-void           *swimcap2_remove (swimcap2_t *, hatrack_hash_t *, bool *);
-void            swimcap2_delete (swimcap2_t *);
-uint64_t        swimcap2_len    (swimcap2_t *);
-hatrack_view_t *swimcap2_view   (swimcap2_t *, uint64_t *, bool);
+void            swimcap_init   (swimcap_t *);
+void           *swimcap_get    (swimcap_t *, hatrack_hash_t *, bool *);
+void           *swimcap_put    (swimcap_t *, hatrack_hash_t *, void *, bool *);
+void           *swimcap_replace(swimcap_t *, hatrack_hash_t *, void *, bool *);
+bool            swimcap_add    (swimcap_t *, hatrack_hash_t *, void *);
+void           *swimcap_remove (swimcap_t *, hatrack_hash_t *, bool *);
+void            swimcap_delete (swimcap_t *);
+uint64_t        swimcap_len    (swimcap_t *);
+hatrack_view_t *swimcap_view   (swimcap_t *, uint64_t *, bool);
 
 #endif

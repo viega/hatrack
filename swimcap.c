@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           swimcap2.c
- *  Description:    Single WrIter, Multiple-read, Crappy, Albeit Parallel, v2.
+ *  Name:           swimcap.c
+ *  Description:    Single Writer, Independent Multiple-readers, 
+ *                  Crappy, Albeit Parallel.
  *
  *                  This uses a per-data structure lock that writers hold
  *                  for their entire operation.
@@ -31,28 +32,28 @@
  *
  */
 
-#include "swimcap2.h"
+#include "swimcap.h"
 
 // clang-format off
-static swimcap2_store_t *swimcap2_store_new    (uint64_t);
-static void             *swimcap2_store_get    (swimcap2_store_t *,
-						hatrack_hash_t *, bool *);
-static void             *swimcap2_store_put    (swimcap2_store_t *,
-						swimcap2_t *, hatrack_hash_t *,
-						void *, bool *);
-static void             *swimcap2_store_replace(swimcap2_store_t *,
-						swimcap2_t *, hatrack_hash_t *,
-						void *, bool *);
-static bool              swimcap2_store_add    (swimcap2_store_t *,
-						swimcap2_t *, hatrack_hash_t *,
-						void *);
-static void             *swimcap2_store_remove (swimcap2_store_t *,
-						swimcap2_t *, hatrack_hash_t *,
-						bool *);
-static void              swimcap2_migrate     (swimcap2_t *);
+static swimcap_store_t *swimcap_store_new    (uint64_t);
+static void            *swimcap_store_get    (swimcap_store_t *,
+					      hatrack_hash_t *, bool *);
+static void            *swimcap_store_put    (swimcap_store_t *,
+					      swimcap_t *, hatrack_hash_t *,
+					      void *, bool *);
+static void            *swimcap_store_replace(swimcap_store_t *,
+					      swimcap_t *, hatrack_hash_t *,
+					      void *, bool *);
+static bool             swimcap_store_add    (swimcap_store_t *,
+					      swimcap_t *, hatrack_hash_t *,
+					      void *);
+static void            *swimcap_store_remove (swimcap_store_t *,
+					      swimcap_t *, hatrack_hash_t *,
+					      bool *);
+static void             swimcap_migrate     (swimcap_t *);
 // clang-format on
 
-/* swimcap2_init()
+/* swimcap_init()
  *
  * This is identical to swimcap_init().
  *
@@ -66,9 +67,9 @@ static void              swimcap2_migrate     (swimcap2_t *);
  * variable HATRACK_MIN_SIZE_LOG.
  */
 void
-swimcap2_init(swimcap2_t *self)
+swimcap_init(swimcap_t *self)
 {
-    swimcap2_store_t *store = swimcap2_store_new(HATRACK_MIN_SIZE);
+    swimcap_store_t *store = swimcap_store_new(HATRACK_MIN_SIZE);
     self->item_count        = 0;
     self->next_epoch        = 1; // 0 is reserved for empty buckets.
     self->store             = store;
@@ -77,7 +78,7 @@ swimcap2_init(swimcap2_t *self)
     return;
 }
 
-/* swimcap2_get()
+/* swimcap_get()
  *
  * This function needs to safely acquire a reference to the current store,
  * before looking for the hash value in the store. We do so, by using our
@@ -118,18 +119,18 @@ swimcap2_init(swimcap2_t *self)
  * swimcap.c for more details if needed.
  */
 void *
-swimcap2_get(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
+swimcap_get(swimcap_t *self, hatrack_hash_t *hv, bool *found)
 {
     void *ret;
 
     mmm_start_basic_op();
-    ret = swimcap2_store_get(self->store, hv, found);
+    ret = swimcap_store_get(self->store, hv, found);
     mmm_end_op();
 
     return ret;
 }
 
-/* swimcap2_put()
+/* swimcap_put()
  *
  * Note that, since this implementation does not have competing
  * writers, the current thread is the only thread that can possibly do
@@ -155,7 +156,7 @@ swimcap2_get(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
  * in a single object in the item parameter.
  */
 void *
-swimcap2_put(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
+swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
 
@@ -163,7 +164,7 @@ swimcap2_put(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
         abort();
     }
 
-    ret = swimcap2_store_put(self->store, self, hv, item, found);
+    ret = swimcap_store_put(self->store, self, hv, item, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -172,9 +173,9 @@ swimcap2_put(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
     return ret;
 }
 
-/* swimcap2_replace()
+/* swimcap_replace()
  *
- * As with swimcap2_put(), we need to acquire the write lock, but do not
+ * As with swimcap_put(), we need to acquire the write lock, but do not
  * need to register an mmm epoch. This function will never result in
  * a table migration.
  *
@@ -191,7 +192,7 @@ swimcap2_put(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * in a single object in the item parameter.
  */
 void *
-swimcap2_replace(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
+swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
 
@@ -199,7 +200,7 @@ swimcap2_replace(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
         abort();
     }
 
-    ret = swimcap2_store_replace(self->store, self, hv, item, found);
+    ret = swimcap_store_replace(self->store, self, hv, item, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -208,9 +209,9 @@ swimcap2_replace(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
     return ret;
 }
 
-/* swimcap2_add()
+/* swimcap_add()
  *
- * As with swimcap2_put(), we need to acquire the write lock, but do not
+ * As with swimcap_put(), we need to acquire the write lock, but do not
  * need to register an mmm epoch.
  *
  * The 'add' operation adds an item to the hash table, but only if
@@ -224,7 +225,7 @@ swimcap2_replace(swimcap2_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * Returns true if the insertion is succesful, and false otherwise.
  */
 bool
-swimcap2_add(swimcap2_t *self, hatrack_hash_t *hv, void *item)
+swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
 {
     bool ret;
 
@@ -232,7 +233,7 @@ swimcap2_add(swimcap2_t *self, hatrack_hash_t *hv, void *item)
         abort();
     }
 
-    ret = swimcap2_store_add(self->store, self, hv, item);
+    ret = swimcap_store_add(self->store, self, hv, item);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -242,7 +243,7 @@ swimcap2_add(swimcap2_t *self, hatrack_hash_t *hv, void *item)
 }
 
 /*
- * As with swimcap2_put(), we need to acquire the write lock, but do not
+ * As with swimcap_put(), we need to acquire the write lock, but do not
  * need to register an mmm epoch. This function can never result in a
  * table migration.
  *
@@ -263,7 +264,7 @@ swimcap2_add(swimcap2_t *self, hatrack_hash_t *hv, void *item)
  * behavior is the same as if the item was never in the table.
  */
 void *
-swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
+swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
 {
     void *ret;
 
@@ -271,7 +272,7 @@ swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
         abort();
     }
 
-    ret = swimcap2_store_remove(self->store, self, hv, found);
+    ret = swimcap_store_remove(self->store, self, hv, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -281,11 +282,11 @@ swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 /*
- * swimcap2_delete()
+ * swimcap_delete()
  *
  * This implementation is identical to swimcap_delete().
  *
- * Deletes a swimcap2 object. Generally, you should be confident that
+ * Deletes a swimcap object. Generally, you should be confident that
  * all threads except the one from which you're calling this have
  * stopped using the table (generally meaning they no longer hold a
  * reference to the store).
@@ -302,7 +303,7 @@ swimcap2_remove(swimcap2_t *self, hatrack_hash_t *hv, bool *found)
  * mutex when it's destroyed will hang indefinitely.
  */
 void
-swimcap2_delete(swimcap2_t *self)
+swimcap_delete(swimcap_t *self)
 {
     pthread_mutex_destroy(&self->write_mutex);
     DEBUG_MMM(self->store, "xxx store retire (delete).");
@@ -312,7 +313,7 @@ swimcap2_delete(swimcap2_t *self)
     return;
 }
 
-/* swimcap2_len()
+/* swimcap_len()
  *
  * This implementation is identical to swimcap_len().
  *
@@ -323,7 +324,7 @@ swimcap2_delete(swimcap2_t *self)
  * use.
  */
 uint64_t
-swimcap2_len(swimcap2_t *self)
+swimcap_len(swimcap_t *self)
 {
     return self->item_count;
 }
@@ -344,14 +345,14 @@ swimcap2_len(swimcap2_t *self)
  * write lock, just as we did with swimcap.
  */
 hatrack_view_t *
-swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
+swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t    *view;
-    swimcap2_store_t  *store;
-    swimcap2_record_t  contents;
+    swimcap_store_t  *store;
+    swimcap_record_t  contents;
     hatrack_view_t    *p;
-    swimcap2_bucket_t *cur;
-    swimcap2_bucket_t *end;
+    swimcap_bucket_t *cur;
+    swimcap_bucket_t *end;
     uint64_t           count;
     uint64_t           last_slot;
     uint64_t           alloc_len;
@@ -418,15 +419,15 @@ swimcap2_view(swimcap2_t *self, uint64_t *num, bool sort)
  * strictly necessary for our use of MMM here; we really only care
  * about the epoch in which we were retired.
  */
-static swimcap2_store_t *
-swimcap2_store_new(uint64_t size)
+static swimcap_store_t *
+swimcap_store_new(uint64_t size)
 {
-    swimcap2_store_t *ret;
+    swimcap_store_t *ret;
     uint64_t          alloc_len;
 
-    alloc_len = sizeof(swimcap2_store_t);
-    alloc_len += size * sizeof(swimcap2_bucket_t);
-    ret = (swimcap2_store_t *)mmm_alloc_committed(alloc_len);
+    alloc_len = sizeof(swimcap_store_t);
+    alloc_len += size * sizeof(swimcap_bucket_t);
+    ret = (swimcap_store_t *)mmm_alloc_committed(alloc_len);
     DEBUG_MMM(ret, "xxx in store_new.");
     ret->last_slot = size - 1;
     ret->threshold = hatrack_compute_table_threshold(size);
@@ -435,13 +436,13 @@ swimcap2_store_new(uint64_t size)
 }
 
 static void *
-swimcap2_store_get(swimcap2_store_t *self, hatrack_hash_t *hv, bool *found)
+swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
 {
     uint64_t           bix;
     uint64_t           last_slot;
     uint64_t           i;
-    swimcap2_bucket_t *cur;
-    swimcap2_record_t  contents;
+    swimcap_bucket_t *cur;
+    swimcap_record_t  contents;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -480,8 +481,8 @@ swimcap2_store_get(swimcap2_store_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 static void *
-swimcap2_store_put(swimcap2_store_t *self,
-                   swimcap2_t       *top,
+swimcap_store_put(swimcap_store_t *self,
+                   swimcap_t       *top,
                    hatrack_hash_t   *hv,
                    void             *item,
                    bool             *found)
@@ -489,8 +490,8 @@ swimcap2_store_put(swimcap2_store_t *self,
     uint64_t           bix;
     uint64_t           i;
     uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    swimcap2_record_t  contents;
+    swimcap_bucket_t *cur;
+    swimcap_record_t  contents;
     void              *ret;
 
     last_slot = self->last_slot;
@@ -527,8 +528,8 @@ swimcap2_store_put(swimcap2_store_t *self,
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
-                swimcap2_migrate(top);
-                return swimcap2_store_put(top->store, top, hv, item, found);
+                swimcap_migrate(top);
+                return swimcap_store_put(top->store, top, hv, item, found);
             }
             self->used_count++;
             top->item_count++;
@@ -548,8 +549,8 @@ swimcap2_store_put(swimcap2_store_t *self,
 }
 
 static void *
-swimcap2_store_replace(swimcap2_store_t *self,
-                       swimcap2_t       *top,
+swimcap_store_replace(swimcap_store_t *self,
+                       swimcap_t       *top,
                        hatrack_hash_t   *hv,
                        void             *item,
                        bool             *found)
@@ -557,8 +558,8 @@ swimcap2_store_replace(swimcap2_store_t *self,
     uint64_t           bix;
     uint64_t           i;
     uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    swimcap2_record_t  contents;
+    swimcap_bucket_t *cur;
+    swimcap_record_t  contents;
     void              *ret;
 
     last_slot = self->last_slot;
@@ -597,16 +598,16 @@ swimcap2_store_replace(swimcap2_store_t *self,
 }
 
 static bool
-swimcap2_store_add(swimcap2_store_t *self,
-                   swimcap2_t       *top,
+swimcap_store_add(swimcap_store_t *self,
+                   swimcap_t       *top,
                    hatrack_hash_t   *hv,
                    void             *item)
 {
     uint64_t           bix;
     uint64_t           i;
     uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    swimcap2_record_t  contents;
+    swimcap_bucket_t *cur;
+    swimcap_record_t  contents;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -630,8 +631,8 @@ swimcap2_store_add(swimcap2_store_t *self,
         // time of the operation, and we should add.
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
-                swimcap2_migrate(top);
-                return swimcap2_store_add(top->store, top, hv, item);
+                swimcap_migrate(top);
+                return swimcap_store_add(top->store, top, hv, item);
             }
             self->used_count++;
             top->item_count++;
@@ -648,16 +649,16 @@ swimcap2_store_add(swimcap2_store_t *self,
 }
 
 void *
-swimcap2_store_remove(swimcap2_store_t *self,
-                      swimcap2_t       *top,
+swimcap_store_remove(swimcap_store_t *self,
+                      swimcap_t       *top,
                       hatrack_hash_t   *hv,
                       bool             *found)
 {
     uint64_t           bix;
     uint64_t           i;
     uint64_t           last_slot;
-    swimcap2_bucket_t *cur;
-    swimcap2_record_t  contents;
+    swimcap_bucket_t *cur;
+    swimcap_record_t  contents;
     void              *ret;
 
     last_slot = self->last_slot;
@@ -697,13 +698,13 @@ swimcap2_store_remove(swimcap2_store_t *self,
 }
 
 static void
-swimcap2_migrate(swimcap2_t *self)
+swimcap_migrate(swimcap_t *self)
 {
-    swimcap2_store_t  *cur_store;
-    swimcap2_store_t  *new_store;
-    swimcap2_bucket_t *cur;
-    swimcap2_bucket_t *target;
-    swimcap2_record_t  contents;
+    swimcap_store_t  *cur_store;
+    swimcap_store_t  *new_store;
+    swimcap_bucket_t *cur;
+    swimcap_bucket_t *target;
+    swimcap_record_t  contents;
     uint64_t           new_size;
     uint64_t           cur_last_slot;
     uint64_t           new_last_slot;
@@ -711,9 +712,9 @@ swimcap2_migrate(swimcap2_t *self)
 
     cur_store     = self->store;
     cur_last_slot = cur_store->last_slot;
-    new_size      = hatrack_new_size(cur_last_slot, swimcap2_len(self) + 1);
+    new_size      = hatrack_new_size(cur_last_slot, swimcap_len(self) + 1);
     new_last_slot = new_size - 1;
-    new_store     = swimcap2_store_new(new_size);
+    new_store     = swimcap_store_new(new_size);
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur      = &cur_store->buckets[n];
