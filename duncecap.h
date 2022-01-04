@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           swimcap.h
- *  Description:    Single WrIter, Multiple-read, Crappy, Albeit Parallel.
+ *  Name:           duncecap.h
+ *  Description:    Don't Use: Crappy Educational Code, Albeit Parallel.
  *
  *                  This uses a per-data structure lock that writers hold
  *                  for their entire operation.
@@ -34,8 +34,8 @@
  *
  */
 
-#ifndef __SWIMCAP_H__
-#define __SWIMCAP_H__
+#ifndef __DUNCECAP_H__
+#define __DUNCECAP_H__
 
 #include "hatrack_common.h"
 
@@ -43,7 +43,7 @@
 
 // clang-format off
 
-/* swimcap_record_t
+/* duncecap_record_t
  *
  * In this implementation, readers only use a mutex long enough to
  * register as a reader (to make sure no writer deletes the store
@@ -60,7 +60,7 @@
  * item (if there is one), and meta-data about that item atomically.
  *
  * We could use the lock to do that, but instead we use an atomic read
- * operation.  The data type swimcap_record_t represents the 128-bit
+ * operation.  The data type duncecap_record_t represents the 128-bit
  * value we read atomically (actually, could be 64 bits on platforms
  * w/ 32-bit pointers). Note that, on architectures without a 128-bit
  * atomic load operation, C will transparently use locking to simulate
@@ -75,7 +75,7 @@
  *         other items. Note that, since this table does not provide
  *         fully consistent views, the epoch is not quite as accurate
  *         as with other table implementations in the hatrack. In
- *         particular, bumps to the swimcap_t data structure's
+ *         particular, bumps to the duncecap_t data structure's
  *         next_epoch value (see below), are racy, so multiple data
  *         items can definitely get the same epoch value, meaning we
  *         have no linearization point on which to construct a
@@ -84,9 +84,9 @@
 typedef struct {
     void    *item;
     uint64_t info;
-} swimcap_record_t;
+} duncecap_record_t;
 
-/* swimcap_bucket_t
+/* duncecap_bucket_t
  *
  * Writers will have a write-lock on the hash table before writing to
  * the items in a bucket, but will still need to update the contents
@@ -113,11 +113,11 @@ typedef struct {
  */
 typedef struct {
     alignas(16)
-    _Atomic swimcap_record_t contents;
+    _Atomic duncecap_record_t contents;
     hatrack_hash_t           hv;
-} swimcap_bucket_t;
+} duncecap_bucket_t;
 
-/* swimcap_store_t
+/* duncecap_store_t
  *
  * The data type representing our current store.
  *
@@ -159,10 +159,10 @@ typedef struct {
     uint64_t            last_slot;
     uint64_t            threshold;
     uint64_t            used_count;
-    swimcap_bucket_t    buckets[];
-} swimcap_store_t;
+    duncecap_bucket_t    buckets[];
+} duncecap_store_t;
 
-/* swimcap_t
+/* duncecap_t
  *
  * item_count    -- The number of items in the table, approximately.
  *                  This value isn't used in anything critical, just
@@ -202,13 +202,13 @@ typedef struct {
  */
 typedef struct {
     uint64_t            item_count;
-    swimcap_store_t    *store_current;
+    duncecap_store_t    *store_current;
     pthread_mutex_t     mutex;
     uint64_t            next_epoch;
-} swimcap_t;
+} duncecap_t;
 // clang-format on
 
-/* swimcap_reader_enter()
+/* duncecap_reader_enter()
  *
  * Used to register readers to the current store, so that we can make
  * sure not to deallocate the store while readers are using it. The
@@ -217,7 +217,7 @@ typedef struct {
  * holding the lock, we get a pointer to the current store, and bump
  * up the reader count.  Readers can then forego holding the lock;
  * they finish by decrementing the counter atomically (see
- * swimcap_reader_exit() below).
+ * duncecap_reader_exit() below).
  *
  * We could use a read-write mutex, but that would unnecessarily block
  * both reads and writes, when a writer comes along.  The store won't
@@ -225,13 +225,13 @@ typedef struct {
  * can atomically read the pointer to the store and register our
  * reference to the store, we are fine. As an alternative, we could do
  * this without locks using a 128-bit CAS that holds the pointer, or
- * use mmm_alloc() for the stores (which we do in the swimcap2
+ * use mmm_alloc() for the stores (which we do in the duncecap2
  * implementation).
  */
-static inline swimcap_store_t *
-swimcap_reader_enter(swimcap_t *self)
+static inline duncecap_store_t *
+duncecap_reader_enter(duncecap_t *self)
 {
-    swimcap_store_t *ret;
+    duncecap_store_t *ret;
 
     pthread_mutex_lock(&self->mutex);
     ret = self->store_current;
@@ -241,13 +241,13 @@ swimcap_reader_enter(swimcap_t *self)
     return ret;
 }
 
-/* swimcap_reader_exit()
+/* duncecap_reader_exit()
  *
  * This simply needs to decrement the reader count associated with the
  * store, atomically.
  */
 static inline void
-swimcap_reader_exit(swimcap_store_t *store)
+duncecap_reader_exit(duncecap_store_t *store)
 {
     atomic_fetch_sub(&store->readers, 1);
 
@@ -255,14 +255,14 @@ swimcap_reader_exit(swimcap_store_t *store)
 }
 
 // clang-format off
-void            swimcap_init   (swimcap_t *);
-void           *swimcap_get    (swimcap_t *, hatrack_hash_t *, bool *);
-void           *swimcap_put    (swimcap_t *, hatrack_hash_t *, void *, bool *);
-void           *swimcap_replace(swimcap_t *, hatrack_hash_t *, void *, bool *);
-bool            swimcap_add    (swimcap_t *, hatrack_hash_t *, void *);
-void           *swimcap_remove (swimcap_t *, hatrack_hash_t *, bool *);
-void            swimcap_delete (swimcap_t *);
-uint64_t        swimcap_len    (swimcap_t *);
-hatrack_view_t *swimcap_view   (swimcap_t *, uint64_t *, bool);
+void            duncecap_init   (duncecap_t *);
+void           *duncecap_get    (duncecap_t *, hatrack_hash_t *, bool *);
+void           *duncecap_put    (duncecap_t *, hatrack_hash_t *, void *, bool *);
+void           *duncecap_replace(duncecap_t *, hatrack_hash_t *, void *, bool *);
+bool            duncecap_add    (duncecap_t *, hatrack_hash_t *, void *);
+void           *duncecap_remove (duncecap_t *, hatrack_hash_t *, bool *);
+void            duncecap_delete (duncecap_t *);
+uint64_t        duncecap_len    (duncecap_t *);
+hatrack_view_t *duncecap_view   (duncecap_t *, uint64_t *, bool);
 
 #endif

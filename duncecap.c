@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           swimcap.c
- *  Description:    Single WrIter, Multiple-read, Crappy, Albeit Parallel.
+ *  Name:           duncecap.c
+ *  Description:    Don't Use: Crappy Educational Code, Albeit Parallel.
  *
  *                  This uses a per-data structure lock that writers hold
  *                  for their entire operation.
@@ -29,46 +29,46 @@
  *
  */
 
-#include "swimcap.h"
+#include "duncecap.h"
 
 // clang-format off
-static swimcap_store_t *swimcap_store_new    (uint64_t);
-static void            *swimcap_store_get    (swimcap_store_t *,
+static duncecap_store_t *duncecap_store_new    (uint64_t);
+static void            *duncecap_store_get    (duncecap_store_t *,
 					      hatrack_hash_t *, bool *);
-static void            *swimcap_store_put    (swimcap_store_t *, swimcap_t *,
+static void            *duncecap_store_put    (duncecap_store_t *, duncecap_t *,
 					      hatrack_hash_t *, void *, bool *);
-static void            *swimcap_store_replace(swimcap_store_t *, swimcap_t *,
+static void            *duncecap_store_replace(duncecap_store_t *, duncecap_t *,
 					      hatrack_hash_t *, void *, bool *);
-static bool             swimcap_store_add    (swimcap_store_t *, swimcap_t *, 
+static bool             duncecap_store_add    (duncecap_store_t *, duncecap_t *, 
 					      hatrack_hash_t *, void *);
-static void            *swimcap_store_remove (swimcap_store_t *, swimcap_t *,
+static void            *duncecap_store_remove (duncecap_store_t *, duncecap_t *,
 					      hatrack_hash_t *, bool *);
-static void             swimcap_migrate      (swimcap_t *);
+static void             duncecap_migrate      (duncecap_t *);
 // clang-format on
 
-/* These macros clean up swimcap_view() to make it more readable.  With
- * swimcap, we allow compile-time configuration to determine whether
+/* These macros clean up duncecap_view() to make it more readable.  With
+ * duncecap, we allow compile-time configuration to determine whether
  * views are consistent or not (this is set in stone for all our other
  * algorithms, except for tophat, where it's runtime selectable).
  *
- * With consistent views, the results of a call to swimcap_view() are
+ * With consistent views, the results of a call to duncecap_view() are
  * guaranteed to be a moment-in-time result. To do this, we act like a
  * writer, grabbing the write-lock to keep the table from mutating
  * while we are using it.
  *
  * Otherwise, we act like a reader, and call the inline functions
- * swimcap_reader_enter() and swimcap_reader_exit() (defined in
- * swimcap.h).
+ * duncecap_reader_enter() and duncecap_reader_exit() (defined in
+ * duncecap.h).
  *
  * This behavior is controlled with the configuration variable
- * SWIMCAP_CONSISTENT_VIEWS. Inconsistent views are the default.
+ * DUNCECAP_CONSISTENT_VIEWS. Inconsistent views are the default.
  */
-#ifndef SWIMCAP_CONSISTENT_VIEWS
-#define swimcap_viewer_enter(self)       swimcap_reader_enter(self)
-#define swimcap_viewer_exit(self, store) swimcap_reader_exit(store)
+#ifndef DUNCECAP_CONSISTENT_VIEWS
+#define duncecap_viewer_enter(self)       duncecap_reader_enter(self)
+#define duncecap_viewer_exit(self, store) duncecap_reader_exit(store)
 #else
-static inline swimcap_store_t *
-swimcap_viewer_enter(swimcap_t *self)
+static inline duncecap_store_t *
+duncecap_viewer_enter(duncecap_t *self)
 {
     if (pthread_mutex_lock(&self->mutex)) {
         abort();
@@ -78,7 +78,7 @@ swimcap_viewer_enter(swimcap_t *self)
 }
 
 static inline void
-swimcap_viewer_exit(swimcap_t *self, swimcap_store_t *unused)
+duncecap_viewer_exit(duncecap_t *self, duncecap_store_t *unused)
 {
     if (pthread_mutex_unlock(&self->mutex)) {
         abort();
@@ -86,9 +86,9 @@ swimcap_viewer_exit(swimcap_t *self, swimcap_store_t *unused)
 }
 #endif
 
-/* swimcap_init()
+/* duncecap_init()
  *
- * It's expected that swimcap instances will be created via the
+ * It's expected that duncecap instances will be created via the
  * default malloc.  This function cannot rely on zero-initialization
  * of its own object.
  *
@@ -98,10 +98,10 @@ swimcap_viewer_exit(swimcap_t *self, swimcap_store_t *unused)
  * variable HATRACK_MIN_SIZE_LOG.
  */
 void
-swimcap_init(swimcap_t *self)
+duncecap_init(duncecap_t *self)
 {
-    swimcap_store_t *store;
-    store               = swimcap_store_new(HATRACK_MIN_SIZE);
+    duncecap_store_t *store;
+    store               = duncecap_store_new(HATRACK_MIN_SIZE);
     self->store_current = store;
     self->item_count    = 0;
     self->next_epoch    = 1;
@@ -111,17 +111,17 @@ swimcap_init(swimcap_t *self)
     return;
 }
 
-/* swimcap_get()
+/* duncecap_get()
  *
  * The function atomically acquires the lock for the current store in
  * order to get a reference to the store and register itself. Then it
  * releases the lock, and calls the private function
- * swimcap_store_get() on the store, in order to do the rest of the
+ * duncecap_store_get() on the store, in order to do the rest of the
  * work. Note that a writer might change the store before we are done,
  * but that's okay-- new readers might end up in the new store, but
  * we'll still get a consistent view of the table, and the memory will
  * not be freed out from under us while we are reading (see
- * swimcap_migrate).
+ * duncecap_migrate).
  *
  * This function takes the hash value of the item to look up, but you
  * do NOT pass the actual key to this API. There's no need, because we
@@ -135,23 +135,23 @@ swimcap_init(swimcap_t *self)
  * the item was in the table, and false if it was not.
  */
 void *
-swimcap_get(swimcap_t *self, hatrack_hash_t *hv, bool *found)
+duncecap_get(duncecap_t *self, hatrack_hash_t *hv, bool *found)
 {
     void            *ret;
-    swimcap_store_t *store;
+    duncecap_store_t *store;
 
-    store = swimcap_reader_enter(self);
-    ret   = swimcap_store_get(store, hv, found);
-    swimcap_reader_exit(store);
+    store = duncecap_reader_enter(self);
+    ret   = duncecap_store_get(store, hv, found);
+    duncecap_reader_exit(store);
 
     return ret;
 }
 
-/* swimcap_put()
+/* duncecap_put()
  *
  * Lock the hash table for writing, and when we get ownership of the
  * lock, perform a 'put' operation in the current store (via
- * swimcap_store_put()), migrating the store if needed.
+ * duncecap_store_put()), migrating the store if needed.
  *
  * 'Put' inserts into the table, whether or not the associated hash
  * value already has a stored item. If it does have a stored item, the
@@ -165,7 +165,7 @@ swimcap_get(swimcap_t *self, hatrack_hash_t *hv, bool *found)
  * in a single object in the item parameter.
  */
 void *
-swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
+duncecap_put(duncecap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
 
@@ -173,7 +173,7 @@ swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
         abort();
     }
 
-    ret = swimcap_store_put(self->store_current, self, hv, item, found);
+    ret = duncecap_store_put(self->store_current, self, hv, item, found);
 
     if (pthread_mutex_unlock(&self->mutex)) {
         abort();
@@ -182,11 +182,11 @@ swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
     return ret;
 }
 
-/* swimcap_replace()
+/* duncecap_replace()
  *
  * Lock the hash table for writing, and when we get ownership of the
  * lock, perform a 'replace' operation in the current store (via
- * swimcap_store_replace()). This cannot lead to a store migration.
+ * duncecap_store_replace()). This cannot lead to a store migration.
  *
  * The 'replace' operation swaps out the old value for the new value
  * provided, returning the old value, for purposes of the caller doing
@@ -196,13 +196,13 @@ swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * parameter will, if not NULL, be set to false.
  *
  * If you want the value to be set, whether or not the item was in the
- * table, then use swimcap_put().
+ * table, then use duncecap_put().
  *
  * Note that, if you're using a key and a value, pass them together
  * in a single object in the item parameter.
  */
 void *
-swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
+duncecap_replace(duncecap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 {
     void *ret;
 
@@ -210,7 +210,7 @@ swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
         abort();
     }
 
-    ret = swimcap_store_replace(self->store_current, self, hv, item, found);
+    ret = duncecap_store_replace(self->store_current, self, hv, item, found);
 
     if (pthread_mutex_unlock(&self->mutex)) {
         abort();
@@ -219,11 +219,11 @@ swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
     return ret;
 }
 
-/* swimcap_add()
+/* duncecap_add()
  *
  * Lock the hash table for writing, and when we get ownership of the
  * lock, perform a 'add' operation in the current store (via
- * swimcap_store_add()).
+ * duncecap_store_add()).
  *
  * The 'add' operation adds an item to the hash table, but only if
  * there isn't currently an item stored with the associated hash
@@ -236,14 +236,14 @@ swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * Returns true if the insertion is succesful, and false otherwise.
  */
 bool
-swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
+duncecap_add(duncecap_t *self, hatrack_hash_t *hv, void *item)
 {
     bool ret;
     if (pthread_mutex_lock(&self->mutex)) {
         abort();
     }
 
-    ret = swimcap_store_add(self->store_current, self, hv, item);
+    ret = duncecap_store_add(self->store_current, self, hv, item);
 
     if (pthread_mutex_unlock(&self->mutex)) {
         abort();
@@ -252,11 +252,11 @@ swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
     return ret;
 }
 
-/* swimcap_remove()
+/* duncecap_remove()
  *
  * Lock the hash table for writing, and when we get ownership of the
  * lock, perform a 'remove' operation in the current store (via
- * swimcap_store_remove()).
+ * duncecap_store_remove()).
  *
  * The 'remove' operation removes an item to the hash table, if it is
  * already present (i.e., if there is currently an item stored with
@@ -275,7 +275,7 @@ swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
  * behavior is the same as if the item was never in the table.
  */
 void *
-swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
+duncecap_remove(duncecap_t *self, hatrack_hash_t *hv, bool *found)
 {
     void *ret;
 
@@ -283,7 +283,7 @@ swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
         abort();
     }
 
-    ret = swimcap_store_remove(self->store_current, self, hv, found);
+    ret = duncecap_store_remove(self->store_current, self, hv, found);
 
     if (pthread_mutex_unlock(&self->mutex)) {
         abort();
@@ -293,14 +293,14 @@ swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 /*
- * swimcap_delete()
+ * duncecap_delete()
  *
- * Deletes a swimcap object. Generally, you should be confident that
+ * Deletes a duncecap object. Generally, you should be confident that
  * all threads except the one from which you're calling this have
  * stopped using the table (generally meaning they no longer hold a
  * reference to the store).
  *
- * Note that this function assumes the swimcap object was allocated
+ * Note that this function assumes the duncecap object was allocated
  * via the default malloc. If it wasn't, don't call this directly, but
  * do note that the stores were created via the system malloc, and the
  * most recent store will need to be freed (and the mutex destroyed).
@@ -312,7 +312,7 @@ swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
  * mutex when it's destroyed will hang indefinitely.
  */
 void
-swimcap_delete(swimcap_t *self)
+duncecap_delete(duncecap_t *self)
 {
     pthread_mutex_destroy(&self->mutex);
     free(self->store_current);
@@ -321,7 +321,7 @@ swimcap_delete(swimcap_t *self)
     return;
 }
 
-/* swimcap_len()
+/* duncecap_len()
  *
  * Returns the approximate number of items currently in the
  * table. Note that we strongly discourage using this call, since it
@@ -330,12 +330,12 @@ swimcap_delete(swimcap_t *self)
  * use.
  */
 uint64_t
-swimcap_len(swimcap_t *self)
+duncecap_len(duncecap_t *self)
 {
     return self->item_count;
 }
 
-/* swimcap_view()
+/* duncecap_view()
  *
  * This returns an array of hatrack_view_t items, representing all of
  * the items in the hash table, for the purposes of iterating over the
@@ -346,19 +346,19 @@ swimcap_len(swimcap_t *self)
  * order.
  */
 hatrack_view_t *
-swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
+duncecap_view(duncecap_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t   *view;
-    swimcap_store_t  *store;
+    duncecap_store_t  *store;
     hatrack_view_t   *p;
-    swimcap_bucket_t *cur;
-    swimcap_bucket_t *end;
-    swimcap_record_t  contents;
+    duncecap_bucket_t *cur;
+    duncecap_bucket_t *end;
+    duncecap_record_t  contents;
     uint64_t          count;
     uint64_t          last_slot;
     uint64_t          alloc_len;
 
-    store     = swimcap_viewer_enter(self);
+    store     = duncecap_viewer_enter(self);
     last_slot = store->last_slot;
     alloc_len = sizeof(hatrack_view_t) * (last_slot + 1);
     view      = (hatrack_view_t *)malloc(alloc_len);
@@ -386,7 +386,7 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 
     if (!count) {
         free(view);
-        swimcap_viewer_exit(self, store);
+        duncecap_viewer_exit(self, store);
         return NULL;
     }
 
@@ -396,19 +396,19 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
         qsort(view, count, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
     }
 
-    swimcap_viewer_exit(self, store);
+    duncecap_viewer_exit(self, store);
     return view;
 }
 
-static swimcap_store_t *
-swimcap_store_new(uint64_t size)
+static duncecap_store_t *
+duncecap_store_new(uint64_t size)
 {
-    swimcap_store_t *ret;
+    duncecap_store_t *ret;
     uint64_t         alloc_len;
 
-    alloc_len = sizeof(swimcap_store_t);
-    alloc_len += size * sizeof(swimcap_bucket_t);
-    ret            = (swimcap_store_t *)calloc(1, alloc_len);
+    alloc_len = sizeof(duncecap_store_t);
+    alloc_len += size * sizeof(duncecap_bucket_t);
+    ret            = (duncecap_store_t *)calloc(1, alloc_len);
     ret->last_slot = size - 1;
     ret->threshold = hatrack_compute_table_threshold(size);
 
@@ -416,13 +416,13 @@ swimcap_store_new(uint64_t size)
 }
 
 static void *
-swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
+duncecap_store_get(duncecap_store_t *self, hatrack_hash_t *hv, bool *found)
 {
     uint64_t          bix;
     uint64_t          last_slot;
     uint64_t          i;
-    swimcap_bucket_t *cur;
-    swimcap_record_t  contents;
+    duncecap_bucket_t *cur;
+    duncecap_record_t  contents;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -462,8 +462,8 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 static void *
-swimcap_store_put(swimcap_store_t *self,
-                  swimcap_t       *top,
+duncecap_store_put(duncecap_store_t *self,
+                  duncecap_t       *top,
                   hatrack_hash_t  *hv,
                   void            *item,
                   bool            *found)
@@ -471,8 +471,8 @@ swimcap_store_put(swimcap_store_t *self,
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
-    swimcap_bucket_t *cur;
-    swimcap_record_t  contents;
+    duncecap_bucket_t *cur;
+    duncecap_record_t  contents;
     void             *ret;
 
     last_slot = self->last_slot;
@@ -507,8 +507,8 @@ swimcap_store_put(swimcap_store_t *self,
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
-                swimcap_migrate(top);
-                return swimcap_store_put(top->store_current,
+                duncecap_migrate(top);
+                return duncecap_store_put(top->store_current,
                                          top,
                                          hv,
                                          item,
@@ -532,8 +532,8 @@ swimcap_store_put(swimcap_store_t *self,
 }
 
 static void *
-swimcap_store_replace(swimcap_store_t *self,
-                      swimcap_t       *top,
+duncecap_store_replace(duncecap_store_t *self,
+                      duncecap_t       *top,
                       hatrack_hash_t  *hv,
                       void            *item,
                       bool            *found)
@@ -541,8 +541,8 @@ swimcap_store_replace(swimcap_store_t *self,
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
-    swimcap_bucket_t *cur;
-    swimcap_record_t  contents;
+    duncecap_bucket_t *cur;
+    duncecap_record_t  contents;
     void             *ret;
 
     last_slot = self->last_slot;
@@ -581,16 +581,16 @@ swimcap_store_replace(swimcap_store_t *self,
 }
 
 static bool
-swimcap_store_add(swimcap_store_t *self,
-                  swimcap_t       *top,
+duncecap_store_add(duncecap_store_t *self,
+                  duncecap_t       *top,
                   hatrack_hash_t  *hv,
                   void            *item)
 {
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
-    swimcap_bucket_t *cur;
-    swimcap_record_t  contents;
+    duncecap_bucket_t *cur;
+    duncecap_record_t  contents;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -614,8 +614,8 @@ swimcap_store_add(swimcap_store_t *self,
         // time of the operation, and we should add.
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
-                swimcap_migrate(top);
-                return swimcap_store_add(top->store_current, top, hv, item);
+                duncecap_migrate(top);
+                return duncecap_store_add(top->store_current, top, hv, item);
             }
             self->used_count++;
             top->item_count++;
@@ -632,16 +632,16 @@ swimcap_store_add(swimcap_store_t *self,
 }
 
 static void *
-swimcap_store_remove(swimcap_store_t *self,
-                     swimcap_t       *top,
+duncecap_store_remove(duncecap_store_t *self,
+                     duncecap_t       *top,
                      hatrack_hash_t  *hv,
                      bool            *found)
 {
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
-    swimcap_bucket_t *cur;
-    swimcap_record_t  contents;
+    duncecap_bucket_t *cur;
+    duncecap_record_t  contents;
     void             *ret;
 
     last_slot = self->last_slot;
@@ -680,7 +680,7 @@ swimcap_store_remove(swimcap_store_t *self,
     __builtin_unreachable();
 }
 
-/* swimcap_migrate()
+/* duncecap_migrate()
  *
  * When we call this, we will have a write lock on the table, so it's
  * mostly straightforward to migrate. We only need to make sure that
@@ -688,13 +688,13 @@ swimcap_store_remove(swimcap_store_t *self,
  * it.
  */
 static void
-swimcap_migrate(swimcap_t *self)
+duncecap_migrate(duncecap_t *self)
 {
-    swimcap_store_t  *cur_store;
-    swimcap_store_t  *new_store;
-    swimcap_bucket_t *cur;
-    swimcap_bucket_t *target;
-    swimcap_record_t  contents;
+    duncecap_store_t  *cur_store;
+    duncecap_store_t  *new_store;
+    duncecap_bucket_t *cur;
+    duncecap_bucket_t *target;
+    duncecap_record_t  contents;
     uint64_t          new_size;
     uint64_t          cur_last_slot;
     uint64_t          new_last_slot;
@@ -703,10 +703,10 @@ swimcap_migrate(swimcap_t *self)
     cur_store     = self->store_current;
     cur_last_slot = cur_store->last_slot;
 
-    new_size = hatrack_new_size(cur_store->last_slot, swimcap_len(self) + 1);
+    new_size = hatrack_new_size(cur_store->last_slot, duncecap_len(self) + 1);
 
     new_last_slot = new_size - 1;
-    new_store     = swimcap_store_new(new_size);
+    new_store     = duncecap_store_new(new_size);
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur      = &cur_store->buckets[n];

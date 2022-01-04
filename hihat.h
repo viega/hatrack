@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           hihat1.h
+ *  Name:           hihat.h
  *  Description:    Half-Interesting HAsh Table.
  *                  This is a lock-free hash table, with wait-free
  *                  read operations. This table allows for you to
@@ -24,12 +24,12 @@
  *
  */
 
-#ifndef __HIHAT1_H__
-#define __HIHAT1_H__
+#ifndef __HIHAT_H__
+#define __HIHAT_H__
 
 #include "hatrack_common.h"
 
-/* hihat1_record_t
+/* hihat_record_t
  *
  * hihat records are atomically compare-and-swapped.
  *
@@ -56,7 +56,7 @@
 typedef struct {
     void    *item;
     uint64_t info;
-} hihat1_record_t;
+} hihat_record_t;
 
 // The aforementioned flags, along with a bitmask that allows us to
 // extract the epoch in the info field, ignoring any migration flags.
@@ -67,7 +67,7 @@ enum : uint64_t
     HIHAT_EPOCH_MASK = 0x3fffffffffffffff
 };
 
-/* hihat1_bucket_t
+/* hihat_bucket_t
  *
  * The representation of a bucket. The hash value and the record can
  * live in separate atomic variables, because the hash value cannot
@@ -83,16 +83,16 @@ enum : uint64_t
  *             with 128-bit hashes, the odds should be way too low to
  *             ever worry about in practice.
  *
- * record   -- The contents of the bucket, per hihat1_record_t above.
+ * record   -- The contents of the bucket, per hihat_record_t above.
  */
 typedef struct {
-    _Atomic hatrack_hash_t  hv;
-    _Atomic hihat1_record_t record;
-} hihat1_bucket_t;
+    _Atomic hatrack_hash_t hv;
+    _Atomic hihat_record_t record;
+} hihat_bucket_t;
 
-typedef struct hihat1_store_st hihat1_store_t;
+typedef struct hihat_store_st hihat_store_t;
 
-/* hihat1_store_t
+/* hihat_store_t
  *
  * The data type representing our current store. We migrate between stores
  * whenever our table gets too cluttered, at which point we might also
@@ -137,18 +137,18 @@ typedef struct hihat1_store_st hihat1_store_t;
  *
  */
 // clang-format off
-struct hihat1_store_st {
+struct hihat_store_st {
     alignas(8)
     uint64_t                   last_slot;
     uint64_t                   threshold;
     _Atomic uint64_t           used_count;
     _Atomic uint64_t           item_count;
-    _Atomic(hihat1_store_t *)  store_next;
+    _Atomic(hihat_store_t *)  store_next;
     alignas(16)
-    hihat1_bucket_t            buckets[];
+    hihat_bucket_t            buckets[];
 };
 
-/* hihat1_t
+/* hihat_t
  *
  * The top-level newshat object.
  *
@@ -164,23 +164,23 @@ struct hihat1_store_st {
  */
 typedef struct {
     alignas(8)
-    _Atomic(hihat1_store_t *) store_current;
+    _Atomic(hihat_store_t *) store_current;
     uint64_t                  next_epoch;
-} hihat1_t;
+} hihat_t;
 
 
-void            hihat1_init    (hihat1_t *);
-void           *hihat1_get     (hihat1_t *, hatrack_hash_t *, bool *);
-void           *hihat1_put     (hihat1_t *, hatrack_hash_t *, void *, bool *);
-void           *hihat1_replace (hihat1_t *, hatrack_hash_t *, void *, bool *);
-bool            hihat1_add     (hihat1_t *, hatrack_hash_t *, void *);
-void           *hihat1_remove  (hihat1_t *, hatrack_hash_t *, bool *);
-void            hihat1_delete  (hihat1_t *);
-uint64_t        hihat1_len     (hihat1_t *);
-hatrack_view_t *hihat1_view    (hihat1_t *, uint64_t *, bool);
+void            hihat_init    (hihat_t *);
+void           *hihat_get     (hihat_t *, hatrack_hash_t *, bool *);
+void           *hihat_put     (hihat_t *, hatrack_hash_t *, void *, bool *);
+void           *hihat_replace (hihat_t *, hatrack_hash_t *, void *, bool *);
+bool            hihat_add     (hihat_t *, hatrack_hash_t *, void *);
+void           *hihat_remove  (hihat_t *, hatrack_hash_t *, bool *);
+void            hihat_delete  (hihat_t *);
+uint64_t        hihat_len     (hihat_t *);
+hatrack_view_t *hihat_view    (hihat_t *, uint64_t *, bool);
 
 /*
- * Note that hihat1a is almost identical to hihat1. It has the same
+ * Note that hihat_a is almost identical to hihat. It has the same
  * data representation, and the only difference is the migration
  * function, which experiments with reducing work on migration, by
  * having late writers wait a bit for the migration to finish.  
@@ -188,14 +188,14 @@ hatrack_view_t *hihat1_view    (hihat1_t *, uint64_t *, bool);
  * Instead of adding an extra indirection for that second migration
  * function, we just copy all the methods.
  */
-void            hihat1a_init   (hihat1_t *);
-void           *hihat1a_get    (hihat1_t *, hatrack_hash_t *, bool *);
-void           *hihat1a_put    (hihat1_t *, hatrack_hash_t *, void *, bool *);
-void           *hihat1a_replace(hihat1_t *, hatrack_hash_t *, void *, bool *);
-bool            hihat1a_add    (hihat1_t *, hatrack_hash_t *, void *);
-void           *hihat1a_remove (hihat1_t *, hatrack_hash_t *, bool *);
-void            hihat1a_delete (hihat1_t *);
-uint64_t        hihat1a_len    (hihat1_t *);
-hatrack_view_t *hihat1a_view   (hihat1_t *, uint64_t *, bool);
+void            hihat_a_init   (hihat_t *);
+void           *hihat_a_get    (hihat_t *, hatrack_hash_t *, bool *);
+void           *hihat_a_put    (hihat_t *, hatrack_hash_t *, void *, bool *);
+void           *hihat_a_replace(hihat_t *, hatrack_hash_t *, void *, bool *);
+bool            hihat_a_add    (hihat_t *, hatrack_hash_t *, void *);
+void           *hihat_a_remove (hihat_t *, hatrack_hash_t *, bool *);
+void            hihat_a_delete (hihat_t *);
+uint64_t        hihat_a_len    (hihat_t *);
+hatrack_view_t *hihat_a_view   (hihat_t *, uint64_t *, bool);
 
 #endif
