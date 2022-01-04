@@ -284,12 +284,25 @@ hatrack_vtable_t tophat_fast_vtable = {
     .view    = (hatrack_view_func)tophat_view
 };
 
+hatrack_vtable_t oldhat_vtable = {
+    .init    = (hatrack_init_func)oldhat_init,
+    .get     = (hatrack_get_func)oldhat_get,
+    .put     = (hatrack_put_func)oldhat_put,
+    .replace = (hatrack_replace_func)oldhat_replace,    
+    .add     = (hatrack_add_func)oldhat_add,
+    .remove  = (hatrack_remove_func)oldhat_remove,
+    .delete  = (hatrack_delete_func)oldhat_delete,
+    .len     = (hatrack_len_func)oldhat_len,
+    .view    = (hatrack_view_func)oldhat_view
+};
+
 // clang-format on
 
 static void
 testhat_init_default_algorithms()
 {
     testhat_register_algorithm("refhat", &refhat_vtable, sizeof(refhat_t));
+    testhat_register_algorithm("oldhat", &oldhat_vtable, sizeof(oldhat_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
     testhat_register_algorithm("swimcap2",
                                &swimcap2_vtable,

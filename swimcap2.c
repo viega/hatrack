@@ -305,6 +305,7 @@ void
 swimcap2_delete(swimcap2_t *self)
 {
     pthread_mutex_destroy(&self->write_mutex);
+    DEBUG_MMM(self->store, "xxx store retire (delete).");
     mmm_retire(self->store);
     free(self);
 
@@ -425,7 +426,8 @@ swimcap2_store_new(uint64_t size)
 
     alloc_len = sizeof(swimcap2_store_t);
     alloc_len += size * sizeof(swimcap2_bucket_t);
-    ret            = (swimcap2_store_t *)mmm_alloc_committed(alloc_len);
+    ret = (swimcap2_store_t *)mmm_alloc_committed(alloc_len);
+    DEBUG_MMM(ret, "xxx in store_new.");
     ret->last_slot = size - 1;
     ret->threshold = hatrack_compute_table_threshold(size);
 
@@ -748,6 +750,7 @@ swimcap2_migrate(swimcap2_t *self)
      * after the retirement epoch, which would constitute a
      * use-after-free bug.
      */
+    DEBUG_MMM(cur_store, "xxx store retire.");
     mmm_retire(cur_store);
 
     return;

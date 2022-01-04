@@ -71,7 +71,7 @@ extern          uint64_t       mmm_reservations[HATRACK_THREADS_MAX];
 
 // clang-format off
 struct mmm_header_st {
-    alignas(8)
+    alignas(16)
     mmm_header_t    *next;
     _Atomic uint64_t create_epoch;
     _Atomic uint64_t write_epoch;

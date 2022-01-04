@@ -30,7 +30,7 @@
  * expensive mod operator.
  */
 #if !defined(HATRACK_MIN_SIZE_LOG) || (HATRACK_MIN_SIZE_LOG < 3)
-#define HATRACK_MIN_SIZE_LOG 3
+#define HATRACK_MIN_SIZE_LOG 4
 #endif
 
 #undef HATRACK_MIN_SIZE
@@ -116,7 +116,6 @@
 // #define HATRACK_MMM_DEBUG
 // #define HATRACK_MMMALLOC_CTRS  (requires counters to be turned on).
 // #define SWIMCAP_CONSISTENT_VIEWS
-// #define HIHAT64_USE_FULL_HASH
 // #define HATRACK_MMMALLOC_CTRS
 // #define HATRACK_EXPAND_THRESHOLD
 // #define HATRACK_CONTRACT_THRESHOLD

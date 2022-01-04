@@ -696,10 +696,6 @@ hihat1a_store_migrate(hihat1_store_t *self, hihat1_t *top)
 			 HIHAT1_CTR_MIGRATE_HV)) {
 		    break;
 		}
-		else {
-		    bix = (bix + 1) & new_store->last_slot;
-		    continue;
-		}
 	    }
 	    if (!hatrack_hashes_eq(&expected_hv, &hv)) {
 		bix = (bix + 1) & new_store->last_slot;

@@ -301,11 +301,11 @@ witchhat_store_put(witchhat_store_t *self,
 		goto found_bucket;
 	    }
 	}
-	if (!hatrack_hashes_eq(hv1, &hv2)) {
-	    bix = (bix + 1) & self->last_slot;
-	    continue;
+	if (hatrack_hashes_eq(hv1, &hv2)) {
+	    goto found_bucket;
 	}
-        goto found_bucket;
+	bix = (bix + 1) & self->last_slot;
+	continue;
     }
     
  migrate_and_retry:
@@ -427,11 +427,11 @@ witchhat_store_replace(witchhat_store_t *self,
 	if (hatrack_bucket_unreserved(&hv2)) {
 	    goto not_found;
 	}
-	if (!hatrack_hashes_eq(hv1, &hv2)) {
-	    bix = (bix + 1) & self->last_slot;
-	    continue;
+	if (hatrack_hashes_eq(hv1, &hv2)) {
+	    goto found_bucket;
 	}
-        goto found_bucket;
+	bix = (bix + 1) & self->last_slot;
+	continue;
     }
 
  not_found:
@@ -518,14 +518,14 @@ witchhat_store_replace(witchhat_store_t *self,
 
 static bool
 witchhat_store_add(witchhat_store_t *self,
-		 witchhat_t       *top,
-		 hatrack_hash_t *hv1,
-		   void           *item,
-		   uint64_t count)
+		   witchhat_t       *top,
+		   hatrack_hash_t   *hv1,
+		   void             *item,
+		   uint64_t          count)
 {
-    uint64_t         bix;
-    uint64_t         i;
-    hatrack_hash_t   hv2;
+    uint64_t           bix;
+    uint64_t           i;
+    hatrack_hash_t     hv2;
     witchhat_bucket_t *bucket;
     witchhat_record_t  record;
     witchhat_record_t  candidate;
@@ -594,10 +594,10 @@ found_bucket:
 
 static void *
 witchhat_store_remove(witchhat_store_t *self,
-                    witchhat_t       *top,
-                    hatrack_hash_t *hv1,
-		      bool           *found,
-		      uint64_t        count)
+		      witchhat_t       *top,
+		      hatrack_hash_t   *hv1,
+		      bool             *found,
+		      uint64_t          count)
 {
     void              *old_item;
     uint64_t           bix;
@@ -615,12 +615,11 @@ witchhat_store_remove(witchhat_store_t *self,
         if (hatrack_bucket_unreserved(&hv2)) {
             break;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
-            bix = (bix + 1) & self->last_slot;
-            continue;
+        if (hatrack_hashes_eq(hv1, &hv2)) {
+	    goto found_bucket;
         }
-
-        goto found_bucket;
+	bix = (bix + 1) & self->last_slot;
+	continue;
     }
 
     if (found) {
@@ -818,10 +817,6 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
 			 hv,
 			 WITCHHAT_CTR_MIGRATE_HV)) {
 		    break;
-		}
-		else {
-		    bix = (bix + 1) & new_store->last_slot;
-		    continue;
 		}
 	    }
 	    if (!hatrack_hashes_eq(&expected_hv, &hv)) {

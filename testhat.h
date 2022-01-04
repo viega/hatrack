@@ -38,6 +38,7 @@
 #include "ballcap.h"
 #include "hihat1.h"
 #include "hihat64.h"
+#include "oldhat.h"
 #include "lohat0.h"
 #include "lohat1.h"
 #include "lohat2.h"

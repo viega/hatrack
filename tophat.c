@@ -575,44 +575,27 @@ static void
 tophat_migrate_to_witchhat(tophat_t *tophat, refhat1_t *rhobj)
 {
     witchhat_t        *new_table;
-    uint64_t           n, i, bix;
-    hatrack_hash_t     hv;    
-    refhat_bucket_t   *cur;
-    witchhat_bucket_t *target;
-    witchhat_record_t  record;
-    tophat_algo_info_t implementation;
-
+    refhat_bucket_t   *cur;    
+    uint64_t           n;
+    tophat_algo_info_t implementation;    
+    
     new_table                = (witchhat_t *)malloc(sizeof(witchhat_t));
     new_table->store_current = witchhat_store_new(rhobj->last_slot + 1);
+    new_table->next_epoch    = 1;
 
     for (n = 0; n <= rhobj->last_slot; n++) {
 	cur = &rhobj->buckets[n];
 	if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
 	    continue;
 	}
-	bix         = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
-	record.item = cur->item;
-	record.info = cur->epoch;
-	
-	for (i = 0; i <= rhobj->last_slot; i++) {
-	    target = &new_table->store_current->buckets[bix];
-	    hv     = atomic_load(&target->hv);
-	    
-	    if (hatrack_bucket_unreserved(&hv)) {
-		atomic_store(&target->hv, cur->hv);
-		atomic_store(&target->record, record);
-		break;
-	    }
-	    bix = (bix + 1) & rhobj->last_slot;
-	}
+	witchhat_add(new_table, &cur->hv, cur->item);
     }
-    new_table->store_current->used_count = rhobj->item_count;
-    implementation.htable                = new_table;
-    implementation.vtable                = &fast_vtable;
-    new_table->next_epoch                = rhobj->next_epoch;
+    implementation.htable = new_table;
+    implementation.vtable = &fast_vtable;
+
     atomic_store(&new_table->help_needed, 0);
     atomic_store(&tophat->implementation, implementation);
-    
+
     tophat_st_delete(rhobj);
 }
 

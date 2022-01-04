@@ -779,6 +779,9 @@ found_bucket:
 	goto migrate_and_retry;
     }
 
+    // Since we don't allow double deletions, at some point
+    // since we loaded record, there was an item there, so we
+    // order our add appropriately, and fail.
     return false;
 }
 
@@ -967,7 +970,7 @@ hihat1_store_migrate(hihat1_store_t *self, hihat1_t *top)
     uint64_t         i, j;
     uint64_t         bix;
     uint64_t         new_used      = 0;
-    uint64_t         expected_used = 0;
+    uint64_t         expected_used;
 
     
     /* If we're a late-enough writer, let's just double check to see if 
@@ -1040,6 +1043,7 @@ hihat1_store_migrate(hihat1_store_t *self, hihat1_t *top)
     if (!new_store) {
         new_size        = hatrack_new_size(self->last_slot, new_used);
         candidate_store = hihat1_store_new(new_size);
+	
         if (!LCAS(&self->store_next,
                   &new_store,
                   candidate_store,
@@ -1078,10 +1082,6 @@ hihat1_store_migrate(hihat1_store_t *self, hihat1_t *top)
 			 hv,
 			 HIHAT1_CTR_MIGRATE_HV)) {
 		    break;
-		}
-		else {
-		    bix = (bix + 1) & new_store->last_slot;
-		    continue;
 		}
 	    }
 	    if (!hatrack_hashes_eq(&expected_hv, &hv)) {
@@ -1123,13 +1123,13 @@ hihat1_store_migrate(hihat1_store_t *self, hihat1_t *top)
      * context, since bucket reservations only get wiped out when
      * we do our migration.
      */
+    expected_used = 0;
+    
     LCAS(&new_store->used_count,
          &expected_used,
          new_used,
          HIHAT1_CTR_LEN_INSTALL);
 
-    expected_used = 0;
-    
     /* Now that the new store is fully set up, with all its buckets in
      * place, and all other data correct, we can 'turn it on' for
      * writes, by overwriting the toplevel object's store pointer.
