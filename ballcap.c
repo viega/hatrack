@@ -32,8 +32,6 @@
 
 // clang-format off
 
-// Not static, because tophat needs to call it, but nonetheless, don't
-// stick it in our public prototypes.
        ballcap_store_t *ballcap_store_new    (uint64_t);
 static void            *ballcap_store_get    (ballcap_store_t *, ballcap_t *,
 					      hatrack_hash_t *, bool *);
@@ -642,11 +640,6 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
     }
     cur_last_slot = store->last_slot;
 
-    /* Run through and lock every bucket as quickly as we can attain
-     * them all, so that we can migrate everything in a consistent
-     * state.  While we're at it, count how many items we are going to
-     * move.
-     */
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];
         if (pthread_mutex_lock(&cur->mutex)) {
@@ -661,8 +654,6 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
     new_last_slot = new_size - 1;
     new_store     = ballcap_store_new(new_size);
 
-    // Now go through again. Retire delete records, and move any other
-    // records.
     for (n = 0; n <= cur_last_slot; n++) {
         cur           = &store->buckets[n];
         cur->migrated = true;

@@ -24,6 +24,32 @@
  *                  provide a fully consistent ordered view of the hash
  *                  table.
  *
+ *                  This table is based on newshat, but changes the
+ *                  record structure to use our approach to managing
+ *                  record history that we developed for the lohat
+ *                  algorithms (including woolhat, which is an
+ *                  incremental improvement on lohat, adding wait
+ *                  freedom; something a lock-based algorithm can
+ *                  never have).
+ *
+ *                  This hash table is mainly intended to allow us to
+ *                  benchmark our lock-free and wait free hash tables
+ *                  that use consistent ordering, with a table that
+ *                  uses locks, but has the same consistent ordering
+ *                  capabilities. And indeed, in my testing so far,
+ *                  performance is not appreciably different from the
+ *                  lohats (though it's probably better on systems
+ *                  without a 128-bit CAS operation).
+ *
+ *                  That is to say, I don't really expect people to
+ *                  consider using this table in real-world
+ *                  applications (or patterning a table off of it).
+ *
+ *                  Given all the above, the implementation of ballcap
+ *                  is mostly uncommented; see implementations of
+ *                  either newshat or lohat0 for documentation on the
+ *                  algorithm.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */

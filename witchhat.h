@@ -25,7 +25,7 @@
  *                  need such a mechanism, so we will only comment on
  *                  those places.
  *
- *                  Refer to hihat1.h and hihat1.c for more detail on
+ *                  Refer to hihat.h and hihat.c for more detail on
  *                  the core algorithm, as here, we only comment on
  *                  the things that are different about witchhat.
  *

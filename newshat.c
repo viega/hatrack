@@ -788,9 +788,10 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
     new_store->used_count = top->item_count;
     top->store_current    = new_store;
 
-    // The old store cannot be deleted immediately, as it might have
-    // readers. We use mmm to ensure it's not freed until it's safe.
-    // see mmm.c for more details.
+    /* The old store cannot be deleted immediately, as it might have
+     * readers. We use mmm to ensure it's not freed until it's safe.
+     * see mmm.c for more details.
+     */
     mmm_retire(store);
 
     /* The new store is officially open at this point, but we

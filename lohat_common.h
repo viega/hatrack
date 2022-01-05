@@ -131,6 +131,11 @@ struct lohat_record_st {
  * considered present or not. Not present can be because it's been
  * deleted, or because it hasn't been written yet.  It's implemented
  * by stealing a bit from the record's "next" pointer.
+ *
+ * Note that we could do without this flag, the way we do in some of
+ * our other tables that use dynamically allocated records, like
+ * oldhat. However, stealing the pointer means that we often will NOT
+ * need to dereference the pointer unnecessarily.
  */
 enum : uint64_t
 {

@@ -45,18 +45,18 @@ char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
     "linearize epoch eq",       // 0
     "mmm write commits",        // 1
     "mmm commit helps",         // 2
-    "lh0 bucket acquires",      // 3
-    "lh0 record installs",      // 4
-    "lh0 record delete",        // 5
-    "lh0 store creates",        // 6
-    "lh0 F_MOVING set",         // 7
-    "lh0 F_MOVED (empty)",      // 8
-    "lh0 F_MOVED (deleted)",    // 9
-    "lh0 migrate hash",         // 10
-    "lh0 migrate record",       // 11
-    "lh0 F_MOVED (migrate)",    // 12
-    "lh0 len installed",        // 13
-    "lh0 store installs",       // 14
+    "lh bucket acquires",       // 3
+    "lh record installs",       // 4
+    "lh record delete",         // 5
+    "lh store creates",         // 6
+    "lh F_MOVING set",          // 7
+    "lh F_MOVED (empty)",       // 8
+    "lh F_MOVED (deleted)",     // 9
+    "lh migrate hash",          // 10
+    "lh migrate record",        // 11
+    "lh F_MOVED (migrate)",     // 12
+    "lh len installed",         // 13
+    "lh store installs",        // 14
     "lh1 bucket acquires",      // 15
     "lh1 ptr installs",         // 16
     "lh1 hist hash installs",   // 17

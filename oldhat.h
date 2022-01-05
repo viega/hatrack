@@ -176,6 +176,15 @@ typedef struct {
     _Atomic uint64_t          item_count;
 } oldhat_t;
 
+/* This API requires that you deal with hashing the key external to
+ * the API.  You might want to cache hash values, use different
+ * functions for different data objects, etc.
+ *
+ * We do require 128-bit hash values, and require that the hash value
+ * alone can stand in for object identity. One might, for instance,
+ * choose a 3-universal keyed hash function, or if hash values need to
+ * be consistent across runs, something fast and practical like XXH3.
+ */
 void            oldhat_init   (oldhat_t *);
 void           *oldhat_get    (oldhat_t *, hatrack_hash_t *, bool *);
 void           *oldhat_put    (oldhat_t *, hatrack_hash_t *, void *, bool *);

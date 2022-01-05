@@ -188,16 +188,16 @@ hatrack_vtable_t hihat_a_vtable = {
     .view    = (hatrack_view_func)hihat_a_view
 };
 
-hatrack_vtable_t lohat0_vtable = {
-    .init    = (hatrack_init_func)lohat0_init,
-    .get     = (hatrack_get_func)lohat0_get,
-    .put     = (hatrack_put_func)lohat0_put,
-    .replace = (hatrack_replace_func)lohat0_replace,    
-    .add     = (hatrack_add_func)lohat0_add,
-    .remove  = (hatrack_remove_func)lohat0_remove,
-    .delete  = (hatrack_delete_func)lohat0_delete,
-    .len     = (hatrack_len_func)lohat0_len,
-    .view    = (hatrack_view_func)lohat0_view
+hatrack_vtable_t lohat_vtable = {
+    .init    = (hatrack_init_func)lohat_init,
+    .get     = (hatrack_get_func)lohat_get,
+    .put     = (hatrack_put_func)lohat_put,
+    .replace = (hatrack_replace_func)lohat_replace,    
+    .add     = (hatrack_add_func)lohat_add,
+    .remove  = (hatrack_remove_func)lohat_remove,
+    .delete  = (hatrack_delete_func)lohat_delete,
+    .len     = (hatrack_len_func)lohat_len,
+    .view    = (hatrack_view_func)lohat_view
 };
 
 hatrack_vtable_t lohat1_vtable = {
@@ -299,7 +299,7 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("ballcap", &ballcap_vtable, sizeof(ballcap_t));
     testhat_register_algorithm("hihat", &hihat_vtable, sizeof(hihat_t));
     testhat_register_algorithm("hihat-a", &hihat_a_vtable, sizeof(hihat_t));
-    testhat_register_algorithm("lohat0", &lohat0_vtable, sizeof(lohat0_t));
+    testhat_register_algorithm("lohat", &lohat_vtable, sizeof(lohat_t));
     testhat_register_algorithm("lohat1", &lohat1_vtable, sizeof(lohat1_t));
     testhat_register_algorithm("lohat2", &lohat2_vtable, sizeof(lohat2_t));
     testhat_register_algorithm("witchhat",
