@@ -59,8 +59,8 @@ locks could be suspended for a long time, stalling threads that are
 running and could be doing work. With Lock Freedom, some thread is
 always able to get work done. And if a thread finds itself not getting
 work done, even though it's running, it's because other threads are
-being productive.  Of our algorithms, *hihat, oldhat, lohat0, lohat1*
-and *lohat2* all provide lock freedom (and, in most cases, wait
+being productive.  Of our algorithms, *hihat, oldhat, lohat, lohat-a*
+and *lohat-b* all provide lock freedom (and, in most cases, wait
 freedom).  We have found one other true hash table that is lock-free,
 written in Java by Cliff Click. Our lock-free tables are far simpler,
 work with C (Click doesn't have to worry about the hard task of
@@ -141,7 +141,7 @@ still provide *approximate* insertion ordering.
 1) Tables without consistent views (and thus would not be good for set
 operations): *swimcap, newshat, hihat, oldhat, witchhat*.
 
-2) Tables with consistent views: *ballcap, lohat0, lohat1, lohat2, woolhat*.
+2) Tables with consistent views: *ballcap, lohat, lohat-a, lohat-b, woolhat*.
 
 3) Table with a compile-time option for consistent views: *duncecap*.
 
@@ -155,7 +155,7 @@ preservation are important.
 
 Note that, unlike some other parallel data structures that have an
 associative (dictionary-like) interface, most of these hash tables
-(with the exception of lohat2), are true hash tables, with average
+(with the exception of lohat-b), are true hash tables, with average
 O(1) insertions, lookups and deletes.
 
 ## Getting started
@@ -225,20 +225,20 @@ scan the comments in the associated .c file.
                 all of the items, that can be sorted reliably by their
                 insertion order.
 		
-8) **lohat0**   A lock-free hash table, that also has consistent,
+8) **lohat**    A lock-free hash table, that also has consistent,
                 order-preserving views.
 		
-9) **lohat1**   Like lohat0, but trades off space to improve the
-                computational complexity of getting an order-preserving
-		view.
+9) **lohat-a** A variant of lohat that trades off space to improve the
+                computational complexity of getting an
+                order-preserving view.
 		
-10) **lohat2**  Like lohat1, but also trades off O(1) lookups to get
+10) **lohat-b** Like lohat-a, but also trades off O(1) lookups to get
                 near-O(n) views (note: I do not generally recommend this
 		trade-off).
 		
 11) **witchhat** A fully wait-free version of hihat.
 
-12) **woolhat**  A fully wait-free version of lohat0.
+12) **woolhat**  A fully wait-free version of lohat.
 
 13) **tophat**  A proof of concept illustrating how language
                 implementations can get single-threaded performance
