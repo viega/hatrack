@@ -57,39 +57,39 @@ char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
     "lh F_MOVED (migrate)",     // 12
     "lh len installed",         // 13
     "lh store installs",        // 14
-    "lh1 bucket acquires",      // 15
-    "lh1 ptr installs",         // 16
-    "lh1 hist hash installs",   // 17
-    "lh1 record installs",      // 18
-    "lh1 record delete",        // 19
-    "lh1 store creates",        // 20
-    "lh1 F_MOVING set",         // 21
-    "lh1 F_MOVED (empty)",      // 22
-    "lh1 F_MOVED (deleted)",    // 23
-    "lh1 migrate hash",         // 24
-    "lh1 migrate record",       // 25
-    "lh1 move other hash",      // 26
-    "lh1 install new ptr",      // 27
-    "lh1 F_MOVED (migrate)",    // 28
-    "lh1 hist ptr installed",   // 29
-    "lh1 store installs",       // 30
-    "lh2 bucket acquires",      // 31
-    "lh2 ptr installs",         // 32
-    "lh2 hist hash installs",   // 33
-    "lh2 forward installed",    // 34
-    "lh2 record installs",      // 35
-    "lh2 record delete",        // 36
-    "lh2 store creates",        // 37
-    "lh2 F_MOVING set",         // 38
-    "lh2 F_MOVED (empty)",      // 39
-    "lh2 F_MOVED (deleted)",    // 40
-    "lh2 migrate hash",         // 41
-    "lh2 migrate record",       // 42
-    "lh2 move other hash",      // 43
-    "lh2 install new ptr",      // 44
-    "lh2 F_MOVED (migrate)",    // 45
-    "lh2 hist ptr installed",   // 46
-    "lh2 store installs",       // 47
+    "lh-a bucket acquires",     // 15
+    "lh-a ptr installs",        // 16
+    "lh-a hist hash installs",  // 17
+    "lh-a record installs",     // 18
+    "lh-a record delete",       // 19
+    "lh-a store creates",       // 20
+    "lh-a F_MOVING set",        // 21
+    "lh-a F_MOVED (empty)",     // 22
+    "lh-a F_MOVED (deleted)",   // 23
+    "lh-a migrate hash",        // 24
+    "lh-a migrate record",      // 25
+    "lh-a move other hash",     // 26
+    "lh-a install new ptr",     // 27
+    "lh-a F_MOVED (migrate)",   // 28
+    "lh-a hist ptr installed",  // 29
+    "lh-a store installs",      // 30
+    "lh-b bucket acquires",     // 31
+    "lh-b ptr installs",        // 32
+    "lh-b hist hash installs",  // 33
+    "lh-b forward installed",   // 34
+    "lh-b record installs",     // 35
+    "lh-b record delete",       // 36
+    "lh-b store creates",       // 37
+    "lh-b F_MOVING set",        // 38
+    "lh-b F_MOVED (empty)",     // 39
+    "lh-b F_MOVED (deleted)",   // 40
+    "lh-b migrate hash",        // 41
+    "lh-b migrate record",      // 42
+    "lh-b move other hash",     // 43
+    "lh-b install new ptr",     // 44
+    "lh-b F_MOVED (migrate)",   // 45
+    "lh-b hist ptr installed",  // 46
+    "lh-b store installs",      // 47
     "hih bucket acquires",      // 48
     "hih record installs",      // 49
     "hih record delete",        // 50

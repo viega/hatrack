@@ -265,7 +265,7 @@ newshat_view(newshat_t *self, uint64_t *num, bool sort)
          *
          * However, that would unnecessarily stall other readers.  We
          * provide another solution to this problem in several other
-         * hash tables, including ballcap, lohat0, lohat1 and woolhat.
+         * hash tables, including ballcap, lohat, lohat-a and woolhat.
          */
         contents = atomic_read(&cur->contents);
 

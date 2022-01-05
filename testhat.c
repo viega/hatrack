@@ -200,28 +200,28 @@ hatrack_vtable_t lohat_vtable = {
     .view    = (hatrack_view_func)lohat_view
 };
 
-hatrack_vtable_t lohat1_vtable = {
-    .init    = (hatrack_init_func)lohat1_init,
-    .get     = (hatrack_get_func)lohat1_get,
-    .put     = (hatrack_put_func)lohat1_put,
-    .replace = (hatrack_replace_func)lohat1_replace,    
-    .add     = (hatrack_add_func)lohat1_add,    
-    .remove  = (hatrack_remove_func)lohat1_remove,
-    .delete  = (hatrack_delete_func)lohat1_delete,
-    .len     = (hatrack_len_func)lohat1_len,
-    .view    = (hatrack_view_func)lohat1_view
+hatrack_vtable_t lohat_a_vtable = {
+    .init    = (hatrack_init_func)lohat_a_init,
+    .get     = (hatrack_get_func)lohat_a_get,
+    .put     = (hatrack_put_func)lohat_a_put,
+    .replace = (hatrack_replace_func)lohat_a_replace,    
+    .add     = (hatrack_add_func)lohat_a_add,    
+    .remove  = (hatrack_remove_func)lohat_a_remove,
+    .delete  = (hatrack_delete_func)lohat_a_delete,
+    .len     = (hatrack_len_func)lohat_a_len,
+    .view    = (hatrack_view_func)lohat_a_view
 };
 
-hatrack_vtable_t lohat2_vtable = {
-    .init    = (hatrack_init_func)lohat2_init,
-    .get     = (hatrack_get_func)lohat2_get,
-    .put     = (hatrack_put_func)lohat2_put,
-    .replace = (hatrack_replace_func)lohat2_replace,    
-    .add     = (hatrack_add_func)lohat2_add,    
-    .remove  = (hatrack_remove_func)lohat2_remove,
-    .delete  = (hatrack_delete_func)lohat2_delete,
-    .len     = (hatrack_len_func)lohat2_len,
-    .view    = (hatrack_view_func)lohat2_view
+hatrack_vtable_t lohat_b_vtable = {
+    .init    = (hatrack_init_func)lohat_b_init,
+    .get     = (hatrack_get_func)lohat_b_get,
+    .put     = (hatrack_put_func)lohat_b_put,
+    .replace = (hatrack_replace_func)lohat_b_replace,    
+    .add     = (hatrack_add_func)lohat_b_add,    
+    .remove  = (hatrack_remove_func)lohat_b_remove,
+    .delete  = (hatrack_delete_func)lohat_b_delete,
+    .len     = (hatrack_len_func)lohat_b_len,
+    .view    = (hatrack_view_func)lohat_b_view
 };
 
 hatrack_vtable_t witchhat_vtable = {
@@ -300,8 +300,8 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("hihat", &hihat_vtable, sizeof(hihat_t));
     testhat_register_algorithm("hihat-a", &hihat_a_vtable, sizeof(hihat_t));
     testhat_register_algorithm("lohat", &lohat_vtable, sizeof(lohat_t));
-    testhat_register_algorithm("lohat1", &lohat1_vtable, sizeof(lohat1_t));
-    testhat_register_algorithm("lohat2", &lohat2_vtable, sizeof(lohat2_t));
+    testhat_register_algorithm("lohat-a", &lohat_a_vtable, sizeof(lohat_a_t));
+    testhat_register_algorithm("lohat-b", &lohat_b_vtable, sizeof(lohat_b_t));
     testhat_register_algorithm("witchhat",
                                &witchhat_vtable,
                                sizeof(witchhat_t));

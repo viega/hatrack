@@ -869,8 +869,8 @@ char *threadsafe_dicts[] = {
     "witchhat", 
     "oldhat",
     "ballcap",
-    "lohat", "lohat1",
-    /*"lohat2",*/
+    "lohat", "lohat-a",
+    "lohat-b",
     "woolhat",
     "tophat-fast",    
     "tophat-cst",
@@ -885,8 +885,8 @@ char *all_dicts[]     = {
     "witchhat",    
     "oldhat",    
     "ballcap",
-    "lohat", "lohat1",
-    /*"lohat2",*/
+    "lohat", "lohat-a",
+    "lohat-b",
     "woolhat",    
     "tophat-fast",   
     "tophat-cst",

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           lohat1.h
+ *  Name:           lohat_a.h
  *  Description:    Linearizeable, Ordered HAsh Table (LOHAT)
  *                  This version keeps two tables, for partial ordering.
  *
@@ -21,8 +21,8 @@
  *
  */
 
-#ifndef __LOHAT1_H__
-#define __LOHAT1_H__
+#ifndef __LOHATa_H__
+#define __LOHATa_H__
 
 #include "lohat_common.h"
 
@@ -148,7 +148,7 @@ typedef struct {
     alignas(16)
     _Atomic hatrack_hash_t    hv;
     _Atomic(lohat_record_t *) head;
-} lohat1_history_t;
+} lohat_a_history_t;
 
 /*
  * We're using a second array to improve our sorting costs. These are
@@ -161,9 +161,9 @@ typedef struct {
  */
 typedef struct {
     alignas(16)
-    _Atomic hatrack_hash_t      hv;
-    _Atomic(lohat1_history_t *) ptr;
-} lohat1_indirect_t;
+    _Atomic hatrack_hash_t       hv;
+    _Atomic(lohat_a_history_t *) ptr;
+} lohat_a_indirect_t;
 
 /* When the table gets full and we need to migrate, we'll need to keep
  * two copies of the hash table at the same time. To that end, we need
@@ -221,34 +221,34 @@ typedef struct {
  * store_next    A pointer to the store to which we are currently
  *               migrating.
  */
-typedef struct lohat1_store_st lohat1_store_t;
+typedef struct lohat_a_store_st lohat_a_store_t;
 
 // clang-format off
-struct lohat1_store_st {
+struct lohat_a_store_st {
     alignas(8)
     uint64_t                    last_slot;
     uint64_t                    threshold;
     _Atomic uint64_t            del_count;
-    lohat1_history_t           *hist_end;
-    _Atomic(lohat1_history_t *) hist_next;
-    _Atomic(lohat1_store_t *)   store_next;
-    lohat1_history_t           *hist_buckets;
-    lohat1_indirect_t           ptr_buckets[];
+    lohat_a_history_t           *hist_end;
+    _Atomic(lohat_a_history_t *) hist_next;
+    _Atomic(lohat_a_store_t *)   store_next;
+    lohat_a_history_t           *hist_buckets;
+    lohat_a_indirect_t           ptr_buckets[];
 };
 
 typedef struct {
     alignas(8)
-    _Atomic(lohat1_store_t *) store_current;
-} lohat1_t;
+    _Atomic(lohat_a_store_t *) store_current;
+} lohat_a_t;
 
-void            lohat1_init   (lohat1_t *);
-void           *lohat1_get    (lohat1_t *, hatrack_hash_t *, bool *);
-void           *lohat1_put    (lohat1_t *, hatrack_hash_t *, void *, bool *);
-void           *lohat1_replace(lohat1_t *, hatrack_hash_t *, void *, bool *);
-bool            lohat1_add    (lohat1_t *, hatrack_hash_t *, void *);
-void           *lohat1_remove (lohat1_t *, hatrack_hash_t *, bool *);
-void            lohat1_delete (lohat1_t *);
-uint64_t        lohat1_len    (lohat1_t *);
-hatrack_view_t *lohat1_view   (lohat1_t *, uint64_t *, bool);
+void            lohat_a_init   (lohat_a_t *);
+void           *lohat_a_get    (lohat_a_t *, hatrack_hash_t *, bool *);
+void           *lohat_a_put    (lohat_a_t *, hatrack_hash_t *, void *, bool *);
+void           *lohat_a_replace(lohat_a_t *, hatrack_hash_t *, void *, bool *);
+bool            lohat_a_add    (lohat_a_t *, hatrack_hash_t *, void *);
+void           *lohat_a_remove (lohat_a_t *, hatrack_hash_t *, bool *);
+void            lohat_a_delete (lohat_a_t *);
+uint64_t        lohat_a_len    (lohat_a_t *);
+hatrack_view_t *lohat_a_view   (lohat_a_t *, uint64_t *, bool);
 
 #endif

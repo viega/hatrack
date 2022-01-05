@@ -388,7 +388,7 @@ refhat_len(refhat_t *self)
  * in practice, if it isn't a frequent operation.
  *
  * We do explore a similar representation to improve sorting times in
- * multi-threaded tables with our lohat1 and lohat2 tables.
+ * multi-threaded tables with our lohat-a and lohat-b tables.
  */
 hatrack_view_t *
 refhat_view(refhat_t *self, uint64_t *num, bool sort)
