@@ -30,10 +30,6 @@
 #include <time.h>
 #include <stdio.h>
 
-#ifndef HATRACK_TEST_MAX_KEYS
-#define HATRACK_TEST_MAX_KEYS 1000000
-#endif
-
 typedef union {
     struct {
         uint32_t key;
@@ -109,26 +105,39 @@ test_precompute_hashes()
     }
 }
 
-/* RNG support. We use a lot of random numbers in our testing, and
- * would like to avoid several things:
+/*
+ * To try to make algorithm comparisons as fair as possible, I try to
+ * do everything I can to eliminate places where the OS might use a
+ * mutex, where there might be contention among threads.
  *
- * 1) Calling into the kernel more than we need to.
+ * Top of that list is malloc() -- where I recommend addressing by
+ * linking in the hoard malloc implementation.
+ *
+ * Second on that list is the random number generator, since we use a
+ * lot of random numbers in our testing, and would like to avoid
+ * several things:
+ *
+ * 1) Calling into the kernel more than we need to (e.g., if we were
+ *    to read from /dev/urandom).
  *
  * 2) Any locks around RNG APIs.  For instance, I'm pretty sure
  *    arc4random() has such a lock on my machine.
  *
  * 3) Holding on to too much memory.
  *
- * Our basic approach is to implement ARC4 ourselves, and keep the
+ * My basic approach is to implement ARC4 ourselves, and keep the
  * state on a per-thread basis, with the seed xor'd with the bottom
  * byte of the thread's pthread id (just to get some variance in the
- * number streams).  We read the seed once from /dev/urandom.
+ * number streams; multiple threads can definitely end up with
+ * identical streams of numbers).  We read the seed once, at
+ * initialization time, from /dev/urandom.
+ *
+ * Note that ARC4 isn't very good cryptographically, but we don't need
+ * cryptographically strong random numbers for our purposes. This just
+ * gets the job done with a quick algorithm, that can be done without
+ * hitting the kernel, after initialization.
  */
-#ifndef HATRACK_RAND_SEED_SIZE
-#define HATRACK_RAND_SEED_SIZE 32
-#endif
-
-uint8_t seed_buf[HATRACK_RAND_SEED_SIZE];
+static uint8_t seed_buf[HATRACK_RAND_SEED_SIZE];
 
 typedef struct {
     uint32_t S[256];
@@ -903,9 +912,6 @@ char *st_dicts[]      = {
     NULL
 };
 
-#ifndef DEFAULT_ITERS
-#define DEFAULT_ITERS 1000000
-#endif
 int
 main(int argc, char *argv[], char *envp[])
 {
@@ -952,7 +958,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_time_test("rand()-1t",
                   test_rand_speed,
-                  DEFAULT_ITERS,
+                  HATRACK_DEFAULT_ITERS,
                   all_dicts,
                   shrug_sizes,
                   one_thread,
@@ -960,7 +966,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_time_test("rand()-mt",
                   test_rand_speed,
-                  DEFAULT_ITERS,
+                  HATRACK_DEFAULT_ITERS,
                   threadsafe_dicts,
                   shrug_sizes,
                   basic_threads,
@@ -968,7 +974,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_time_test("insert-1t",
                   test_insert_speed,
-                  DEFAULT_ITERS,
+                  HATRACK_DEFAULT_ITERS,
                   all_dicts,
                   basic_sizes,
                   one_thread,
@@ -976,7 +982,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_time_test("insert-mt",
                   test_insert_speed,
-                  DEFAULT_ITERS,
+                  HATRACK_DEFAULT_ITERS,
                   threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
@@ -984,7 +990,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_time_test("writes-1t",
                   test_write_speed,
-                  DEFAULT_ITERS,
+                  HATRACK_DEFAULT_ITERS,
                   all_dicts,
                   basic_sizes,
                   one_thread,
@@ -992,7 +998,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_time_test("writes-mt",
                   test_write_speed,
-                  DEFAULT_ITERS,
+                  HATRACK_DEFAULT_ITERS,
                   threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
@@ -1000,7 +1006,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_time_test("rw speed-1t",
                   test_rw_speed,
-                  DEFAULT_ITERS,
+                  HATRACK_DEFAULT_ITERS,
                   all_dicts,
                   basic_sizes,
                   one_thread,
@@ -1008,7 +1014,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();        
     run_time_test("rw speed-mt",
                   test_rw_speed,
-                  DEFAULT_ITERS,
+                  HATRACK_DEFAULT_ITERS,
 		  threadsafe_dicts,
                   basic_sizes,
                   basic_threads,
@@ -1016,7 +1022,7 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();
     run_time_test("sorts-1t",
                   test_sort_speed,
-                  DEFAULT_ITERS/10,
+                  HATRACK_DEFAULT_ITERS/10,
                   all_dicts,
                   sort_sizes,
                   one_thread,
@@ -1024,14 +1030,14 @@ main(int argc, char *argv[], char *envp[])
     counters_output_delta();
     run_time_test("sorts-mt",
                   test_sort_speed,
-                  DEFAULT_ITERS/10,
+                  HATRACK_DEFAULT_ITERS/10,
                   threadsafe_dicts,
                   sort_sizes,
                   basic_threads,
                   write_rates);
     run_time_test("contend",
                   test_sort_contention,
-                  DEFAULT_ITERS/10,
+                  HATRACK_DEFAULT_ITERS/10,
                   threadsafe_dicts,
                   sort_sizes,
                   basic_threads,
