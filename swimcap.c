@@ -20,8 +20,9 @@
  *                  This uses a per-data structure lock that writers hold
  *                  for their entire operation.
  *
- *                  In this version, readers do NOT use the lock;
- *                  in fact, they are fully wait free.
+ *                  It's similar to duncecap, but in this version,
+ *                  readers do NOT use the lock; in fact, they are
+ *                  fully wait free.
  *
  *                  Instead, we use an epoch-based memory management
  *                  scheme on our current data store, to make sure that
@@ -72,7 +73,7 @@ swimcap_init(swimcap_t *self)
     swimcap_store_t *store = swimcap_store_new(HATRACK_MIN_SIZE);
     self->item_count       = 0;
     self->next_epoch       = 1; // 0 is reserved for empty buckets.
-    self->store            = store;
+    self->store_current    = store;
     pthread_mutex_init(&self->write_mutex, NULL);
 
     return;
@@ -124,7 +125,7 @@ swimcap_get(swimcap_t *self, hatrack_hash_t *hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    ret = swimcap_store_get(self->store, hv, found);
+    ret = swimcap_store_get(self->store_current, hv, found);
     mmm_end_op();
 
     return ret;
@@ -164,7 +165,7 @@ swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
         abort();
     }
 
-    ret = swimcap_store_put(self->store, self, hv, item, found);
+    ret = swimcap_store_put(self->store_current, self, hv, item, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -200,7 +201,7 @@ swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
         abort();
     }
 
-    ret = swimcap_store_replace(self->store, self, hv, item, found);
+    ret = swimcap_store_replace(self->store_current, self, hv, item, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -233,7 +234,7 @@ swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
         abort();
     }
 
-    ret = swimcap_store_add(self->store, self, hv, item);
+    ret = swimcap_store_add(self->store_current, self, hv, item);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -272,7 +273,7 @@ swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
         abort();
     }
 
-    ret = swimcap_store_remove(self->store, self, hv, found);
+    ret = swimcap_store_remove(self->store_current, self, hv, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -306,8 +307,8 @@ void
 swimcap_delete(swimcap_t *self)
 {
     pthread_mutex_destroy(&self->write_mutex);
-    DEBUG_MMM(self->store, "xxx store retire (delete).");
-    mmm_retire(self->store);
+    DEBUG_MMM(self->store_current, "xxx store retire (delete).");
+    mmm_retire(self->store_current);
     free(self);
 
     return;
@@ -365,7 +366,7 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
     mmm_start_basic_op();
 #endif
 
-    store     = self->store;
+    store     = self->store_current;
     last_slot = store->last_slot;
     alloc_len = sizeof(hatrack_view_t) * (last_slot + 1);
     view      = (hatrack_view_t *)malloc(alloc_len);
@@ -528,7 +529,11 @@ swimcap_store_put(swimcap_store_t *self,
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
-                return swimcap_store_put(top->store, top, hv, item, found);
+                return swimcap_store_put(top->store_current,
+                                         top,
+                                         hv,
+                                         item,
+                                         found);
             }
             self->used_count++;
             top->item_count++;
@@ -631,7 +636,7 @@ swimcap_store_add(swimcap_store_t *self,
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
-                return swimcap_store_add(top->store, top, hv, item);
+                return swimcap_store_add(top->store_current, top, hv, item);
             }
             self->used_count++;
             top->item_count++;
@@ -709,7 +714,7 @@ swimcap_migrate(swimcap_t *self)
     uint64_t          new_last_slot;
     uint64_t          i, n, bix;
 
-    cur_store     = self->store;
+    cur_store     = self->store_current;
     cur_last_slot = cur_store->last_slot;
     new_size      = hatrack_new_size(cur_last_slot, swimcap_len(self) + 1);
     new_last_slot = new_size - 1;
@@ -734,7 +739,7 @@ swimcap_migrate(swimcap_t *self)
     }
 
     new_store->used_count = self->item_count;
-    self->store           = new_store;
+    self->store_current   = new_store;
 
     /* This is effectively a "deferred" free. It might end up calling
      * mmm_empty() (in mmm.c), but even if it does, mmm_empty() won't

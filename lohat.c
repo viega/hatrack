@@ -49,7 +49,9 @@ static lohat_store_t  *lohat_store_migrate(lohat_store_t *, lohat_t *);
 void
 lohat_init(lohat_t *self)
 {
-    lohat_store_t *store = lohat_store_new(HATRACK_MIN_SIZE);
+    lohat_store_t *store;
+
+    store = lohat_store_new(HATRACK_MIN_SIZE);
 
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
@@ -214,7 +216,7 @@ lohat_delete(lohat_t *self)
 uint64_t
 lohat_len(lohat_t *self)
 {
-    return self->item_count;
+    return atomic_read(&self->item_count);
 }
 
 /* lohat_view()
@@ -917,7 +919,14 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
     /* Quickly run through every history bucket, and mark any bucket
      * that doesn't already have F_MOVING set.  Note that the CAS
      * could fail due to some other updater, so we keep CASing until
-     * we know it was successful.
+     * we know some thread was successful (either we succeeded, or we
+     * see LOHAT_F_MOVING).
+     *
+     * Note that this makes our migration algorithm lock-free, not
+     * wait free, because other threads could keep causing us to fail
+     * by re-writing this bucket continually.
+     *
+     * We solve that problem in woolhat, to make this part wait-free.
      */
     for (i = 0; i <= self->last_slot; i++) {
         cur  = &self->hist_buckets[i];
@@ -925,12 +934,33 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
 
         do {
             if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-                break;
+                goto didnt_win;
             }
-        } while (!LCAS(&cur->head,
-                       &head,
-                       hatrack_pflag_set(head, LOHAT_F_MOVING),
-                       LOHAT_CTR_F_MOVING));
+            /* If the head pointer is a deletion record, we can also
+             * set LOHAT_F_MOVED, since there's no actual work to do
+             * to migrate. However, there we need to know if we won
+             * the CAS, because if we do, we're responsible for the
+             * memory management. That's why the exit from this loop
+             * above is is a GOTO... we need to be able to do the
+             * memory management and just move on to the next item if
+             * we've got a successful CAS on a delete record.
+             */
+            if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+                candidate = hatrack_pflag_set(head, LOHAT_F_MOVING);
+            }
+            else {
+                candidate
+                    = hatrack_pflag_set(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
+            }
+        } while (!LCAS(&cur->head, &head, candidate, LOHAT_CTR_F_MOVING));
+
+        if (head && hatrack_pflag_test(candidate, LOHAT_F_MOVED)) {
+            mmm_help_commit(head);
+            mmm_retire(head);
+            continue;
+        }
+
+didnt_win:
         head = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
         if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
             new_used++;
@@ -938,7 +968,30 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
     }
 
     new_store = atomic_read(&self->store_next);
-
+    /* If there's still not a store in place by now, we'll allocate
+     * one, and try to install it ourselves. If we can't install ours,
+     * that means someone raced us, installing one after our read
+     * completed (well, could have been during or even before our
+     * read, since our read doesn't use a memory barrier, only the
+     * swap used to install does), so we free ours and use it.
+     *
+     * Note that, in large tables, this could be a big allocation, and
+     * there could be lots of concurrent threads attempting to do the
+     * allocation at the same time. And, we are zero-initializing the
+     * memory we grab, too (using calloc), making it straightforward
+     * for us to tell the status of a bucket migration in the target
+     * store.
+     *
+     * However, this isn't generally much of a concern-- most
+     * reasonable calloc implementations on any reasonable
+     * architecture will grab virtual memory that maps to a read-only
+     * page of all zeros, and then copy-on-write, once we start
+     * mutating the array.
+     *
+     * As a result, we may have a bunch of simultaneous maps into the
+     * same page, but only the winning store should result in new
+     * memory usage.
+     */
     if (!new_store) {
         new_size        = hatrack_new_size(self->last_slot, new_used);
         candidate_store = lohat_store_new(new_size);
@@ -954,9 +1007,21 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
         }
     }
 
-    /* Here, 'candidate' is the candidate head to install in the
-     * destimation store, whereas 'head' is the head in the source
-     * store.
+    /* At this point, we're sure that any late writers will help us
+     * with the migration. Therefore, we can go through each item,
+     * and, if it's not fully migrated, we can attempt to migrate it.
+     *
+     * Of course, other migrating threads may race ahead of us.
+     *
+     * Note that, since the table may be resizing, not just migrating,
+     * the bucket index our hash value maps to may change, and there
+     * may be new collisions. Plus, we may no longer 'collide' with
+     * keys that have since been deleted, which could put us in a
+     * different place, even if the table is NOT resizing.
+     *
+     * That all means, we can't just copy a record to the same index
+     * in the new table; we need to go through the bucket allocation
+     * process again (including the linear probing).
      */
     for (i = 0; i <= self->last_slot; i++) {
         cur       = &self->hist_buckets[i];
@@ -967,39 +1032,8 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
             continue;
         }
 
-        if (!candidate) {
-            LCAS(&cur->head,
-                 &head,
-                 hatrack_pflag_set(head, LOHAT_F_MOVED),
-                 LOHAT_CTR_F_MOVED1);
-            continue;
-        }
-
-        if (!hatrack_pflag_test(candidate->next, LOHAT_F_USED)) {
-            if (LCAS(&cur->head,
-                     &head,
-                     hatrack_pflag_set(head, LOHAT_F_MOVED),
-                     LOHAT_CTR_F_MOVED2)) {
-                /* Since the record on top is a deletion record,
-                 * we are not going to migrate it to the new store.
-                 * Instead, we should retire it, so that it gets reclaimed
-                 * when all threads are out of the old store.
-                 *
-                 * Do note that we still need to ensure the write
-                 * epoch is committed by the time we send it to
-                 * mmm_retire() though; if it isn't, mmm
-                 * will actually free this immediately, because it looks
-                 * unused.
-                 *
-                 * That's obviously bad news for late readers, so call
-                 * mmm_help_commit() before we retire.
-                 */
-                mmm_help_commit(candidate);
-                mmm_retire(candidate);
-            }
-            continue;
-        }
-
+        // If it hasn't been moved, there's definitely an item in it,
+        // as empty buckets got MOVED set in the first loop.
         hv  = atomic_read(&cur->hv);
         bix = hatrack_bucket_index(&hv, new_store->last_slot);
 
@@ -1017,13 +1051,30 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
         }
 
         expected_head = NULL;
+
+        // The only way this can fail is if some other thread succeeded,
+        // so we don't need to concern ourselves with the return value.
         LCAS(&bucket->head, &expected_head, candidate, LOHAT_CTR_MIG_REC);
+
+        // Whether we won or not, assume the winner might have
+        // stalled.  Every thread attempts to update the source
+        // bucket, to denote that the move was successful.
         LCAS(&cur->head,
              &head,
              hatrack_pflag_set(head, LOHAT_F_MOVED),
              LOHAT_CTR_F_MOVED3);
     }
 
+    /* All buckets are migrated. Attempt to write to the new table how
+     * many buckets are currently used. Note that, it's possible if
+     * the source table was drained, that this value might be zero, so
+     * the value in the target array will already be right.  If we're
+     * a late-comer, and the new store has already been re-opened for
+     * writing, there's still no failure case-- if new writers write
+     * to the new store, used_count only ever increases in the
+     * context, since bucket reservations only get wiped out when
+     * we do our migration.
+     */
     expected_used = 0;
 
     LCAS(&new_store->used_count,
@@ -1031,9 +1082,27 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
          new_used,
          LOHAT_CTR_LEN_INSTALL);
 
+    /* Now that the new store is fully set up, with all its buckets in
+     * place, and all other data correct, we can 'turn it on' for
+     * writes, by overwriting the top-level object's store pointer.
+     *
+     * Of course, multiple threads might be trying to do this. If we
+     * fail, it's because someone else succeeded, and we move on.
+     *
+     * However, if we succeed, then we are responsible for the memory
+     * management of the old store. We use mmm_retire(), to make sure
+     * that we don't free the store before all threads currently using
+     * the store are done with it.
+     */
     if (LCAS(&top->store_current, &self, new_store, LOHAT_CTR_STORE_INSTALL)) {
         mmm_retire(self);
     }
 
+    /* Instead of returning new_store here, we accept that we might
+     * have been suspended for a while at some point, and there might
+     * be an even later migration. So we grab the top-most store, even
+     * though we expect that it's generally going to be the same as
+     * next_store.
+     */
     return top->store_current;
 }

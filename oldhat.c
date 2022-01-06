@@ -293,7 +293,7 @@ oldhat_delete(oldhat_t *self)
 uint64_t
 oldhat_len(oldhat_t *self)
 {
-    return self->item_count;
+    return atomic_read(&self->item_count);
 }
 
 /* hihat_view()

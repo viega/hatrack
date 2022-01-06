@@ -24,6 +24,25 @@
  *                  provide a fully consistent ordered view of the hash
  *                  table.
  *
+ *                  Note that this table is a hybrid between newshat
+ *                  and lohat -- newshat for the bucket access and
+ *                  locking, and lohat for the approach to storing and
+ *                  reading what's actually in the buckets.
+ *
+ *                  Like with lohat, the records are in a linked list,
+ *                  and linearization is handled by viewers traversing
+ *                  that list to find the appropriate record.
+ *
+ *                  This algorithm is mainly meant to be a lock-based
+ *                  alternative to the lohat family of algorithms for
+ *                  the purposes of performance comparisons.
+ *
+ *                  Due to that, and since all the algorithmic bits
+ *                  are found (and probably documented) in either
+ *                  newshat.c or lohat.c, we provide only minimal
+ *                  comments below, especially where there are
+ *                  meaningful variations.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -50,10 +69,13 @@ static ballcap_store_t *ballcap_store_migrate(ballcap_store_t *, ballcap_t *);
 void
 ballcap_init(ballcap_t *self)
 {
-    ballcap_store_t *store = ballcap_store_new(HATRACK_MIN_SIZE);
-    self->item_count       = 0;
-    self->next_epoch       = 0;
-    self->store            = store;
+    ballcap_store_t *store;
+
+    store               = ballcap_store_new(HATRACK_MIN_SIZE);
+    self->item_count    = 0;
+    self->next_epoch    = 1;
+    self->store_current = store;
+
     pthread_mutex_init(&self->migrate_mutex, NULL);
 
     return;
@@ -65,7 +87,7 @@ ballcap_get(ballcap_t *self, hatrack_hash_t *hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    ret = ballcap_store_get(self->store, self, hv, found);
+    ret = ballcap_store_get(self->store_current, self, hv, found);
     mmm_end_op();
 
     return ret;
@@ -77,7 +99,7 @@ ballcap_put(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    ret = ballcap_store_put(self->store, self, hv, item, found);
+    ret = ballcap_store_put(self->store_current, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -89,7 +111,7 @@ ballcap_replace(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    ret = ballcap_store_replace(self->store, self, hv, item, found);
+    ret = ballcap_store_replace(self->store_current, self, hv, item, found);
     mmm_end_op();
 
     return ret;
@@ -101,7 +123,7 @@ ballcap_add(ballcap_t *self, hatrack_hash_t *hv, void *item)
     bool ret;
 
     mmm_start_basic_op();
-    ret = ballcap_store_add(self->store, self, hv, item);
+    ret = ballcap_store_add(self->store_current, self, hv, item);
     mmm_end_op();
 
     return ret;
@@ -113,7 +135,7 @@ ballcap_remove(ballcap_t *self, hatrack_hash_t *hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    ret = ballcap_store_remove(self->store, self, hv, found);
+    ret = ballcap_store_remove(self->store_current, self, hv, found);
     mmm_end_op();
 
     return ret;
@@ -125,15 +147,15 @@ ballcap_delete(ballcap_t *self)
     uint64_t          i;
     ballcap_bucket_t *bucket;
 
-    for (i = 0; i <= self->store->last_slot; i++) {
-        bucket = &self->store->buckets[i];
+    for (i = 0; i <= self->store_current->last_slot; i++) {
+        bucket = &self->store_current->buckets[i];
 
         if (bucket->record) {
             mmm_retire_unused(bucket->record);
         }
     }
 
-    mmm_retire_unused(self->store);
+    mmm_retire_unused(self->store_current);
 
     if (pthread_mutex_destroy(&self->migrate_mutex)) {
         abort();
@@ -144,6 +166,11 @@ ballcap_delete(ballcap_t *self)
     return;
 }
 
+/*
+ * Called via callback from mmm's cleanup routine. All this needs to
+ * do that MMM doesn't handle itself is to destroy the per-bucket
+ * mutexes.
+ */
 static void
 ballcap_store_delete(ballcap_store_t *self)
 {
@@ -177,7 +204,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
 
     target_epoch = mmm_start_linearized_op();
 
-    store     = self->store;
+    store     = self->store_current;
     last_slot = store->last_slot;
     alloc_len = sizeof(hatrack_view_t) * (last_slot + 1);
     view      = (hatrack_view_t *)malloc(alloc_len);
@@ -196,8 +223,6 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
         }
         record = cur->record;
 
-        // Look for the most recent record written BEFORE or during
-        // the epoch we're targeting for linearization.
         while (record) {
             sort_epoch = mmm_get_write_epoch(record);
             if (sort_epoch <= target_epoch) {
@@ -272,28 +297,27 @@ ballcap_store_get(ballcap_store_t *self,
     uint64_t          last_slot;
     uint64_t          i;
     ballcap_bucket_t *cur;
+    ballcap_record_t *record;
 
     last_slot = self->last_slot;
+    bix       = hatrack_bucket_index(hv, last_slot);
 
-    bix = hatrack_bucket_index(hv, last_slot);
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+
         if (hatrack_hashes_eq(hv, &cur->hv)) {
-            if (pthread_mutex_lock(&cur->mutex)) {
-                abort();
-            }
-            if (!cur->record || cur->record->deleted) {
+            record = cur->record;
+
+            if (!record || record->deleted) {
                 if (found) {
                     *found = false;
                 }
-                pthread_mutex_unlock(&cur->mutex);
                 return NULL;
             }
             if (found) {
                 *found = true;
             }
-            pthread_mutex_unlock(&cur->mutex);
-            return cur->record->item;
+            return record->item;
         }
         if (hatrack_bucket_unreserved(&cur->hv)) {
             if (found) {
@@ -338,7 +362,11 @@ check_bucket_again:
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->mutex);
                 mmm_retire_unused(record);
-                return ballcap_store_put(top->store, top, hv, item, found);
+                return ballcap_store_put(top->store_current,
+                                         top,
+                                         hv,
+                                         item,
+                                         found);
             }
             old_record = cur->record;
             /* Because we're using locks, there should always be a
@@ -378,7 +406,11 @@ check_bucket_again:
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->mutex);
                 mmm_retire_unused(record);
-                return ballcap_store_put(top->store, top, hv, item, found);
+                return ballcap_store_put(top->store_current,
+                                         top,
+                                         hv,
+                                         item,
+                                         found);
             }
             if (!hatrack_bucket_unreserved(&cur->hv)) {
                 pthread_mutex_unlock(&cur->mutex);
@@ -441,7 +473,11 @@ ballcap_store_replace(ballcap_store_t *self,
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->mutex);
-                return ballcap_store_replace(top->store, top, hv, item, found);
+                return ballcap_store_replace(top->store_current,
+                                             top,
+                                             hv,
+                                             item,
+                                             found);
             }
             /* Because we're using locks, there should always be a
              * record here. We may have to revisit this in the future
@@ -504,7 +540,7 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->mutex);
-                return ballcap_store_add(top->store, top, hv, item);
+                return ballcap_store_add(top->store_current, top, hv, item);
             }
             if (!cur->record->deleted) {
                 pthread_mutex_unlock(&cur->mutex);
@@ -518,7 +554,7 @@ check_bucket_again:
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->mutex);
-                return ballcap_store_add(top->store, top, hv, item);
+                return ballcap_store_add(top->store_current, top, hv, item);
             }
             if (!hatrack_bucket_unreserved(&cur->hv)) {
                 pthread_mutex_unlock(&cur->mutex);
@@ -582,7 +618,7 @@ ballcap_store_remove(ballcap_store_t *self,
             }
             if (cur->migrated) {
                 pthread_mutex_unlock(&cur->mutex);
-                return ballcap_store_remove(top->store, top, hv, found);
+                return ballcap_store_remove(top->store_current, top, hv, found);
             }
             if (cur->record->deleted) {
                 if (found) {
@@ -630,10 +666,10 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
     if (pthread_mutex_lock(&top->migrate_mutex)) {
         abort();
     }
-    if (store != top->store) {
+    if (store != top->store_current) {
         // Someone else migrated it, and now we can go finish our
         // write.
-        new_store = top->store;
+        new_store = top->store_current;
         pthread_mutex_unlock(&top->migrate_mutex);
         return new_store;
     }
@@ -676,13 +712,8 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
         }
     }
 
-    /* Once we install a new store, new writers may come into that new
-     * store. If we really care about being fair, we can lock all the
-     * buckets in the new store, unlock all the buckets in this store,
-     * then go and free up the new store.  But we don't do that here.
-     */
     new_store->used_count = top->item_count;
-    top->store            = new_store;
+    top->store_current    = new_store;
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];

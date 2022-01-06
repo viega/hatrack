@@ -63,7 +63,6 @@ struct witchhat_store_st {
     uint64_t                    last_slot;
     uint64_t                    threshold;
     _Atomic uint64_t            used_count;
-    _Atomic uint64_t            item_count;
     _Atomic(witchhat_store_t *) store_next;
     alignas(16)
     witchhat_bucket_t           buckets[];
@@ -72,6 +71,7 @@ struct witchhat_store_st {
 typedef struct {
     alignas(8)
     _Atomic(witchhat_store_t *) store_current;
+    _Atomic uint64_t            item_count;
     _Atomic uint64_t            help_needed;
             uint64_t            next_epoch;
 

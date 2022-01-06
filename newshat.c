@@ -62,10 +62,13 @@ static newshat_store_t *newshat_store_migrate(newshat_store_t *, newshat_t *);
 void
 newshat_init(newshat_t *self)
 {
-    newshat_store_t *store = newshat_store_new(HATRACK_MIN_SIZE);
-    self->item_count       = 0;
-    self->next_epoch       = 1; // 0 is reserved for empty buckets.
-    self->store_current    = store;
+    newshat_store_t *store;
+
+    store               = newshat_store_new(HATRACK_MIN_SIZE);
+    self->item_count    = 0;
+    self->next_epoch    = 1; // 0 is reserved for empty buckets.
+    self->store_current = store;
+
     pthread_mutex_init(&self->migrate_mutex, NULL);
 
     return;
@@ -787,6 +790,11 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
         cur->migrated = true;
     }
 
+    /* Once we install a new store, new writers may come into that new
+     * store. If we really care about being fair, we can lock all the
+     * buckets in the new store, unlock all the buckets in this store,
+     * then go and free up the new store.  But we don't do that here.
+     */
     new_store->used_count = top->item_count;
     top->store_current    = new_store;
 

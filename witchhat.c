@@ -70,8 +70,10 @@ witchhat_init(witchhat_t *self)
     witchhat_store_t *store;
 
     store            = witchhat_store_new(HATRACK_MIN_SIZE);
-    self->next_epoch = 1; 
+    self->next_epoch = 1;
+    
     atomic_store(&self->store_current, store);
+    atomic_store(&self->item_count, 0);
 }
 
 void *
@@ -154,7 +156,7 @@ witchhat_delete(witchhat_t *self)
 uint64_t
 witchhat_len(witchhat_t *self)
 {
-    return self->store_current->item_count;
+    return atomic_read(&self->item_count);
 }
 
 hatrack_view_t *
@@ -319,8 +321,8 @@ witchhat_store_put(witchhat_store_t *self,
      * a thread waiting indefinitely.
      *
      * This case isn't very practical in the real world, but we can
-     * still guard against it at a fairly minimal cost. Our approach
-     * is to count the number of attempts we make to mutate the table
+     * still guard against it, with nearly zero cost. Our approach is
+     * to count the number of attempts we make to mutate the table
      * that result in a resizing, and when we hit a particular
      * threshold, we "ask for help". When a thread needs help writing
      * in the face of migrations, it means that no thread that comes
@@ -377,7 +379,7 @@ witchhat_store_put(witchhat_store_t *self,
 
     if (LCAS(&bucket->record, &record, candidate, WITCHHAT_CTR_REC_INSTALL)) {
         if (new_item) {
-            atomic_fetch_add(&self->item_count, 1);
+            atomic_fetch_add(&top->item_count, 1);
         }
         return old_item;
     }
@@ -386,11 +388,12 @@ witchhat_store_put(witchhat_store_t *self,
 	goto migrate_and_retry;
     }
 
-    // In witchhat, whenever we successfully overwrite a value, we
-    // need to help migrate, if a migration is in process.  See
-    // witchhat_store_migrate() for a bit more detailed an
-    // explaination, but doing this makes witchhat_store_migrate()
-    // wait free.
+    /* In witchhat, whenever we successfully overwrite a value, we
+     * need to help migrate, if a migration is in process.  See
+     * witchhat_store_migrate() for a bit more detailed an
+     * explaination, but doing this helps make
+     * witchhat_store_migrate() wait free.
+     */
     if (!new_item) {
 	if (atomic_read(&self->used_count) >= self->threshold) {
 	    witchhat_store_migrate(self, top);
@@ -402,16 +405,16 @@ witchhat_store_put(witchhat_store_t *self,
 
 static void *
 witchhat_store_replace(witchhat_store_t *self,
-		     witchhat_t       *top,
-		     hatrack_hash_t *hv1,
-		     void           *item,
-		       bool           *found,
-		       uint64_t count)
+		       witchhat_t       *top,
+		       hatrack_hash_t   *hv1,
+		       void             *item,
+		       bool             *found,
+		       uint64_t          count)
 {
-    void            *old_item;
-    uint64_t         bix;
-    uint64_t         i;
-    hatrack_hash_t   hv2;
+    void              *ret;
+    uint64_t           bix;
+    uint64_t           i;
+    hatrack_hash_t     hv2;
     witchhat_bucket_t *bucket;
     witchhat_record_t  record;
     witchhat_record_t  candidate;
@@ -447,12 +450,11 @@ witchhat_store_replace(witchhat_store_t *self,
 	if (witchhat_help_required(count)) {
 	    HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
 	    atomic_fetch_add(&top->help_needed, 1);
-	    self     = witchhat_store_migrate(self, top);
-	    old_item =
-		witchhat_store_replace(self, top, hv1, item, found, count);
+	    self = witchhat_store_migrate(self, top);
+	    ret  = witchhat_store_replace(self, top, hv1, item, found, count);
 	    
 	    atomic_fetch_sub(&top->help_needed, 1);
-	    return old_item;
+	    return ret;
 	}
 	self = witchhat_store_migrate(self, top);
 	return witchhat_store_replace(self, top, hv1, item, found, count);
@@ -462,7 +464,6 @@ witchhat_store_replace(witchhat_store_t *self,
 	goto not_found;
     }
 
-    old_item       = record.item;
     candidate.item = item;
     candidate.info = record.info;
 
@@ -489,7 +490,6 @@ witchhat_store_replace(witchhat_store_t *self,
      * Essentially, all we are doing is simply replacing a while loop
      * that could theoretically last forever with a single attempt.
      */
-
     if(!LCAS(&bucket->record, &record, candidate, WITCHHAT_CTR_REC_INSTALL)) {
 	if (record.info & WITCHHAT_F_MOVING) {
 	    goto migrate_and_retry;
@@ -501,11 +501,12 @@ witchhat_store_replace(witchhat_store_t *self,
 	*found = true;
     }
 
-    // In witchhat, whenever we successfully overwrite a value, we
-    // need to help migrate, if a migration is in process.  See
-    // witchhat_store_migrate() for a bit more detailed an
-    // explaination, but doing this makes witchhat_store_migrate()
-    // wait free.
+    /* In witchhat, whenever we successfully overwrite a value, we
+     * need to help migrate, if a migration is in process.  See
+     * witchhat_store_migrate() for a bit more detailed an
+     * explaination, but doing this makes witchhat_store_migrate()
+     * wait free.
+     */
     if (atomic_read(&self->used_count) >= self->threshold) {
 	witchhat_store_migrate(self, top);
     }    
@@ -579,7 +580,7 @@ found_bucket:
     candidate.info = top->next_epoch++;
 
     if (LCAS(&bucket->record, &record, candidate, WITCHHAT_CTR_REC_INSTALL)) {
-	atomic_fetch_add(&self->item_count, 1);
+	atomic_fetch_add(&top->item_count, 1);
         return true;
     } 
     if (record.info & WITCHHAT_F_MOVING) {
@@ -656,18 +657,19 @@ found_bucket:
     candidate.info = 0;
 
     if (LCAS(&bucket->record, &record, candidate, WITCHHAT_CTR_DEL)) {
-        atomic_fetch_sub(&self->item_count, 1);
+        atomic_fetch_sub(&top->item_count, 1);
 
         if (found) {
             *found = true;
         }
 
 
-    // In witchhat, whenever we successfully overwrite a value, we
-    // need to help migrate, if a migration is in process.  See
-    // witchhat_store_migrate() for a bit more detailed an
-    // explaination, but doing this makes witchhat_store_migrate()
-    // wait free.
+	/* In witchhat, whenever we successfully overwrite a value, we
+	 * need to help migrate, if a migration is in process.  See
+	 * witchhat_store_migrate() for a bit more detailed an
+	 * explaination, but doing this makes witchhat_store_migrate()
+	 * wait free.
+	 */
 	if (atomic_read(&self->used_count) >= self->threshold) {
 	    witchhat_store_migrate(self, top);
 	}
@@ -770,13 +772,12 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
 	 * Plus, the helper isn't the one responsible for
 	 * determining when help is no longer necessary, so if the
 	 * smaller store is selected, the next resize will definitely
-	 * be bigger if help was needed continuously.
+	 * be bigger, if help was needed continuously.
 	 *
 	 * This mechanism is, in practice, the only mechanism that
 	 * seems like it might have any sort of impact on the overall
 	 * performance of the algorithm, and if it does have an
 	 * impact, it seems to be completely in the noise.
-	 * 
 	 */
 	if (witchhat_need_to_help(top)) {
 	    new_size = (self->last_slot + 1) << 1;

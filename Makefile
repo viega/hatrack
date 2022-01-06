@@ -1,6 +1,6 @@
 ENV      := /usr/bin/env
 CC       := cc
-OPT      := -Ofast -flto 
+#OPT      := -Ofast -flto 
 #LIBS     := -L/opt/homebrew/lib -lhoard
 # Needed for linux.
 #LIBS    := -latomic -pthread -lrt -lhoard

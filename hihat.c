@@ -54,7 +54,9 @@ hihat_init(hihat_t *self)
 
     store            = hihat_store_new(HATRACK_MIN_SIZE);
     self->next_epoch = 1; // 0 is reserved for empty buckets.
+    
     atomic_store(&self->store_current, store);
+    atomic_store(&self->item_count, 0);
 }
 
 /* hihat_get(), _put(), _replace(), _add(), _remove()
@@ -229,7 +231,7 @@ hihat_delete(hihat_t *self)
 uint64_t
 hihat_len(hihat_t *self)
 {
-    return self->store_current->item_count;
+    return atomic_read(&self->item_count);
 }
 
 /* hihat_view()
@@ -622,7 +624,7 @@ hihat_store_put(hihat_store_t *self,
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_REC_INSTALL)) {
         if (new_item) {
-            atomic_fetch_add(&self->item_count, 1);
+            atomic_fetch_add(&top->item_count, 1);
         }
         return old_item;
     }
@@ -799,7 +801,7 @@ found_bucket:
     candidate.info = top->next_epoch++;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_REC_INSTALL)) {
-	atomic_fetch_add(&self->item_count, 1);
+	atomic_fetch_add(&top->item_count, 1);
         return true;
     } 
     if (record.info & HIHAT_F_MOVING) {
@@ -877,7 +879,7 @@ found_bucket:
     candidate.info = 0;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_DEL)) {
-        atomic_fetch_sub(&self->item_count, 1);
+        atomic_fetch_sub(&top->item_count, 1);
 
         if (found) {
             *found = true;
@@ -1079,9 +1081,12 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
 
     new_store = atomic_read(&self->store_next);
 
-    /* If we couldn't acquire a store, try to install one into
-     * store_current->next_store. If we fail, free it, and begin using
-     * the one that was successfully installed.
+    /* If there's still not a store in place by now, we'll allocate
+     * one, and try to install it ourselves. If we can't install ours,
+     * that means someone raced us, installing one after our read
+     * completed (well, could have been during or even before our
+     * read, since our read doesn't use a memory barrier, only the
+     * swap used to install does), so we free ours and use it.
      *
      * Note that, in large tables, this could be a big allocation, and
      * there could be lots of concurrent threads attempting to do the
@@ -1121,10 +1126,14 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
      *
      * Of course, other migrating threads may race ahead of us.
      *
-     * Note that, since the table has resized, the bucket index our
-     * hash value maps to may change, and there may be new
-     * collisions. So we can't just copy a record to the same index in
-     * the new table; we need to go through the bucket allocation
+     * Note that, since the table may be resizing, not just migrating,
+     * the bucket index our hash value maps to may change, and there
+     * may be new collisions. Plus, we may no longer 'collide' with
+     * keys that have since been deleted, which could put us in a
+     * different place, even if the table is NOT resizing.
+     *
+     * That all means, we can't just copy a record to the same index
+     * in the new table; we need to go through the bucket allocation
      * process again (including the linear probing).
      */
     for (i = 0; i <= self->last_slot; i++) {

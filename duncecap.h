@@ -201,10 +201,10 @@ typedef struct {
  *                  operation, for the purposes of sort ordering.
  */
 typedef struct {
-    uint64_t            item_count;
     duncecap_store_t    *store_current;
-    pthread_mutex_t     mutex;
+    uint64_t            item_count;
     uint64_t            next_epoch;
+    pthread_mutex_t     mutex;
 } duncecap_t;
 // clang-format on
 

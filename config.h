@@ -191,10 +191,11 @@
  *    allow you to inspect the state at your leisure.
  *
  * 3) This is NOT a power of two... set it to the actual number of
- *    records you think you want to see.  Default is 8,192 records.
+ *    records you think you want to see.  Default is just 64 records;
+ *    you can always choose to dump more.
  */
 #ifndef HATRACK_ASSERT_FAIL_RECORD_LEN
-#define HATRACK_ASSERT_FAIL_RECORD_LEN (1 << 13)
+#define HATRACK_ASSERT_FAIL_RECORD_LEN (1 << 6)
 #endif
 
 #if HATRACK_ASSERT_FAIL_RECORD_LEN > HATRACK_DEBUG_RING_SIZE
@@ -436,12 +437,16 @@
  * quicksort, if sorting is asked for.
  *
  * Therefore, this applies ONLY to lohat-a and lohat-b.
+ *
+ * And, generally, I would not recommend this flag for anyone at any
+ * time, as it appears to perform abysmally on large arrays, for some
+ * reason that I have not yet discerned (PEBCAK?).
  */
 // #define HATRACK_ALWAYS_USE_INSSORT
 
 #if defined(HATRACK_ALWAYS_USE_INSSORT) && defined(HATRACK_ALWAYS_USE_QSORT)
 #error                                                                         \
-    "Cannot have both HATRACK_ALWAYS_USE_INSSORT and "                      \
+    "Cannot have both HATRACK_ALWAYS_USE_INSSORT and "                         \
        "HATRACK_ALWAYS_USE_QSORT"
 #endif
 
@@ -458,7 +463,6 @@
  * yet understand what's going on, but haven't gotten around to
  * exploring this yet.
  */
-// #define HATRACK_QSORT_THRESHOLD 256
 
 #if defined(HATRACK_QSORT_THRESHOLD) && defined(HATRACK_ALWAYS_USE_QSORT)
 #error "Cannot have both HATRACK_QSORT_THRESHOLD and HATRACK_ALWAYS_USE_QSORT"
@@ -466,6 +470,11 @@
 
 #if defined(HATRACK_QSORT_THRESHOLD) && defined(HATRACK_ALWAYS_USE_INSSORT)
 #error "Cannot have both HATRACK_QSORT_THRESHOLD and HATRACK_ALWAYS_USE_INSSORT"
+#endif
+
+#if !defined(HATRACK_ALWAYS_USE_INSORT) && !defined(HATRACK_ALWAYS_USED_QSORT) \
+    && !defined(HATRACK_QSORT_THRESHOLD)
+#define HATRACK_QSORT_THRESHOLD 256
 #endif
 
 /* TOPHAT_USE_LOCKING_ALGORITHMS

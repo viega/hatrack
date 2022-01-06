@@ -133,10 +133,6 @@ typedef struct hihat_store_st hihat_store_t;
  *               but the item has been removed since the last
  *               resizing.
  *
- * item_count -- The number of items in the table, approximately.
- *               This value isn't used in anything critical, just to
- *               return a result when querying the length.
- *
  * store_next -- When writer threads realize it's time to migrate,
  *               they will try to create the next store, if it hasn't
  *               been put here by the time they read it. Once they
@@ -156,7 +152,6 @@ struct hihat_store_st {
     uint64_t                   last_slot;
     uint64_t                   threshold;
     _Atomic uint64_t           used_count;
-    _Atomic uint64_t           item_count;
     _Atomic(hihat_store_t *)   store_next;
     alignas(16)
     hihat_bucket_t            buckets[];
@@ -173,13 +168,18 @@ struct hihat_store_st {
  *                  migration is completed, so we'll have to be sure
  *                  not to delete it prematurely.
  *
+ * item_count    -- The number of items in the table, approximately.
+ *                  This value isn't used in anything critical, just
+ *                  to return a result when querying the length.
+ *
  * next_epoch    -- The next epoch value to give to an insertion
  *                  operation, for the purposes of sort ordering.
  */
 typedef struct {
     alignas(8)
     _Atomic(hihat_store_t *) store_current;
-    uint64_t                  next_epoch;
+    _Atomic uint64_t         item_count;
+    uint64_t                 next_epoch;
 } hihat_t;
 
 

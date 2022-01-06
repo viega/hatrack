@@ -17,6 +17,9 @@
  *  Description:    Linearizeable, Ordered HAsh Table (LOHAT)
  *                  This version keeps two tables, for partial ordering.
  *
+ *                  An overview of the algorithm and the motivation
+ *                  behind it live in the .h file.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -30,23 +33,23 @@ static void             lohat_a_retire_store       (lohat_a_store_t *);
 static void             lohat_a_retire_unused_store(lohat_a_store_t *);
 static void            *lohat_a_store_get          (lohat_a_store_t *,
 						    lohat_a_t *,
-						   hatrack_hash_t *, bool *);
+						    hatrack_hash_t *, bool *);
 static void            *lohat_a_store_put          (lohat_a_store_t *,
 						    lohat_a_t *,
-						   hatrack_hash_t *, void *,
-						   bool *);
+						    hatrack_hash_t *, void *,
+						    bool *);
 static void            *lohat_a_store_replace      (lohat_a_store_t *,
 						    lohat_a_t *,
 						    hatrack_hash_t *, void *,
 						    bool *);
 static bool             lohat_a_store_add          (lohat_a_store_t *,
-						   lohat_a_t *,
-						   hatrack_hash_t *, void *);
+						    lohat_a_t *,
+						    hatrack_hash_t *, void *);
 static void            *lohat_a_store_remove       (lohat_a_store_t *,
 						    lohat_a_t *,
-						   hatrack_hash_t *, bool *);
-static lohat_a_store_t *lohat_a_store_migrate       (lohat_a_store_t *,
-						   lohat_a_t *);
+						    hatrack_hash_t *, bool *);
+static lohat_a_store_t *lohat_a_store_migrate      (lohat_a_store_t *,
+						    lohat_a_t *);
 
 #ifndef HATRACK_ALWAYS_USE_QSORT
 static void             lohat_a_insertion_sort     (hatrack_view_t *, uint64_t);
@@ -57,21 +60,14 @@ static void             lohat_a_insertion_sort     (hatrack_view_t *, uint64_t);
 void
 lohat_a_init(lohat_a_t *self)
 {
-    lohat_a_store_t *store = lohat_a_store_new(HATRACK_MIN_SIZE);
+    lohat_a_store_t *store;
 
+    store = lohat_a_store_new(HATRACK_MIN_SIZE);
+
+    atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
 }
 
-/* lohat_a_get() returns whatever is stored in the item field.
- * Generally, we expect this to be two pointers, a key and a value.
- * Meaning, when the object is NOT in the table, the return value
- * will be the null pointer.
- *
- * When not using values (i.e., a set), it would be reasonable to
- * store values directly, instead of pointers. Thus, the extra
- * optional parameter to get() can tell us whether the item was
- * found or not.  Set it to NULL if you're not interested.
- */
 void *
 lohat_a_get(lohat_a_t *self, hatrack_hash_t *hv, bool *found)
 {
@@ -147,11 +143,16 @@ lohat_a_remove(lohat_a_t *self, hatrack_hash_t *hv, bool *found)
 void
 lohat_a_delete(lohat_a_t *self)
 {
-    lohat_a_store_t   *store   = atomic_load(&self->store_current);
-    lohat_a_history_t *buckets = store->hist_buckets;
-    lohat_a_history_t *p       = buckets;
-    lohat_a_history_t *end     = store->hist_end;
+    lohat_a_store_t   *store;
+    lohat_a_history_t *buckets;
+    lohat_a_history_t *p;
+    lohat_a_history_t *end;
     lohat_record_t    *rec;
+
+    store   = atomic_load(&self->store_current);
+    buckets = store->hist_buckets;
+    p       = buckets;
+    end     = store->hist_end;
 
     while (p < end) {
         rec = hatrack_pflag_clear(atomic_load(&p->head),
@@ -169,18 +170,7 @@ lohat_a_delete(lohat_a_t *self)
 uint64_t
 lohat_a_len(lohat_a_t *self)
 {
-    uint64_t diff;
-
-    /* Remember that pointer subtraction implicity divides
-     * the result by the number of objects, so this
-     * gives us the number of buckets in the history store
-     * that have been claimed.
-     */
-    diff = atomic_read(&self->store_current->hist_next)
-         - self->store_current->hist_buckets;
-
-    // Subtract out buckets known to be empty.
-    return diff - atomic_read(&self->store_current->del_count);
+    return atomic_read(&self->item_count);
 }
 
 hatrack_view_t *
@@ -211,16 +201,8 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
     while (cur < end) {
         rec = hatrack_pflag_clear(atomic_read(&cur->head),
                                   LOHAT_F_MOVING | LOHAT_F_MOVED);
-
-        // If there's a record, we need to ensure its epoch is updated
-        // before we proceed.
         mmm_help_commit(rec);
 
-        /* First, we find the top-most record that's older than (or
-         * equal to) the linearization epoch.  At this point, we
-         * happily will look under deletions; our goal is to just go
-         * back in time until we find the right record.
-         */
         while (rec) {
             sort_epoch = mmm_get_write_epoch(rec);
             if (sort_epoch <= epoch) {
@@ -229,11 +211,6 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
             rec = hatrack_pflag_clear(rec->next, LOHAT_F_USED);
         }
 
-        /* If the sort_epoch is larger than the epoch, then no records
-         * in this bucket are old enough to be part of the linearization.
-         * Similarly, if the top record is a delete record, then the
-         * bucket was empty at the linearization point.
-         */
         if (!rec || sort_epoch > epoch
             || !hatrack_pflag_test(rec->next, LOHAT_F_USED)) {
             cur++;
@@ -259,9 +236,25 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
     view = realloc(view, num_items * sizeof(hatrack_view_t));
 
     if (sort) {
-        // Unordered buckets should be in random order, so quicksort
-        // is a good option.  Otherwise, we should use an insertion
-        // sort.
+        /* Since we're keeping history buckets somewhat ordered, an
+         * insertion sort could buy us significant time over
+         * quicksort.
+         *
+         * In my early testing, that only seems to be true to a
+         * point... at a disappointingly low number of items, the
+         * curves meet, and quicksort becomes faster, for reasons I do
+         * not yet understand.
+         *
+         * By the time arrays get to 10s of thousands of items,
+         * quicksort is a LOT faster.
+         *
+         * At some point I'd like to understand why, though it's not
+         * too high on my priority list.
+         *
+         * At the moment, you can hard-code a threshold for list size,
+         * where we start applying quicksort, or you can just select
+         * one or the other to run, always.
+         */
 #ifdef HATRACK_QSORT_THRESHOLD
         if (num_items >= HATRACK_QSORT_THRESHOLD) {
             qsort(view,
@@ -283,6 +276,14 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
     return view;
 }
 
+/* Note that, unlike in lohat, we have TWO sets of buckets... the
+ * "history" buckets, where change records are kept, and the
+ * "indirection" buckets, which point us into the history array.
+ *
+ * In this table, the indirection buckets are the last item of the
+ * struct, and declared as a variable sized array.  The history
+ * buckets require an additional allocation, which is done here.
+ */
 static lohat_a_store_t *
 lohat_a_store_new(uint64_t size)
 {
@@ -292,10 +293,8 @@ lohat_a_store_new(uint64_t size)
     sz    = sizeof(lohat_a_store_t) + sizeof(lohat_a_indirect_t) * size;
     store = (lohat_a_store_t *)mmm_alloc_committed(sz);
 
-    store->last_slot  = size - 1;
-    store->threshold  = hatrack_compute_table_threshold(size);
-    store->del_count  = ATOMIC_VAR_INIT(0);
-    store->store_next = ATOMIC_VAR_INIT(NULL);
+    store->last_slot = size - 1;
+    store->threshold = hatrack_compute_table_threshold(size);
 
     sz                  = sizeof(lohat_a_history_t) * size;
     store->hist_buckets = (lohat_a_history_t *)mmm_alloc_committed(sz);
@@ -352,8 +351,13 @@ not_found:
         }
 
         bucket = atomic_read(&ptrbucket->ptr);
-        // It's possible that another thread has started a write but
-        // has not finished it yet.
+        /* The bucket could be reserved via a hash write, but some
+         * thread could be stalled on writing out the indirection
+         * pointer.
+         *
+         * If so, there's nothing written yet.
+         */
+
         if (!bucket) {
             goto not_found;
         }
@@ -361,6 +365,9 @@ not_found:
     }
     goto not_found;
 
+    /* Otherwise, we've found the history bucket, and the rest of the
+     * logic should look exactly like with lohat.
+     */
 found_history_bucket:
     head = hatrack_pflag_clear(atomic_read(&bucket->head),
                                LOHAT_F_MOVING | LOHAT_F_MOVED);
@@ -411,9 +418,8 @@ found_ptr_bucket:
          * us who was slow, both the ptr value and the hash value in
          * the history record may not be set.  For the ptr field, we
          * check to see if it's not set, before trying to "help",
-         * because we don't want to waste space in the second
-         * array. However, with the hv, we always just try to write
-         * it.
+         * especially because we don't want to waste space in the
+         * second array, triggering more migrations than we need.
          */
         bucket = atomic_read(&ptrbucket->ptr);
         if (!bucket) {
@@ -421,9 +427,10 @@ found_ptr_bucket:
             if (new_bucket >= self->hist_end) {
                 goto migrate_and_retry;
             }
-            // If someone else installed ptr before we did, then its
-            // value will be in bucket.  Otherwise, it will be in
-            // new_bucket.
+            /* If someone else installed ptr before we did, then its
+             * value will be in bucket.  Otherwise, it will be in
+             * new_bucket.
+             */
             if (LCAS(&ptrbucket->ptr,
                      &bucket,
                      new_bucket,
@@ -446,6 +453,9 @@ migrate_and_retry:
     self = lohat_a_store_migrate(self, top);
     return lohat_a_store_put(self, top, hv1, item, found);
 
+    /* Post-bucket acquisition, everything we do in the bucket remains
+       the same as with lohat.
+     */
 found_history_bucket:
     head = atomic_read(&bucket->head);
 
@@ -457,14 +467,6 @@ found_history_bucket:
     candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
     candidate->item = item;
 
-    /* Even if we're the winner, we need still to make sure that the
-     * previous thread's write epoch got committed (since ours has to
-     * be later than theirs). Then, we need to commit our write, and
-     * return whatever value was there before, if any.
-     *
-     * Do this first, so we can attempt to set our create epoch
-     * properly before we move our record into place.
-     */
     if (head) {
         mmm_help_commit(head);
         if (hatrack_pflag_test(head->next, LOHAT_F_USED)) {
@@ -473,14 +475,6 @@ found_history_bucket:
     }
 
     if (!LCAS(&bucket->head, &head, candidate, LOHATa_CTR_REC_INSTALL)) {
-        /* CAS failed. This is either because a flag got updated
-         * (because of a table migration), or because a new record got
-         * added first.  In the later case, we act like our write
-         * happened, and that we got immediately overwritten, before
-         * any read was possible.  We want the caller to delete the
-         * item if appropriate, so when found is passed, we return
-         * *found = true, and return the item passed in as a result.
-         */
         mmm_retire_unused(candidate);
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
@@ -501,8 +495,6 @@ found_history_bucket:
         return NULL;
     }
 
-    // If the previous record was a delete, then we bump down
-    // del_count.
     if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
         atomic_fetch_sub(&self->del_count, 1);
         if (found) {
@@ -518,14 +510,15 @@ found_history_bucket:
         ret = head->item;
     }
 
-    // Even though the write committment may have been serviced by
-    // someone else, we're still responsible for retiring it ourselves,
-    // since we are the ones that overwrote the record.
     mmm_retire(head);
 
     return ret;
 }
 
+/* See the comments on lohat_a_store_put() for an overview of the
+ * bucket acquisition logic. Everything else should be the same as
+ * with lohat.
+ */
 static void *
 lohat_a_store_replace(lohat_a_store_t *self,
                       lohat_a_t       *top,
@@ -555,13 +548,6 @@ lohat_a_store_replace(lohat_a_store_t *self,
             continue;
         }
 
-        /* If we are the first writer, or if there's a writer ahead of
-         * us who was slow, both the ptr value and the hash value in
-         * the history record may not be set.  If we can't follow the
-         * pointer, we conclude 'not found' and move on.  We don't
-         * bother checking the hash value; the writer might speed up,
-         * and if not, we'll bail when we see a null record.
-         */
         bucket = atomic_read(&ptrbucket->ptr);
         if (!bucket) {
             goto not_found;
@@ -615,6 +601,10 @@ migrate_and_retry:
     return head->item;
 }
 
+/* See the comments on lohat_a_store_put() for an overview of the
+ * bucket acquisition logic. Everything else should be the same as
+ * with lohat.
+ */
 static bool
 lohat_a_store_add(lohat_a_store_t *self,
                   lohat_a_t       *top,
@@ -647,23 +637,12 @@ lohat_a_store_add(lohat_a_store_t *self,
         }
 
 found_ptr_bucket:
-        /* If we are the first writer, or if there's a writer ahead of
-         * us who was slow, both the ptr value and the hash value in
-         * the history record may not be set.  For the ptr field, we
-         * check to see if it's not set, before trying to "help",
-         * because we don't want to waste space in the second
-         * array. However, with the hv, we always just try to write
-         * it.
-         */
         bucket = atomic_read(&ptrbucket->ptr);
         if (!bucket) {
             new_bucket = atomic_fetch_add(&self->hist_next, 1);
             if (new_bucket >= self->hist_end) {
                 goto migrate_and_retry;
             }
-            // If someone else installed ptr before we did, then its
-            // value will be in bucket.  Otherwise, it will be in
-            // new_bucket.
             if (LCAS(&ptrbucket->ptr,
                      &bucket,
                      new_bucket,
@@ -693,18 +672,10 @@ found_history_bucket:
         goto migrate_and_retry;
     }
 
-    // There's already something in this bucket, and the request was
-    // to put only if the bucket is empty.
     if (head && head->next && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
         return false;
     }
 
-    /* Right now there's nothing in the bucket, but there might be
-     * something in the bucket before we add our item, in which case
-     * the CAS will fail. Or, the CAS may fail if the migrating flag
-     * got set.  If there is an item there, we return false; if we see
-     * a migration in progress, we go off and do that instead.
-     */
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
     candidate->item = item;
@@ -718,9 +689,6 @@ found_history_bucket:
     }
 
     if (head) {
-        // If there's a previous record, it will be a "delete", so we need
-        // still to make sure that the previous thread's write epoch got
-        // committed before committing our write.
         atomic_fetch_sub(&self->del_count, 1);
         mmm_help_commit(head);
         mmm_commit_write(candidate);
@@ -733,6 +701,10 @@ found_history_bucket:
     return true;
 }
 
+/* See the comments on lohat_a_store_get() for an overview of the
+ * bucket traversal logic. Everything else should be the same as with
+ * lohat.
+ */
 static void *
 lohat_a_store_remove(lohat_a_store_t *self,
                      lohat_a_t       *top,
@@ -765,16 +737,14 @@ lohat_a_store_remove(lohat_a_store_t *self,
         if (!bucket) {
             break;
         }
-        // Now try to write out the hash value, without bothering to
-        // check if it needs to be written.
         hv2 = atomic_read(&bucket->hv);
         if (hatrack_bucket_unreserved(&hv2)) {
-            LCAS(&bucket->hv, &hv2, *hv1, LOHATa_CTR_BUCKET_ACQUIRE);
+            break;
         }
 
         goto found_history_bucket;
     }
-    // If run off the loop, or break out of it, the item was not present.
+
 empty_bucket:
     if (found) {
         *found = false;
@@ -790,32 +760,20 @@ migrate_and_retry:
         return lohat_a_store_remove(self, top, hv1, found);
     }
 
-    // If !head, then some write hasn't finished.
     if (!head || !(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
         goto empty_bucket;
     }
 
-    /* At this moment, there's an item there to delete. Create a
-     * deletion record, and try to add it on. If we "fail", we look at
-     * the record that won. If it is itself a deletion, then that
-     * record did the delete, and we act like we came in after it.  If
-     * it's an overwrite, then the overwrite was responsible for
-     * returning the old item for memory management purposes, so we
-     * return NULL and set *found to false (if requested), to indicate
-     * that there's no memory management work to do.
-     */
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = NULL;
     candidate->item = NULL;
     if (!LCAS(&bucket->head, &head, candidate, LOHATa_CTR_DEL)) {
         mmm_retire_unused(candidate);
 
-        // Moving flag got set before our CAS.
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
             goto migrate_and_retry;
         }
         if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
-            // We got beat to the delete;
             goto empty_bucket;
         }
         if (found) {
@@ -824,9 +782,6 @@ migrate_and_retry:
 
         return NULL;
     }
-
-    // Help finish the commit of anything we're overwriting, before we
-    // fully commit our write, and then add its retirement epoch.
 
     mmm_help_commit(head);
     mmm_commit_write(candidate);
@@ -844,43 +799,57 @@ static lohat_a_store_t *
 lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
 {
     lohat_a_store_t    *new_store;
-    lohat_a_store_t    *candidate;
+    lohat_a_store_t    *candidate_store;
     uint64_t            new_size;
     lohat_a_history_t  *cur;
     lohat_a_history_t  *target;
     lohat_a_history_t  *store_end;
-    lohat_record_t     *old_head;
-    lohat_record_t     *deflagged;     // Head w/ migration flags removed.
-    lohat_a_indirect_t *ptr_bucket;    // New unordered bucket location.
-    hatrack_hash_t      cur_hv;        // Hash value of the record to migrate.
-    lohat_record_t     *expected_head; // Expected values in new table are NULL.
+    lohat_record_t     *head;
+    lohat_record_t     *candidate;
+    lohat_a_indirect_t *ptr_bucket;
+    hatrack_hash_t      cur_hv;
+    lohat_record_t     *expected_head;
     hatrack_hash_t      expected_hv;
     lohat_a_history_t  *expected_ptr;
     uint64_t            i;
     uint64_t            bix;
     uint64_t            new_used = 0;
 
-    /* Quickly run through every history bucket, and mark any bucket
-     * that doesn't already have F_MOVING set.  Note that the CAS
-     * could fail due to some other updater, so we keep CASing until
-     * we know it was successful.
-     */
     cur       = self->hist_buckets;
     store_end = self->hist_end;
 
+    /* Right now, lohat-a gets the same number of history buckets as
+     * it has top-level buckets. I've been expecting to size that down
+     * to the 'threshhold' value at some point, so instead of using a
+     * loop over an array index, we just dump a pointer on every
+     * iteration, to be more flexible here (stopping when we get to
+     * store_end).
+     */
     while (cur < store_end) {
-        old_head = atomic_read(&cur->head);
+        head = atomic_read(&cur->head);
         do {
-            if (hatrack_pflag_test(old_head, LOHAT_F_MOVING)) {
-                break;
+            if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+                goto didnt_win;
             }
-        } while (!LCAS(&cur->head,
-                       &old_head,
-                       hatrack_pflag_set(old_head, LOHAT_F_MOVING),
-                       LOHATa_CTR_F_MOVING));
-        deflagged
-            = hatrack_pflag_clear(old_head, LOHAT_F_MOVING | LOHAT_F_MOVED);
-        if (deflagged && hatrack_pflag_test(deflagged->next, LOHAT_F_USED)) {
+            if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+                candidate = hatrack_pflag_set(head, LOHAT_F_MOVING);
+            }
+            else {
+                candidate
+                    = hatrack_pflag_set(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
+            }
+        } while (!LCAS(&cur->head, &head, candidate, LOHATa_CTR_F_MOVING));
+
+        if (head && hatrack_pflag_test(candidate, LOHAT_F_MOVED)) {
+            // Then it was a delete record; retire it.
+            mmm_help_commit(head);
+            mmm_retire(head);
+            continue;
+        }
+
+didnt_win:
+        head = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
+        if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
             new_used++;
         }
 
@@ -889,69 +858,42 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
 
     new_store = atomic_read(&self->store_next);
 
-    // If we couldn't acquire a store, try to install one. If we fail, free it.
     if (!new_store) {
-        new_size  = hatrack_new_size(self->last_slot, new_used);
-        candidate = lohat_a_store_new(new_size);
+        new_size        = hatrack_new_size(self->last_slot, new_used);
+        candidate_store = lohat_a_store_new(new_size);
 
         if (!LCAS(&self->store_next,
                   &new_store,
-                  candidate,
+                  candidate_store,
                   LOHATa_CTR_NEW_STORE)) {
-            lohat_a_retire_unused_store(candidate);
+            lohat_a_retire_unused_store(candidate_store);
         }
         else {
-            new_store = candidate;
+            new_store = candidate_store;
         }
     }
 
-    // At this point, we're sure that any late writers will help us
-    // with the migration. Therefore, we can go through each item,
-    // and, if it's not fully migrated, we can attempt to migrate it.
-
+    // Again, we use pointer addition instead of an index to iterate
+    // through the buckets.
     cur    = self->hist_buckets;
     target = new_store->hist_buckets;
 
     while (cur < store_end) {
-        old_head = atomic_read(&cur->head);
-        deflagged
-            = hatrack_pflag_clear(old_head, LOHAT_F_MOVING | LOHAT_F_MOVED);
+        head      = atomic_read(&cur->head);
+        candidate = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
 
-        // If there was not an old record in this bucket, then we race
-        // to set LOHAT_F_MOVED and go on.
-        if (!deflagged) {
-            if (!(hatrack_pflag_test(old_head, LOHAT_F_MOVED))) {
-                LCAS(&cur->head,
-                     &old_head,
-                     hatrack_pflag_set(old_head, LOHAT_F_MOVED),
-                     LOHATa_CTR_F_MOVED1);
-            }
-
-            cur++;
-            continue;
-        }
-
-        // If someone beat us to the move, and there was an item present,
-        // we need to update our index into both bucket lists.
-        if (hatrack_pflag_test(old_head, LOHAT_F_MOVED)) {
-            if (hatrack_pflag_test(deflagged->next, LOHAT_F_USED)) {
+        /* If someone beat us to the move, and there was an item
+         * present, we need to update our index into both of the
+         * history bucket lists.
+         *
+         * If candidate is NULL, there was no deletion record; we
+         * don't check head for null, as it will have at least
+         * LOHAT_F_MIGRATE set.
+         */
+        if (hatrack_pflag_test(head, LOHAT_F_MOVED)) {
+            if (candidate
+                && hatrack_pflag_test(candidate->next, LOHAT_F_USED)) {
                 target++;
-            }
-            cur++;
-            continue;
-        }
-
-        // If the record is a delete record, then try to set the moved
-        // flag. If we win, then we retire the old delete record.
-        if (!hatrack_pflag_test(deflagged->next, LOHAT_F_USED)) {
-            if (LCAS(&cur->head,
-                     &old_head,
-                     hatrack_pflag_set(old_head, LOHAT_F_MOVED),
-                     LOHATa_CTR_F_MOVED2)) {
-                // Need to not mmm_retire() something without a write epoch
-                // when something is still referencing it.
-                mmm_help_commit(deflagged);
-                mmm_retire(deflagged);
             }
             cur++;
             continue;
@@ -963,6 +905,11 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
          * us to any particular step. We do this, because other
          * threads may get suspended, and we want to ensure progress.
          *
+         * With our two-tier bucket structure, we first try to write
+         * the raw record to the (linearly ordered) history
+         * array. After that, we try to write to the pointer
+         * indirection bucket.
+         *
          * New array starts off zero-initialized. If there's anything else
          * after any specific swap, it means we lost a race.
          */
@@ -973,11 +920,14 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
         cur_hv = atomic_read(&cur->hv);
 
         LCAS(&target->hv, &expected_hv, cur_hv, LOHATa_CTR_MIGRATE_HV);
-        LCAS(&target->head, &expected_head, deflagged, LOHATa_CTR_MIG_REC);
+        LCAS(&target->head, &expected_head, candidate, LOHATa_CTR_MIG_REC);
 
-        // The history records are now successfully migrated.  But we
-        // still have to claim a bucket in the indirection array, and
-        // point it into the ordered array.
+        /* The history records are now successfully migrated.  But we
+         * still have to claim a bucket in the indirection array, and
+         * point it into the ordered array.  This basically works the
+         * same way as an "add" operation above, and is how we treat
+         * history records in lohat, etc.
+         */
 
         bix = hatrack_bucket_index(&cur_hv, new_store->last_slot);
 
@@ -995,7 +945,7 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
                     continue;
                 }
             }
-            break; // Bucket is claimed.
+            break;
         }
         /* Attempt to install the pointer that points from the hashed
          * array, so that it points to target.  The only reason this
@@ -1009,8 +959,8 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
         // table.  We need to make sure the old bucket is updated
         // properly, by trying to add LOHAT_F_MOVED.
         LCAS(&cur->head,
-             &old_head,
-             hatrack_pflag_set(old_head, LOHAT_F_MOVED),
+             &head,
+             hatrack_pflag_set(head, LOHAT_F_MOVED),
              LOHATa_CTR_F_MOVED3);
         target++;
         cur++;
@@ -1021,13 +971,14 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
     // to it).
 
     expected_ptr = new_store->hist_buckets;
+
     LCAS(&new_store->hist_next, &expected_ptr, target, LOHATa_CTR_F_HIST);
 
     if (LCAS(&top->store_current, &self, new_store, LOHATa_CTR_STORE_INSTALL)) {
         lohat_a_retire_store(self);
     }
 
-    return new_store;
+    return top->store_current;
 }
 
 #ifndef HATRACK_ALWAYS_USE_QSORT

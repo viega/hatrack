@@ -60,6 +60,7 @@ hihat_a_init(hihat_t *self)
     store            = hihat_a_store_new(HATRACK_MIN_SIZE);
     self->next_epoch = 1; 
     atomic_store(&self->store_current, store);
+    atomic_store(&self->item_count, 0);
 }
 
 void *
@@ -142,7 +143,7 @@ hihat_a_delete(hihat_t *self)
 uint64_t
 hihat_a_len(hihat_t *self)
 {
-    return self->store_current->item_count;
+    return atomic_read(&self->item_count);
 }
 
 hatrack_view_t *
@@ -324,7 +325,7 @@ hihat_a_store_put(hihat_store_t *self,
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_REC_INSTALL)) {
         if (new_item) {
-            atomic_fetch_add(&self->item_count, 1);
+            atomic_fetch_add(&top->item_count, 1);
         }
         return old_item;
     }
@@ -455,7 +456,7 @@ found_bucket:
     candidate.info = top->next_epoch++;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_REC_INSTALL)) {
-	atomic_fetch_add(&self->item_count, 1);
+	atomic_fetch_add(&top->item_count, 1);
         return true;
     } 
     if (record.info & HIHAT_F_MOVING) {
@@ -521,7 +522,7 @@ found_bucket:
     candidate.info = 0;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_DEL)) {
-        atomic_fetch_sub(&self->item_count, 1);
+        atomic_fetch_sub(&top->item_count, 1);
 
         if (found) {
             *found = true;

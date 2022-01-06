@@ -87,7 +87,7 @@ typedef struct {
 typedef struct {
     uint64_t             item_count;
     uint64_t             next_epoch;
-    ballcap_store_t     *store;
+    ballcap_store_t     *store_current;
     pthread_mutex_t      migrate_mutex;
 } ballcap_t;
 

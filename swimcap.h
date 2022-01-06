@@ -202,9 +202,9 @@ typedef struct {
  *                  operation, for the purposes of sort ordering.
  */
 typedef struct {
+    swimcap_store_t   *store_current;
     uint64_t           item_count;
     uint64_t           next_epoch;
-    swimcap_store_t   *store;
     pthread_mutex_t    write_mutex;
 } swimcap_t;
 

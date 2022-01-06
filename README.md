@@ -10,7 +10,8 @@ tables. For instance:
 
 - That highly parallel tables cannot shrink as items are deleted.
 
-- That there is no way to get both lock-freedom and O(1) operations.
+- That there is no way to get both lock-freedom and amortized O(1)
+  operations, with a low constant.
 
 - That it's not possible to get a view / an iterator on the table that
   gives a consistent, "moment in time" snapshot of the hash table
@@ -22,8 +23,11 @@ tables. For instance:
   Python3's dictionaries order their items based on when they were
   inserted).
 
-This Hatrack has something for every need-- solving all of those
-problems, with highly performant hash tables.
+- That it's not possible to get a highly parallel table that is
+  performant enough to use when apps are single-threaded.
+
+This Hatrack has something for every situation!  We address all of
+those problems, with highly performant hash tables.
 
 ## Overview
 
@@ -160,8 +164,24 @@ O(1) insertions, lookups and deletes.
 
 ## Getting started
 
-Right now, there's no high-level interfaces yet. Each algorithm has a
-low-level interface you can use.
+Right now, there are no high-level interfaces yet. Each algorithm has
+a low-level interface you can use. This means:
+
+1) That the implementations don't memory-manage the ITEMS stored in
+   the hash table.
+
+2) That the implementations don't run a hash function for you-- you
+   pass in a hash value that you're already calculated. We do supply
+   XXHASH3-128, as a fast and appropriate hash (see hash.h for an API
+   to it that we use in testing).
+
+   This allows you to decide if you want to cache hashes with objects,
+   use different kinds of functions for different kinds of data types,
+   etc.
+
+I'll produce some developer documentation on using the API soon. Right
+now, the source code is documented; start by looking at refhat to
+understand the basic API structure.
 
 For general purpose use, witchhat is your best bet (at least when you
 have a 128-bit CAS operation; I've not yet tested it on legacy
@@ -189,6 +209,21 @@ locking tables to be able to directly compare performance; and woolhat
 and witchhat are the culmination of our lock-free tables). Generally,
 start with the .h file to get a sense of the data structures, then
 scan the comments in the associated .c file.
+
+Note that I've tried to keep tables reasonably independent, to make
+them easier to pick out, and drop into some other program. That means
+there's a lot of code duplication across files.
+
+Because of that, I don't re-comment on everything in every source code
+file. Tables that are incremental changes over other tables are
+often VERY lightly commented.
+
+But I should indicate everywhere (if you open the source code for any
+table), what the appropriate table to look at would be, if the
+comments in the current table wouldn't be enough to understand the
+table independently.
+
+Here is an overview of the tables in their 'logical' order:
 
 1) **refhat**   A simple, fast, single-threaded reference hash table.
 
@@ -218,23 +253,24 @@ scan the comments in the associated .c file.
                 architectures w/o this operation, hihat1 still works,
                 but C implements the operation using fine-grained
                 locking.
-		
-7) **ballcap**  Uses locks like newshat, but with consistent views,
-                meaning that when you ask for a view (e.g., to
-                iterate), you will get a moment-in-time snapshot with
-                all of the items, that can be sorted reliably by their
-                insertion order.
-		
-8) **lohat**    A lock-free hash table, that also has consistent,
+				
+7) **lohat**    A lock-free hash table, that also has consistent,
                 order-preserving views.
 		
-9) **lohat-a** A variant of lohat that trades off space to improve the
+8) **lohat-a**  A variant of lohat that trades off space to improve the
                 computational complexity of getting an
                 order-preserving view.
 		
-10) **lohat-b** Like lohat-a, but also trades off O(1) lookups to get
+9) **lohat-b**  Like lohat-a, but also trades off O(1) lookups to get
                 near-O(n) views (note: I do not generally recommend this
 		trade-off).
+
+10) **ballcap** Uses locks like newshat, but with consistent views,
+                meaning that when you ask for a view (e.g., to
+                iterate), you will get a moment-in-time snapshot with
+                all of the items, that can be sorted reliably by their
+                insertion order.  Really just meant for direct comparison
+		to lohat.
 		
 11) **witchhat** A fully wait-free version of hihat.
 
@@ -249,31 +285,89 @@ scan the comments in the associated .c file.
                 admirably, even for single-threaded applications
                 (especially witchhat, when multi-threaded order
                 preservation and consistency are unimportant).
-		
+
+In general, looking at refhat will give you a good idea of the overall
+structure of all these tables, including what the top-level API for
+each table will look like.
+
+Then, the earlier tables are generally going to have some redundant
+documentation.  Hihat being our first lock-free table, that gets a lot
+of exposition, as does Lohat, since it's the first one that adds in
+full linearization of operations table-wide.
+
+But, in terms of ones I'd actually pick up and use, I recommend
+witchhat and woolhat (if you need the linearization).
 
 ## Status of this work
 
 Right now, I'm making this available for early comment, but I still
 have a lot of work remaining:
 
-1) I'm going to provide two high-level interfaces Dict and Set, that
-   are suitable for direct inclusion into projects, and allow you to
-   dynamically select the properties you need in a hash table.
-   
-2) I need to add proper handling for signals, thread deaths, and
-   thread exits.
+1) I'm still working on TopHat; I can definitely make it so that the
+   non-threaded readers don't need to hold a lock. But it requires me
+   to either change refhat or at least add a refhat-a. I'll make the
+   mods in refhat-a soon, and if performance doesn't degrade, I'll
+   replace refhat w/ refhat-a.
+
+2) There's some minor work that's just undone. For instance, I need to
+   add proper handling for signals, thread deaths, and thread
+   exits. And I have a small memory leak in swimcap that I still need
+   to squash...
 
 3) I've been doing my primary development and testing on an OS X
    laptop. I have kept things compatable with Linux, but need to go
    back, ensure that all still works in both environments, and set up
    automated testing as I make future commits.
 
-4) While I currently have a basic testbed and performance testing rig,
-   I intend to do a lot to improve this (including a lot of
-   functionality testing that hasn't happened yet).
+4) I need to keep going through the code base, doing clean-up and
+   commenting. I'm also going to organize the directory structure,
+   etc.
 
-5) I need to go through the code base, do clean-up and commenting. I'm
-   also going to organize the directory structure, etc.
-
-6) I'm going to write a long document describing the algorithms, that
+5) I'm going to write a long document describing the algorithms, that
    will be available in the doc/ directory.
+
+   I have half a mind to turn that into a full-fledged doctoral
+   dissertation-- there are certainly enough publishable results here
+   (though I'm not sure I want to spend my next year plus tweaking and
+   testing hash tables).
+   
+6) I'm going to provide two high-level interfaces Dict and Set, that
+   are suitable for direct inclusion into projects, and allow you to
+   dynamically select the properties you need in a hash table.
+
+   Though, I probably will do that strictly as part of this project;
+   this project is a bikeshed from a bikeshed project, which I call
+   bikeshed... basically which is a library of C programming nicities.
+   Witchhat and Woolhat will probably get copied into that project.
+
+7) While I currently have a basic testbed and performance testing rig,
+   I intend to do a lot to improve this (including a lot of
+   functionality testing that hasn't happened yet). Though, I want to
+   use the niceties I've been building myself in 'bikeshed', so these
+   projects may get even more intertwined somehow.
+
+
+Also, I seem to still messing around with some implementation details,
+as I revisit my implementation decisions and explore the alternatives
+I'd previously abandoned. So there are places where the algorithm
+implementations will be slightly inconsistent.
+
+For instance, many of the algorithms, when migrating to a new store,
+set flags indicating a move is in progress on all the buckets quickly.
+If the bucket is empty, most of those implementations will ALSO set a
+flag indicating the migration is done, in an attempt to short-circuit
+more work when threads go back to look at the bucket again.
+
+Generally, on first glance that's seemed to have helped, but on one
+algorithm, it was seeming to hurt. I haven't given it enough attention
+yet, so different algorithms may or may not do this.
+
+Finally, there are minor cosmetic differences that I might never
+bother to resolve, often resulting from too LITTLE cut and paste
+(perhaps). For instance, both implementations might have a test that
+is identical, and currently algorithm A will do 'if (x)' where
+algorithm b does 'if (!x)'.
+
+Sorry about that. A part of me wants to keep polishing and tweaking
+forever (or least before letting ANYONE see), but I also want to get
+this out there for feedback from some friends!

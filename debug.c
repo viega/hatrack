@@ -31,6 +31,11 @@ hatrack_debug_record_t __hatrack_debug[HATRACK_DEBUG_RING_SIZE] = {};
 _Atomic uint64_t __hatrack_debug_sequence         = ATOMIC_VAR_INIT(0);
 const char       __hatrack_hex_conversion_table[] = "0123456789abcdef";
 
+/* debug_dump()
+ *
+ * Prints the most recent records in the ring buffer to stderr, up to
+ * the specified amount.
+ */
 void
 debug_dump(uint64_t max_msgs)
 {
@@ -72,12 +77,23 @@ debug_dump(uint64_t max_msgs)
     }
 }
 
+/* debug_thread()
+ *
+ * Prints (to stderr) all messages current in the ring buffer that
+ * were written by the current thread.
+ */
 void
 debug_thread(void)
 {
     debug_other_thread(mmm_mytid);
 }
 
+/* debug_thread()
+ *
+ * Prints (to stderr) all messages current in the ring buffer that
+ * were written by the thread with the given id. Note that we use the
+ * thread IDs assigned by mmm for the purposes of thread identification.
+ */
 void
 debug_other_thread(int64_t tid)
 {
@@ -107,6 +123,15 @@ debug_other_thread(int64_t tid)
     }
 }
 
+/* debug_grep()
+ *
+ * Okay, this doesn't really "grep", but it searches the message field
+ * of all ring buffer entries (from oldest to newest), looking for the
+ * given substring.
+ *
+ * The searching is implemented using strstr, so definitely no regexps
+ * work.
+ */
 void
 debug_grep(char *s)
 {
@@ -136,6 +161,12 @@ debug_grep(char *s)
     }
 }
 
+/* debug_pgrep()
+ *
+ * If you pass in a pointer's value as an integer, constructs the
+ * appropriate string for that pointer, and then calls debug_grep()
+ * for you.
+ */
 void
 debug_pgrep(uintptr_t n)
 {

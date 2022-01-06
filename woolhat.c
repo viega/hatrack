@@ -56,7 +56,9 @@ static inline bool      woolhat_need_to_help (woolhat_t *);
 void
 woolhat_init(woolhat_t *self)
 {
-    woolhat_store_t *store = woolhat_store_new(HATRACK_MIN_SIZE);
+    woolhat_store_t *store;
+
+    store = woolhat_store_new(HATRACK_MIN_SIZE);
 
     atomic_store(&self->help_needed, 0);
     atomic_store(&self->item_count, 0);
@@ -162,7 +164,7 @@ woolhat_delete(woolhat_t *self)
 uint64_t
 woolhat_len(woolhat_t *self)
 {
-    return self->item_count;
+    return atomic_read(&self->item_count);
 }
 
 hatrack_view_t *
@@ -189,14 +191,11 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
         rec = hatrack_pflag_clear(atomic_read(&cur->head),
                                   WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
 
-        // If there's a record, we need to ensure its epoch is updated
-        // before we proceed.
         mmm_help_commit(rec);
 
-        /* First, we find the top-most record that's older than (or
-         * equal to) the linearization epoch.  At this point, we
-         * happily will look under deletions; our goal is to just go
-         * back in time until we find the right record.
+        /* This loop is bounded by the number of writes to this bucket
+         * since the call to mmm_start_linearized_op(), which could
+         * be large, but not unbounded.
          */
         while (rec) {
             sort_epoch = mmm_get_write_epoch(rec);
@@ -236,8 +235,6 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
     view = (hatrack_view_t *)realloc(view, num_items * sizeof(hatrack_view_t));
 
     if (sort) {
-        // Unordered buckets should be in random order, so quicksort
-        // is a good option.
         qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
     }
 
@@ -345,6 +342,37 @@ woolhat_store_put(woolhat_store_t *self,
     }
 
 migrate_and_retry:
+    /* One of the places where tophat is lock-free, instead of
+     * wait-free, is when a write operation has to help migrate.  In
+     * theory, it could go help migrate, and by the time it tries to
+     * write again, it has to participate in the next migration.
+     *
+     * Now, if we only ever doubled the size of the table, this
+     * operation would be wait-free, because there's an upper bound on
+     * the number of table resizes that would happen. However, table
+     * sizes can shrink, or stay the same. So a workload that clutters
+     * up a table with lots of deleted items could theoretically leave
+     * a thread waiting indefinitely.
+     *
+     * This case isn't very practical in the real world, but we can
+     * still guard against it, with nearly zero cost. Our approach is
+     * to count the number of attempts we make to mutate the table
+     * that result in a resizing, and when we hit a particular
+     * threshold, we "ask for help". When a thread needs help writing
+     * in the face of migrations, it means that no thread that comes
+     * along to migrate after the request is registered will migrate
+     * to a same-size or smaller table. It FORCES the table size to
+     * double on a migration, giving us a small bound of how long we
+     * might wait.
+     *
+     * Once the resquest is satisfied, we deregister our request for
+     * help.
+     *
+     * With all my initial test cases, which are mainly write-heavy
+     * workloads, if setting the threshold to 8, this help mechanism
+     * never triggers, and it barely ever triggers at a threshold of
+     * 6.
+     */
     count = count + 1;
     if (woolhat_help_required(count)) {
         HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
@@ -405,6 +433,16 @@ not_overwriting:
     if (found) {
         *found = true;
     }
+
+    /* In woolhat, whenever we successfully overwrite a value, we need
+     * to help migrate, if a migration is in process.  See
+     * woolhat_store_migrate() for a bit more detailed an
+     * explaination, but doing this helps make woolhat_store_migrate()
+     * wait free.
+     */
+    if (atomic_read(&self->used_count) >= self->threshold) {
+        woolhat_store_migrate(self, top);
+    }
     return head->item;
 }
 
@@ -455,6 +493,7 @@ found_history_bucket:
 
     if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
 migrate_and_retry:
+        // This is the same helping mechanism as per above.
         count = count + 1;
         if (woolhat_help_required(count)) {
             HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
@@ -509,6 +548,16 @@ migrate_and_retry:
         *found = true;
     }
 
+    /* In woolhat, whenever we successfully overwrite a value, we need
+     * to help migrate, if a migration is in process.  See
+     * woolhat_store_migrate() for a bit more detailed an
+     * explaination, but doing this helps make woolhat_store_migrate()
+     * wait free.
+     */
+    if (atomic_read(&self->used_count) >= self->threshold) {
+        woolhat_store_migrate(self, top);
+    }
+
     return head->item;
 }
 
@@ -550,6 +599,7 @@ woolhat_store_add(woolhat_store_t *self,
     }
 
 migrate_and_retry:
+    // This is where we ask for help if needed; see above for details.
     count = count + 1;
     if (woolhat_help_required(count)) {
         bool ret;
@@ -697,6 +747,16 @@ migrate_and_retry:
         *found = true;
     }
 
+    /* In woolhat, whenever we successfully overwrite a value, we need
+     * to help migrate, if a migration is in process.  See
+     * woolhat_store_migrate() for a bit more detailed an
+     * explaination, but doing this helps make woolhat_store_migrate()
+     * wait free.
+     */
+    if (atomic_read(&self->used_count) >= self->threshold) {
+        woolhat_store_migrate(self, top);
+    }
+
     atomic_fetch_sub(&top->item_count, 1);
     return head->item;
 }
@@ -727,23 +787,50 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
 
     new_used = 0;
 
-    /* Quickly run through every history bucket, and mark any bucket
-     * that doesn't already have F_MOVING set.  Note that the CAS
-     * could fail due to some other updater, so we keep CASing until
-     * we know it was successful.
-     */
     for (i = 0; i <= self->last_slot; i++) {
         cur  = &self->hist_buckets[i];
         head = atomic_read(&cur->head);
 
+        /* This loop is the final place where lohat is only
+         * lock-free-- it's possible that we could spin forever
+         * waiting to lock a bucket, telling other writers to migrate.
+         * For instance, we might be the only thread adding new
+         * content, and other threads might all be trying to update
+         * the same bucket with new values as fast as they can. It's
+         * possible (though not likely in practice, due to fair
+         * scheduling), that we'd effectively get starved, spinning
+         * here forever.
+         *
+         * Woolhat addresses this problem by having writers who
+         * MODIFY the contents of a bucket help migrate, but only
+         * after their modification operation succeeds. This prevents
+         * any one thread from unbounded starving others in this loop
+         * due to modifications-- the upper bound is the number of
+         * threads performing updates.
+         *
+         * Note that it's only necessary to do that check on updates
+         * of existing values (including removes), not on inserts.
+         */
         do {
             if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
-                break;
+                goto didnt_win;
             }
-        } while (!LCAS(&cur->head,
-                       &head,
-                       hatrack_pflag_set(head, WOOLHAT_F_MOVING),
-                       WOOLHAT_CTR_F_MOVING));
+            if (head && hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
+                candidate = hatrack_pflag_set(head, WOOLHAT_F_MOVING);
+            }
+            else {
+                candidate
+                    = hatrack_pflag_set(head,
+                                        WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
+            }
+        } while (!LCAS(&cur->head, &head, candidate, WOOLHAT_CTR_F_MOVING));
+        if (head && hatrack_pflag_test(candidate, WOOLHAT_F_MOVED)) {
+            mmm_help_commit(head);
+            mmm_retire(head);
+            continue;
+        }
+
+didnt_win:
         head = hatrack_pflag_clear(head, WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
         if (head && hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
             new_used++;
@@ -753,6 +840,26 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
     new_store = atomic_read(&self->store_next);
 
     if (!new_store) {
+        /* When threads need help in the face of a resize, this is
+         * where we provide that help.  We do it simply by forcing
+         * the table to resize up, when help is required.
+         *
+         * Note that different threads might end up producing
+         * different store sizes, if their value of top->help_needed
+         * changes.  This is ultimately irrelevent, because whichever
+         * store we swap in will be big enough to handle the
+         * migration.
+         *
+         * Plus, the helper isn't the one responsible for
+         * determining when help is no longer necessary, so if the
+         * smaller store is selected, the next resize will definitely
+         * be bigger, if help was needed continuously.
+         *
+         * This mechanism is, in practice, the only mechanism that
+         * seems like it might have any sort of impact on the overall
+         * performance of the algorithm, and if it does have an
+         * impact, it seems to be completely in the noise.
+         */
         if (woolhat_need_to_help(top)) {
             new_size = (self->last_slot + 1) << 1;
         }
@@ -779,25 +886,6 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
             = hatrack_pflag_clear(head, WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
 
         if (hatrack_pflag_test(head, WOOLHAT_F_MOVED)) {
-            continue;
-        }
-
-        if (!candidate) {
-            LCAS(&cur->head,
-                 &head,
-                 hatrack_pflag_set(head, WOOLHAT_F_MOVED),
-                 WOOLHAT_CTR_F_MOVED1);
-            continue;
-        }
-
-        if (!hatrack_pflag_test(candidate->next, WOOLHAT_F_USED)) {
-            if (LCAS(&cur->head,
-                     &head,
-                     hatrack_pflag_set(head, WOOLHAT_F_MOVED),
-                     WOOLHAT_CTR_F_MOVED2)) {
-                mmm_help_commit(candidate);
-                mmm_retire(candidate);
-            }
             continue;
         }
 

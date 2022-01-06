@@ -23,6 +23,10 @@
  *                  general-purpose table, but might be good when there
  *                  aren't likely to be many deletes.
  *
+ *                  The implementation has only minor changes,
+ *                  relative to lohat-a; the source code only
+ *                  documents those changes.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -32,125 +36,16 @@
 
 #include "lohat_common.h"
 
-/* This API requires that you deal with hashing the key external to
- * the API.  You might want to cache hash values, use different
- * functions for different data objects, etc.
- *
- * We do require 128-bit hash values, and require that the hash value
- * alone can stand in for object identity. One might, for instance,
- * choose a 3-universal keyed hash function, or if hash values need to
- * be consistent across runs, something fast and practical like XXH3.
- *
- * The dict_history data structure is the top of the list of
- * modification records assoiated with a bucket (which will be the
- * unordered array when we're using only one array, and the ordered
- * array otherwise).
- *
- * This data structure contains the following:
- *
- * 1) A copy of the hash value, which we'll need when we grow the
- *    table.
- *
- * 2) A pointer to the top of the record list for the bucket.
- *
- * 3) The first "write epoch" for purposes of sorting.  While this
- *    value lives in the allocation header for lowest-most record
- *    after the most recent delete (if any delete is associated with
- *    the key, the lowest record, if not), The record it lives in
- *    eventually could go away as writes supercede it.
- *
- *    If a sort begins before a delete and subsequent reinsertion,
- *    that's okay too. We'll ignore the write epoch in that case.
- *
- *    Similarly, it's possible for the write to be committed, but the
- *    write epoch value to not have been written yet, in which case
- *    we will go calculate it an try to "help" by writing it out.
- *
- * As for the pointer to the record list, we do NOT care about the ABA
- * problem here, so do not need a counter.  In particular, let's say a
- * writer is about to insert its new record C into the head, and sees
- * record A at the top.  If that thread suffers from a long
- * suspension, B might link to A, and then A can get reclaimed.
- * Another thread could go to the memory manager, and get the memory
- * back, and re-add it to the exact same bucket, all before C wakes
- * up.  Yes, the A is not the "same" A we saw before in some sense,
- * but we do not care, because our operation is a push, not a pop.
- * The item we're pushing correctly points to the next item in the
- * list if the CAS succeeds.
- *
- * Note also that we "push" records onto the record list like a stack,
- * but we never really remove items from the list at all. Instead,
- * when we can prove that no thread will ever algorithmically descend
- * into that record, we can safely reclaim the memory, but we never
- * actually bother unlink the items.
- *
- * Note that when we go to add a new record associated with a bucket,
- * we have multiple strategies for handling any CAS failure:
- *
- * 1) We can continue to retry until we succeed. This should be fine
- *    in practice, but in theory, other threads could update the value
- *    so frequenty, we could have to try an unbounded number of
- *    times. Therefore, this approach is lock free, but not wait free.
- *
- * 2) We can treat the losing thread as if it were really the
- *    "winning" thread... acting as if it has inserted a fraction of a
- *    second before the competing thread, but in the exact same
- *    epoch. In such a case, no reader could possibly see this value,
- *    and so it is safe to forego inserting it into the table. This
- *    approach is trivially wait free, since it doesn't loop.
- *
- * 3) We can use the first approach, but with a bounded number of
- *    loops, before switching to the 2nd approach. This is also
- *    wait-free.
- *
- * The second two options open up some minor memory management
- * questions.
- *
- * In this implementation, we go with approach #2, as it's not only
- * more efficient to avoid retries, but it's in some sense more
- * satisfying to me to move the commit time, in the cases where two
- * threads essentially combine, a miniscule time backwards to resolve
- * the colision than a potentially large time forward.
- *
- * Also note that we need to think about memory management here. While
- * handle record retirement properly, we should also consider what to
- * do with the items in the table. Here are the scenarios:
- *
- * 1) If there's an explicit call to delete the entry associated with a
- *    key.
- * 2) If we overwrite the entry with a new entry.
- *
- * One option for dealing with this scenario is to explicitly return
- * items through the API. For instance, if you call delete, you'll get
- * back the previous key / value pair. Similarly for a put() operation
- * that overwrites another.
- *
- * A slight problem here is that a single delete can effectively
- * remove multiple entries from a bucket, if there's contention on the
- * writing. If there are conflicting writes and we decide to silently
- * drop one on the floor, per our wait-free strategy above, the
- * conceptual "overwrite" won't even have awareness that it's
- * overwriting the data.
- *
- * A solution here is to have the operation that we're really dropping
- * from the table return its own key/value as previous entries that
- * may need to be deleted. That has the advantage of giving the
- * programmer the opportunity to choose to retry instead of accepting
- * the default behavior. However, in practice, people aren't really
- * going to care, and they're far more likely to forget to do the
- * memory management.
- *
- * A second solution is to have the user register a memory management
- * handler that gets called on any table deletion.
- *
- * Currently, we're taking the former approach, and expecting a
- * wrapper API to handle this, since such a thing is also needed for
- * applying the actual hash function.
- *
- */
 typedef struct lohat_b_history_st lohat_b_history_t;
 
 // clang-format off
+/*
+ * The main difference between lohat-a and lohat-b is that we try
+ * harder to keep the history array in its insertion order, by giving
+ * re-insertions a more up-to-date location in the history array.
+ *
+ * TODO-- you are here.
+ */
 struct lohat_b_history_st {
     alignas(16)
     _Atomic hatrack_hash_t       hv;

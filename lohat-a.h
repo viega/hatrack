@@ -14,8 +14,101 @@
  * limitations under the License.
  *
  *  Name:           lohat_a.h
- *  Description:    Linearizeable, Ordered HAsh Table (LOHAT)
+ *  Description:    Linearizeable, Ordered HAsh Table (LOHAT), Variant A
+ *
  *                  This version keeps two tables, for partial ordering.
+ *
+ *                  It's derived from lohat: The main difference is
+ *                  that the top-level buckets don't store the actual
+ *                  items. They instead store only pointers into a
+ *                  "history array".
+ *
+ *                  The history array is the same size as the main
+ *                  array, but the slots are given out in-order, based
+ *                  on the time a thread requests one. The hope is
+ *                  that, by having two tiers of buckets, we can get
+ *                  the inserted items living in a near-sorted order,
+ *                  when they're in the second array.
+ *
+ *                  The reason that could be interesting is to improve
+ *                  times when sorting based on insertion order. It's
+ *                  well known that arbitrary sorting problems have an
+ *                  n log n lower bound, which can start to become a
+ *                  problem when we get very large arrays.
+ *
+ *                  For instance, if we have an array of 1,000,000
+ *                  items, an O(n) operation that costs c units of cpu
+ *                  per item will cost c * 1,000,000 units of work. An
+ *                  n log n algorithm is likely to cost closer to c *
+ *                  13,815,511 work units.
+ *
+ *                  Often this cost won't matter in practice,
+ *                  especially for small values. But the cost
+ *                  obviously rises at a greater-than-linear rate
+ *                  (even though it's well less than O(n^2) time).
+ *
+ *                  But, constrained sorting problems, can have better
+ *                  bounds. Particularly, with mostly sorted arrays,
+ *                  intertion sort's performance approaches O(n).
+ *
+ *                  Back to lohat-a. If there are no parallel writes,
+ *                  it will definitely assign history buckets in write
+ *                  order.  When there ARE parallel writes, the items
+ *                  hopefully would appear in an order close to the
+ *                  one in which they were committed. So, if we trade
+ *                  off space, and use a sort algorithm that does well
+ *                  on nearly sorted data, perhaps we can come closer
+ *                  to O(n) time for our ordering operations.
+ *
+ *                  Note, however, that there has to be one source of
+ *                  truth for what item is in the table, for a given
+ *                  key. The indirection without locks makes that
+ *                  challenging, if both the pointer to the history
+ *                  bucket and the contents in the history bucket can
+ *                  both change.
+ *
+ *                  The easiest tact to take that performs well is the
+ *                  same one we use in all the other tables for the
+ *                  top-level buckets; once a pointer to the history
+ *                  array is installed, we never change it. The
+ *                  problem with that is, if an item gets removed from
+ *                  the table and re-inserted, then the place it sits
+ *                  in the history array is close to the ORIGINAL
+ *                  insertion time, not the re-insertion time (all
+ *                  assuming no migrations).
+ *
+ *                  Still, this should be much more sorted than a
+ *                  random hash, which means we should be able to get
+ *                  sorting times down, without too significant a
+ *                  penalty on other operations, relative to lohat.
+ *
+ *                  We could keep items in the history bucket a bit
+ *                  more sorted if we always insert new items into
+ *                  a recent history bucket, never re-inserting into
+ *                  the old history bucket.
+ *
+ *                  I experimented with that in the lohat-b variant,
+ *                  and sorting times can indeed get very
+ *                  good. However, it's at the expense of the number
+ *                  of table migrations going up dramatically in cases
+ *                  with a reasonable number of deletions. that makes
+ *                  it not-so-great for general-purpose use.
+ *
+ *                  Note that I built this off lohat, since lohat has
+ *                  a clear table-wide linarization, but there's
+ *                  ultimately no reason why you couldnt do the same
+ *                  thing for hihat, if we're willing to accept a bit
+ *                  less accuracy.
+ *
+ *                  Still, for most practical applications, sorts
+ *                  aren't going to be incredibly frequent, so it
+ *                  seems much more practical to just pay the n log n
+ *                  cost to sort, if (and only if) it's required.
+ *
+ *                  The comments below assume you've already got a
+ *                  decent understanding of the lohat algorithm; we
+ *                  skip basic exposition.
+ *
  *
  *  Author:         John Viega, john@zork.org
  *
@@ -26,14 +119,7 @@
 
 #include "lohat_common.h"
 
-/* This API requires that you deal with hashing the key external to
- * the API.  You might want to cache hash values, use different
- * functions for different data objects, etc.
- *
- * We do require 128-bit hash values, and require that the hash value
- * alone can stand in for object identity. One might, for instance,
- * choose a 3-universal keyed hash function, or if hash values need to
- * be consistent across runs, something fast and practical like XXH3.
+/* lohat_a_history_t
  *
  * The dict_history data structure is the top of the list of
  * modification records assoiated with a bucket (which will be the
@@ -42,104 +128,15 @@
  *
  * This data structure contains the following:
  *
- * 1) A copy of the hash value, which we'll need when we grow the
- *    table.
+ * hv   -- A copy of the hash value, which ALSO will be stored in the
+ *         top-level of buckets. It needs to live in the top-level
+ *         bucket to map hash values to buckets. And it also helps to
+ *         have it here, for when we need to migrate stores. This way,
+ *         we can just iterate through the history array linearly, and
+ *         re-insert into the new store.
  *
- * 2) A pointer to the top of the record list for the bucket.
+ * head -- A pointer to the top of the record list for the bucket.
  *
- * 3) The first "write epoch" for purposes of sorting.  While this
- *    value lives in the allocation header for lowest-most record
- *    after the most recent delete (if any delete is associated with
- *    the key, the lowest record, if not), The record it lives in
- *    eventually could go away as writes supercede it.
- *
- *    If a sort begins before a delete and subsequent reinsertion,
- *    that's okay too. We'll ignore the write epoch in that case.
- *
- *    Similarly, it's possible for the write to be committed, but the
- *    write epoch value to not have been written yet, in which case
- *    we will go calculate it an try to "help" by writing it out.
- *
- * As for the pointer to the record list, we do NOT care about the ABA
- * problem here, so do not need a counter.  In particular, let's say a
- * writer is about to insert its new record C into the head, and sees
- * record A at the top.  If that thread suffers from a long
- * suspension, B might link to A, and then A can get reclaimed.
- * Another thread could go to the memory manager, and get the memory
- * back, and re-add it to the exact same bucket, all before C wakes
- * up.  Yes, the A is not the "same" A we saw before in some sense,
- * but we do not care, because our operation is a push, not a pop.
- * The item we're pushing correctly points to the next item in the
- * list if the CAS succeeds.
- *
- * Note also that we "push" records onto the record list like a stack,
- * but we never really remove items from the list at all. Instead,
- * when we can prove that no thread will ever algorithmically descend
- * into that record, we can safely reclaim the memory, but we never
- * actually bother unlink the items.
- *
- * Note that when we go to add a new record associated with a bucket,
- * we have multiple strategies for handling any CAS failure:
- *
- * 1) We can continue to retry until we succeed. This should be fine
- *    in practice, but in theory, other threads could update the value
- *    so frequenty, we could have to try an unbounded number of
- *    times. Therefore, this approach is lock free, but not wait free.
- *
- * 2) We can treat the losing thread as if it were really the
- *    "winning" thread... acting as if it has inserted a fraction of a
- *    second before the competing thread, but in the exact same
- *    epoch. In such a case, no reader could possibly see this value,
- *    and so it is safe to forego inserting it into the table. This
- *    approach is trivially wait free, since it doesn't loop.
- *
- * 3) We can use the first approach, but with a bounded number of
- *    loops, before switching to the 2nd approach. This is also
- *    wait-free.
- *
- * The second two options open up some minor memory management
- * questions.
- *
- * In this implementation, we go with approach #2, as it's not only
- * more efficient to avoid retries, but it's in some sense more
- * satisfying to me to move the commit time, in the cases where two
- * threads essentially combine, a miniscule time backwards to resolve
- * the colision than a potentially large time forward.
- *
- * Also note that we need to think about memory management here. While
- * handle record retirement properly, we should also consider what to
- * do with the items in the table. Here are the scenarios:
- *
- * 1) If there's an explicit call to delete the entry associated with a
- *    key.
- * 2) If we overwrite the entry with a new entry.
- *
- * One option for dealing with this scenario is to explicitly return
- * items through the API. For instance, if you call delete, you'll get
- * back the previous key / value pair. Similarly for a put() operation
- * that overwrites another.
- *
- * A slight problem here is that a single delete can effectively
- * remove multiple entries from a bucket, if there's contention on the
- * writing. If there are conflicting writes and we decide to silently
- * drop one on the floor, per our wait-free strategy above, the
- * conceptual "overwrite" won't even have awareness that it's
- * overwriting the data.
- *
- * A solution here is to have the operation that we're really dropping
- * from the table return its own key/value as previous entries that
- * may need to be deleted. That has the advantage of giving the
- * programmer the opportunity to choose to retry instead of accepting
- * the default behavior. However, in practice, people aren't really
- * going to care, and they're far more likely to forget to do the
- * memory management.
- *
- * A second solution is to have the user register a memory management
- * handler that gets called on any table deletion.
- *
- * Currently, we're taking the former approach, and expecting a
- * wrapper API to handle this, since such a thing is also needed for
- * applying the actual hash function.
  */
 
 // clang-format off
@@ -150,11 +147,12 @@ typedef struct {
     _Atomic(lohat_record_t *) head;
 } lohat_a_history_t;
 
-/*
- * We're using a second array to improve our sorting costs. These are
- * the buckets that the hash function points to... their contents just
- * point us to where the actual records are. Note that contents of
- * this bucket do not indicate whether an item is actually in the hash
+/* lohat_a_indirect_t
+ *
+ * This is the type for the buckets that the hash function points us
+ * to... their contents just point us to where the actual records are
+ * in the (somewhat ordered) history array. Note that contents of this
+ * bucket do not indicate whether an item is actually in the hash
  * table or not; it only keeps "reservations"... hv being set reserves
  * the bucket for the particular hash item, and ptr being set reserves
  * a particular location in the other array.
@@ -165,21 +163,7 @@ typedef struct {
     _Atomic(lohat_a_history_t *) ptr;
 } lohat_a_indirect_t;
 
-/* When the table gets full and we need to migrate, we'll need to keep
- * two copies of the hash table at the same time. To that end, we need
- * to be able to swap out and eventually delete old copies of the hash
- * table.
- *
- * To that end, we have the "lohat_t" hashtable type contain a
- * "lohat_store_t", that represents the current table.  When we
- * migrate the table, the lohat_store_t will point to the one we're
- * working on migrating to, and when the migration is complete, the
- * lohat_t reference to the current store will be atomically shifted
- * to the new table.  At that point, the old table will be "retired",
- * meaning it will be freed when there are definitely no more threads
- * attempting to operate on the table.
- *
- * Fields in this table:
+/* lohat_a_store_t 
  *
  * last_slot     Indicates the last bucket index for unordered buckets
  *               (one less than the total number of buckets). In our
@@ -239,6 +223,7 @@ struct lohat_a_store_st {
 typedef struct {
     alignas(8)
     _Atomic(lohat_a_store_t *) store_current;
+    _Atomic(uint64_t)          item_count;
 } lohat_a_t;
 
 void            lohat_a_init   (lohat_a_t *);
