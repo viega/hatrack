@@ -34,13 +34,22 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdalign.h>
 
+/*
+ * Note that the field named 'null' is intended to always be zero.
+ * Records are strncpy()'d into the msg array, but just in case they
+ * go right up to the end of the array, make sure we get a zero,
+ * whatever the semantics of the strncpy() implementation.
+ */
 // clang-format off
 typedef struct {
-    uint64_t  sequence;
+    alignas(8)
     char      msg[HATRACK_DEBUG_MSG_SIZE];
-    int64_t   thread;
     char      null;
+    alignas(8)
+    uint64_t  sequence;
+    int64_t   thread;    
 } hatrack_debug_record_t;
 
 extern hatrack_debug_record_t __hatrack_debug[];
@@ -129,13 +138,14 @@ debug_assert(bool        expression_result,
     }
 }
 
-static inline debug_assert_w_params(bool        expression_result,
-                                    char       *assertion,
-                                    const char *function,
-                                    const char *file,
-                                    int         line,
-                                    uint32_t    num_records,
-                                    bool        busy_wait)
+static inline void
+debug_assert_w_params(bool        expression_result,
+                      char       *assertion,
+                      const char *function,
+                      const char *file,
+                      int         line,
+                      uint32_t    num_records,
+                      bool        busy_wait)
 {
     if (!expression_result) {
         fprintf(stderr,

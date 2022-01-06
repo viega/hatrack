@@ -1,7 +1,7 @@
 xxHash (xxhash.h and xxhash.c) is Copyright ©2012-2020 by Yann Collet,
 and is licensed under a BSD 2-clause license.
 
-All other files are Copyright © 2021 John Viega, and
+All other files are Copyright © 2021-2022 John Viega, and
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use these files except in compliance with the License.

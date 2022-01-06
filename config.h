@@ -124,7 +124,6 @@
  * Also note that, if you log something that would take up more space
  * than this value allows, it will be truncated to fit.
  */
-
 #if !defined(HATRACK_DEBUG_MSG_SIZE)
 #ifndef HATRACK_DEBUG_MSG_SIZE
 #define HATRACK_DEBUG_MSG_SIZE 128
@@ -214,6 +213,7 @@
 #ifndef HATRACK_PTR_CHRS
 #define HATRACK_PTR_CHRS 16
 #endif
+
 /* HATRACK_EPOCH_DEBUG_LEN
  *
  * When dumping records from the ring log using MMM_DEBUG(), this
@@ -406,7 +406,6 @@
  * multi-writer lock-free tables, this should be pretty worthless
  * to you either way-- don't use swimcap :)
  */
-
 // #define SWIMCAP_CONSISTENT_VIEWS
 
 /* HATRACK_ALWAYS_USE_QUICKSORT
@@ -490,7 +489,6 @@
  * performance, and woolhat for sets, where you need to perform set
  * operations.
  */
-
 // #define TOPHAT_USE_LOCKING_ALGORITHMS
 
 /* HATRACK_TEST_MAX_KEYS
