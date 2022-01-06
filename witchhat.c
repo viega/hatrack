@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -162,7 +162,6 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t  *view;
     hatrack_view_t  *p;
-    hatrack_hash_t   hv;
     witchhat_bucket_t *cur;
     witchhat_bucket_t *end;
     witchhat_record_t  record;
@@ -188,8 +187,6 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
 	    continue;
 	}
 	
-        hv            = atomic_read(&cur->hv);
-        p->hv         = hv;
         p->item       = record.item;
 	
         p++;

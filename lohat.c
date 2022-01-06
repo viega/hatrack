@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,8 +51,8 @@ lohat_init(lohat_t *self)
 {
     lohat_store_t *store = lohat_store_new(HATRACK_MIN_SIZE);
 
-    atomic_store(&self->store_current, store);
     atomic_store(&self->item_count, 0);
+    atomic_store(&self->store_current, store);
 }
 
 /* lohat_get, _put, _replace, _add, _remove
@@ -180,11 +180,16 @@ lohat_remove(lohat_t *self, hatrack_hash_t *hv, bool *found)
 void
 lohat_delete(lohat_t *self)
 {
-    lohat_store_t   *store   = atomic_load(&self->store_current);
-    lohat_history_t *buckets = store->hist_buckets;
-    lohat_history_t *p       = buckets;
-    lohat_history_t *end     = buckets + (store->last_slot + 1);
+    lohat_store_t   *store;
+    lohat_history_t *buckets;
+    lohat_history_t *p;
+    lohat_history_t *end;
     lohat_record_t  *rec;
+
+    store   = atomic_load(&self->store_current);
+    buckets = store->hist_buckets;
+    p       = buckets;
+    end     = buckets + (store->last_slot + 1);
 
     while (p < end) {
         rec = atomic_load(&p->head);
@@ -194,7 +199,7 @@ lohat_delete(lohat_t *self)
         p++;
     }
 
-    mmm_retire_unused(store);
+    mmm_retire(store);
     free(self);
 }
 
@@ -253,7 +258,6 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
     lohat_store_t   *store;
     hatrack_view_t  *view;
     hatrack_view_t  *p;
-    hatrack_hash_t   hv;
     lohat_record_t  *rec;
     uint64_t         epoch;
     uint64_t         sort_epoch;
@@ -267,7 +271,6 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
     p     = view;
 
     while (cur < end) {
-        hv  = atomic_read(&cur->hv);
         /* Clear the HEAD flags, to be able to dereference the
          * original record if a migration is in progres.
          */
@@ -316,7 +319,6 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
         /* We found the right record via its write commit time, but for
          * sorting purposes, we want to go back to the create epoch.
          */
-        p->hv         = hv;
         p->item       = rec->item;
         p->sort_epoch = mmm_get_create_epoch(rec);
 
@@ -327,6 +329,8 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
     num_items = p - view;
     *out_num  = num_items;
 
+    // If there are no items, instead of realloc'ing down, free the
+    // memory and return NULL.
     if (!num_items) {
         free(view);
         mmm_end_op();
@@ -472,9 +476,9 @@ lohat_store_put(lohat_store_t  *self,
                 void           *item,
                 bool           *found)
 {
-    void            *ret;
     uint64_t         bix;
     uint64_t         i;
+    uint64_t         used_count;
     hatrack_hash_t   hv2;
     lohat_history_t *bucket;
     lohat_record_t  *head;
@@ -487,7 +491,8 @@ lohat_store_put(lohat_store_t  *self,
         hv2    = atomic_read(&bucket->hv);
         if (hatrack_bucket_unreserved(&hv2)) {
             if (LCAS(&bucket->hv, &hv2, *hv1, LOHAT_CTR_BUCKET_ACQUIRE)) {
-                if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
+                used_count = atomic_fetch_add(&self->used_count, 1);
+                if (used_count >= self->threshold) {
                     goto migrate_and_retry;
                 }
                 goto found_history_bucket;
@@ -549,33 +554,56 @@ found_history_bucket:
         return item;
     }
 
-    /* If we're here, the record install was successful.  head won't
-     * have any flags set, otherwise we'd be migrating instead.
-     * If there is no head, or if the previous record was a delete,
-     * then we also need to bump up the item count.
+    /* If we're here, the record install was successful.  Now we need
+     * to commit our write operation, so that our record will get a
+     * write epoch recorded for it, which will be the linearization
+     * point for this operation.
+     *
+     * Remember that if our thread gets suspended after the record
+     * install, but before this commit completes, no other write
+     * thread will use this record, nor will viewers, until it is
+     * committed; they call mmm_help_commit() before accessing.
      */
-    if (!head || !(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+    mmm_commit_write(candidate);
+
+    /* The variable 'head' won't have any flags set here, otherwise
+     * we'd be migrating the store.  If there is no head, or if the
+     * previous record was a delete, then we also need to bump up the
+     * item count.
+     */
+
+    if (!head) {
+not_overwriting:
         atomic_fetch_add(&top->item_count, 1);
         if (found) {
             *found = false;
         }
-
-        ret = NULL;
-    }
-    else {
-        if (found) {
-            *found = true;
-        }
-        ret = head->item;
+        return NULL;
     }
 
-    // Since we were successful at installing the record, we are
-    // respondible for retiring the old record.
-    if (head) {
-        mmm_retire(head);
+    /* At this point, we've definitely installed a new record over
+     * the old record, and therefore we are responsible for retiring
+     * that record via mmm_retire().  If the record we're retiring
+     * was a deletion record, then jump up above to bump the
+     * item count and return NULL.
+     *
+     * Otherwise, return the item from the old record.
+
+     * Remember that mmm_retire() never frees immediately; it's safe
+     * to continue to use the pointer until the end of our operation.
+     */
+
+    mmm_retire(head);
+
+    if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+        goto not_overwriting;
     }
 
-    return ret;
+    if (found) {
+        *found = true;
+    }
+
+    return head->item;
 }
 
 static void *
@@ -876,6 +904,15 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
     uint64_t         new_used;
     uint64_t         expected_used;
 
+    /* If we're a late-enough writer, let's just double check to see
+     * if we need to help at all.
+     */
+    new_store = atomic_read(&top->store_current);
+
+    if (new_store != self) {
+        return new_store;
+    }
+
     new_used = 0;
     /* Quickly run through every history bucket, and mark any bucket
      * that doesn't already have F_MOVING set.  Note that the CAS
@@ -917,22 +954,24 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
         }
     }
 
+    /* Here, 'candidate' is the candidate head to install in the
+     * destimation store, whereas 'head' is the head in the source
+     * store.
+     */
     for (i = 0; i <= self->last_slot; i++) {
         cur       = &self->hist_buckets[i];
         head      = atomic_read(&cur->head);
         candidate = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
 
-        if (!candidate) {
-            if (!(hatrack_pflag_test(head, LOHAT_F_MOVED))) {
-                LCAS(&cur->head,
-                     &head,
-                     hatrack_pflag_set(head, LOHAT_F_MOVED),
-                     LOHAT_CTR_F_MOVED1);
-            }
+        if (hatrack_pflag_test(head, LOHAT_F_MOVED)) {
             continue;
         }
 
-        if (hatrack_pflag_test(head, LOHAT_F_MOVED)) {
+        if (!candidate) {
+            LCAS(&cur->head,
+                 &head,
+                 hatrack_pflag_set(head, LOHAT_F_MOVED),
+                 LOHAT_CTR_F_MOVED1);
             continue;
         }
 
@@ -941,8 +980,20 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
                      &head,
                      hatrack_pflag_set(head, LOHAT_F_MOVED),
                      LOHAT_CTR_F_MOVED2)) {
-                // Need to not mmm_retire() something without a write epoch
-                // when something is still referencing it.
+                /* Since the record on top is a deletion record,
+                 * we are not going to migrate it to the new store.
+                 * Instead, we should retire it, so that it gets reclaimed
+                 * when all threads are out of the old store.
+                 *
+                 * Do note that we still need to ensure the write
+                 * epoch is committed by the time we send it to
+                 * mmm_retire() though; if it isn't, mmm
+                 * will actually free this immediately, because it looks
+                 * unused.
+                 *
+                 * That's obviously bad news for late readers, so call
+                 * mmm_help_commit() before we retire.
+                 */
                 mmm_help_commit(candidate);
                 mmm_retire(candidate);
             }

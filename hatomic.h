@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,15 @@
 #include "counters.h"
 #include <stdatomic.h>
 
-// Most of our reads are agnostic to memory ordering. We use this
-// macro whenever it doesn't matter if an update is happening
-// concurrently, we'll take either version.
+/* While we don't explicitly discuss it much in the comments of the
+ * algorithms, most of our reads are agnostic to memory ordering.
+ *
+ * We use this macro whenever it doesn't matter if an update is
+ * happening concurrently, we'll take either version.
+ *
+ * We continue to use atomic_load() if we DO want a memory barier on
+ * the read operation, for instance in our debugging support code.
+ */
 #define atomic_read(x) atomic_load_explicit(x, memory_order_relaxed)
 
 /* Most of our writes will need ordering, except when initializing
@@ -36,6 +42,11 @@
  *
  * Compare-And-Swap is our workhorse for writing, and by default
  * provides sequentially consistent memory ordering.
+ *
+ * Note that our LCAS macro keeps tally of whether a CAS succeeds or
+ * fails, as per counters.{h,c}.  When HATRACK_COUNTERS is undefined,
+ * the extra accounting gets compiled out, and we end up with
+ * an atomic_compare_exchange_strong() only.
  */
 
 #define CAS(target, expected, desired)                                         \

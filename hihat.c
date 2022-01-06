@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -285,12 +285,12 @@ hihat_view(hihat_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t  *view;
     hatrack_view_t  *p;
-    hatrack_hash_t   hv;
     hihat_bucket_t *cur;
     hihat_bucket_t *end;
     hihat_record_t  record;
     uint64_t         num_items;
     uint64_t         alloc_len;
+    uint64_t         record_epoch;
     hihat_store_t  *store;
 
     /* Again, we need to do this before grabbing our pointer to the
@@ -312,17 +312,17 @@ hihat_view(hihat_t *self, uint64_t *num, bool sort)
     end       = cur + (store->last_slot + 1);
 
     while (cur < end) {
-        record        = atomic_read(&cur->record);
-        p->sort_epoch = record.info & HIHAT_EPOCH_MASK;
+        record       = atomic_read(&cur->record);
+        record_epoch = record.info & HIHAT_EPOCH_MASK;
 
-	// If there's no sort epoch, then the bucket was empty.
-	if (!p->sort_epoch) {
+	// If there's no epoch in the record, then the bucket was
+	// empty, and we skip it.
+	if (!record_epoch) {
 	    cur++;
 	    continue;
 	}
-	
-        hv            = atomic_read(&cur->hv);
-        p->hv         = hv;
+
+	p->sort_epoch = record_epoch;
         p->item       = record.item;
 	
         p++;

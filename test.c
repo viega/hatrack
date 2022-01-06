@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,9 @@
  *
  *  Name:           test.c
  *  Description:    Lohat test cases, and code to support tests.
+ *                  This is currently messy; I would love to
+ *                  find the time to put some real work into this.
+ *
  *
  *  Author:         John Viega, john@zork.org
  *
@@ -862,6 +865,7 @@ uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 //  clang-format on
 
 char *threadsafe_dicts[] = {
+    
     "duncecap",
     "swimcap", 
     "newshat",
@@ -869,8 +873,9 @@ char *threadsafe_dicts[] = {
     "witchhat", 
     "oldhat",
     "ballcap",
-    "lohat", "lohat-a",
-    "lohat-b",
+    "lohat",
+    "lohat-a",
+    //    "lohat-b",
     "woolhat",
     "tophat-fast",    
     "tophat-cst",
@@ -885,8 +890,9 @@ char *all_dicts[]     = {
     "witchhat",    
     "oldhat",    
     "ballcap",
-    "lohat", "lohat-a",
-    "lohat-b",
+    "lohat",
+    "lohat-a",
+    //    "lohat-b",
     "woolhat",    
     "tophat-fast",   
     "tophat-cst",

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -191,7 +191,6 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
     lohat_a_store_t   *store;
     hatrack_view_t    *view;
     hatrack_view_t    *p;
-    hatrack_hash_t     hv;
     lohat_record_t    *rec;
     uint64_t           epoch;
     uint64_t           sort_epoch;
@@ -210,7 +209,6 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
     p    = view;
 
     while (cur < end) {
-        hv  = atomic_read(&cur->hv);
         rec = hatrack_pflag_clear(atomic_read(&cur->head),
                                   LOHAT_F_MOVING | LOHAT_F_MOVED);
 
@@ -242,7 +240,6 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
             continue;
         }
 
-        p->hv         = hv;
         p->item       = rec->item;
         p->sort_epoch = mmm_get_create_epoch(rec);
 
@@ -606,7 +603,7 @@ migrate_and_retry:
         }
         mmm_help_commit(head);
         mmm_copy_create_epoch(candidate, head);
-    } while (!LCAS(&bucket->head, &head, candidate, LOHAT0_CTR_REC_INSTALL));
+    } while (!LCAS(&bucket->head, &head, candidate, LOHATa_CTR_REC_INSTALL));
 
     mmm_commit_write(candidate);
     mmm_retire(head);

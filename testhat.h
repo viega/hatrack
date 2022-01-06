@@ -1,4 +1,4 @@
-/* Copyright © 2021 John Viega
+/* Copyright © 2021-2022 John Viega
  *
  * See LICENSE.txt for licensing info.
  *

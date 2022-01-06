@@ -1,4 +1,4 @@
-/* Copyright © 2021 John Viega
+/* Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,16 +18,34 @@
  *                  generally it's best to do it externally, by editing
  *                  the Makefile.
  *
+ *                  The variables you can consider setting are
+ *                  commented; other preprocessor variables are
+ *                  calculated here from those variables.
+ *
  *  Author:         John Viega, john@zork.org
  */
 
 #ifndef __CONFIG_H__
 #define __CONFIG_H__
 
-/* Doing the macro this way forces you to pick a power-of-two boundary
+/* HATRACK_MIN_SIZE_LOG
+ *
+ * Specifies the minimum table size, but represented as a base two
+ * logarithm.  That is, if you set this to 3 (the minimum value we
+ * accept), then you are specifying a minimum table size of 2^3
+ * entries.
+ *
+ * Doing the macro this way forces you to pick a power-of-two boundary
  * for the hash table size, which is best for alignment, and allows us
  * to use an & to calculate bucket indicies, instead of the more
  * expensive mod operator.
+ *
+ * Also, if you tried to use a table size that isn't a power of two
+ * without changing all the code that depends on it, things would
+ * break badly :)
+ *
+ * If you not provide this, it will get the default value 4, which is
+ * a table with 16 buckets in it.
  */
 #if !defined(HATRACK_MIN_SIZE_LOG) || (HATRACK_MIN_SIZE_LOG < 3)
 #define HATRACK_MIN_SIZE_LOG 4
@@ -36,16 +54,111 @@
 #undef HATRACK_MIN_SIZE
 #define HATRACK_MIN_SIZE (1 << HATRACK_MIN_SIZE_LOG)
 
+/*
+ * HATRACK_DEBUG
+ *
+ * Determines whether or not to compile in code that can be useful for
+ * debugging parallel processes.
+ *
+ * This includes an ASSERT() macro that busy-loops instead of
+ * aborting, so that we can keep other threads alive, and attach a
+ * debugger to a process (the system assert will cause the process to
+ * abort, which isn't ideal if we want to debug when there's a
+ * failure).
+ *
+ * The main feature though is a ring buffer for storing debug
+ * messages, in a threadsafe way. When rare events happen, we want to
+ * be able to see the debug messages near that event, without having
+ * to clog up log files, or slow down the program with a lot of file
+ * i/o to write out those log files.
+ *
+ * The size of the ring buffer is controlled with the variable
+ * HATRACK_DEBUG_RING_LOG (see below).
+ *
+ * Note that, if you use our ASSERT() macro, the most recent log
+ * messages will get dumped to stderr, and the thread will spin,
+ * waiting for a debugger to attach. There is also an XASSERT() macro
+ * that gives a bit more flexibility.
+ *
+ * When you attach via debugger, there's a small API for searching
+ * through the logs that you can call.  See debug.h and debug.c for
+ * more information.
+ */
+// #define HATRACK_DEBUG
+
+/* HATRACK_MMM_DEBUG
+ *
+ * This variable turns ON debugging information in the memory manager,
+ * that causes it to recore when it allocs, retires and frees records,
+ * complete with epoch information associated with the memory address.
+ *
+ * Note that this is seprate from the DEBUG_MMM() macro... which is
+ * available any time HATRACK_DEBUG is on.  Note that, if you set
+ * HATRACK_MMM_DEBUG on, it imples HATRACK_DEBUG, and we turn it on
+ * automatically, if it isn't already.
+ */
+// #define HATRACK_MMM_DEBUG
+
 #if defined(HATRACK_MMM_DEBUG) && !defined(HATRACK_DEBUG)
 #define HATRACK_DEBUG
 #endif
 
 #ifdef HATRACK_DEBUG
+
+/* HATRACK_DEBUG_MSG_SIZE
+ *
+ * When using the ring bugger, this variable controls how many bytes
+ * are available for each ring buffer entry. Try to keep it small. And
+ * for alignment purposes, you probably want to keep it a power of
+ * two, but at least pointer-aligned.
+ *
+ * If you do not provide this, and debugging is turned on, you'll get
+ * 128 bytes per record.  The minimum value is 32 bytes; any lower
+ * value will get you 32 bytes.
+ *
+ * Note that this number does NOT include the extra stuff we keep
+ * along with our records, like thread ID and a message counter. Those
+ * things get shown when viewing the log, but you don't have to worry
+ * about them with the value you set here.
+ *
+ * Also note that, if you log something that would take up more space
+ * than this value allows, it will be truncated to fit.
+ */
+
+#if !defined(HATRACK_DEBUG_MSG_SIZE)
 #ifndef HATRACK_DEBUG_MSG_SIZE
 #define HATRACK_DEBUG_MSG_SIZE 128
 #endif
+#endif
 
-#if !defined(HATRACK_DEBUG_RING_LOG) || HATRACK_DEBUG_RING_LOG < 17
+#if HATRACK_DEBUG_MSG_SIZE & 0x7
+#error "Must keep HATRACK_DEBUG_MSG_SIZE aligned to an 8 byte boundary"
+#endif
+
+#if HATRACK_DEBUG_MSG_SIZE < 32
+#define HATRACK_DEBUG_MSG_SIZE 32
+#endif
+
+/* HATRACK_DEBUG_RING_LOG
+ *
+ * This controls how many entries are in the debugging system's ring
+ * buffer. As with HATRACK_MIN_SIZE_LOG above, this is expressed as a
+ * base 2 logarithm, so the minimum value of 13 is a mere 8192
+ * entries.
+ *
+ * When building my test cases, they can do so much logging across so many
+ * threads, that I've definitely found it valuable to have more than
+ * 100K messages in memory, which is why the default value for this is
+ * 17 (2^17 = 131,072 entries).
+ *
+ * In those cases, I've been using 100 threads, reading or writing as
+ * fast as they can.  I might need to go back pretty far for data,
+ * because threads get preempted...
+ *
+ * Of course, if you set this value TOO large, you could end up with
+ * real memory issues on your system.  But we don't enforce a maximum.
+ */
+#if !defined(HATRACK_DEBUG_RING_LOG) || HATRACK_DEBUG_RING_LOG < 13
 #undef HATRACK_DEBUG_RING_LOG
 #define HATRACK_DEBUG_RING_LOG 17
 #endif
@@ -56,12 +169,80 @@
 #undef HATRACK_DEBUG_RING_LAST_SLOT
 #define HATRACK_DEBUG_RING_LAST_SLOT (HATRACK_DEBUG_RING_SIZE - 1)
 
+/* HATRACK_ASSERT_FAIL_RECORD_LEN
+ *
+ * When using our ASSERT() macro, when an assertion fails, this
+ * variable controls how many previous records to dump from the ring
+ * buffer to stdout automatically.
+ *
+ * Things to note:
+ *
+ * 1) You can control how much to dump on a case-by-case basis with
+ *    the XASSERT() macro, instead.  See debug.h.
+ *
+ * 2) Since the ASSERT() macro does not stop the entire process, other
+ *    threads will continue writing to the ring buffer while the dump
+ *    is happening.  If your ring buffer is big enough, I wouldn't
+ *    expect that to be a problem, but it's possible that threads
+ *    scribble over your debugging data.
+ *
+ *    If that's an issue, try to get the ASSERT to trigger in a
+ *    debugger, setting a breakpoint that only triggers along with the
+ *    ASSERT.  That will quickly suspend all the other threads, and
+ *    allow you to inspect the state at your leisure.
+ *
+ * 3) This is NOT a power of two... set it to the actual number of
+ *    records you think you want to see.  Default is 8,192 records.
+ */
+#ifndef HATRACK_ASSERT_FAIL_RECORD_LEN
+#define HATRACK_ASSERT_FAIL_RECORD_LEN (1 << 13)
+#endif
+
+#if HATRACK_ASSERT_FAIL_RECORD_LEN > HATRACK_DEBUG_RING_SIZE
+#undef HATRACK_ASSERT_FAIL_RECORD_LEN
+#define HATRACK_ASSERT_FAIL_RECORD_LEN HATRACK_DEBUG_RING_SIZE
+#endif
+
+/* HATRACK_PTR_CHRS
+ *
+ * This variable controls how much of a pointer you'll see when
+ * viewing the ring buffer.
+ *
+ * The default is the full 16 byte pointer; you probably don't need to
+ * ever consider changing this one.
+ */
 #ifndef HATRACK_PTR_CHRS
 #define HATRACK_PTR_CHRS 16
 #endif
+/* HATRACK_EPOCH_DEBUG_LEN
+ *
+ * When dumping records from the ring log using MMM_DEBUG(), this
+ * variable controls how many digits of the 64-bit epoch to output,
+ * for the sake of brevity.  This is measured in characters output,
+ * not bits of the epoch.
+ *
+ * Naturally, we output the least significant bits.
+ *
+ * Since we keep 64 bit epochs, 8 is the maximum. Anything below 4 is
+ * probably worthless.
+ */
+#ifndef HATRACK_EPOCH_DEBUG_LEN
+#define HATRACK_EPOCH_DEBUG_LEN 8
 #endif
 
-/* Our memory management algorithm keeps an array of thread reader
+#if HATRACK_EPOCH_DEBUG_LEN > 8
+#error "HATRACK_EPOCH_DEBUG_LEN is set too high."
+#endif
+
+#if HATRACK_EPOCH_DEBUG_LEN < 2
+#error "HATRACK_EPOCH_DEBUG_LEN is set too low."
+#endif
+
+#endif // #ifdef HATRACK_DEBUG
+
+/* HATRACK_THREADS_MAX
+ *
+ * Our memory management algorithm keeps an array of thread reader
  * epochs that's shared across threads. The basic idea is that each
  * reader writes the current epoch into their slot in the array in
  * order to declare the current epoch as the one they're reading in.
@@ -77,59 +258,239 @@
  * deletion.
  *
  * To do this, we have to scan the reservation for every single
- * thread.  It'd be bad to have to resize the reservations, so we'll
- * keep them in static memory, and only allow a fixed number of
- * threads (HATRACK_THREADS_MAX).
+ * thread.  It'd be bad to have to resize the reservations array, so
+ * we currently keep them in static memory, and only allow a fixed
+ * number of threads (HATRACK_THREADS_MAX).
+ *
+ * For all places in this code base, a threads' index into this array
+ * is what we consider its thread ID.  That means, you'll see this
+ * value in debug dumps, even though it will usually be different than
+ * a pthread id, or the ID that a debugger selects.
+ *
+ * If you're spinning up and down lots of threads, then make sure to
+ * not run out of these.  See the option HATRACK_ALLOW_TID_GIVEBACKS
+ * below.
  */
 #ifndef HATRACK_THREADS_MAX
 #define HATRACK_THREADS_MAX 8192
 #endif
 
-/* Each thread goes through its list of retired objects periodically,
+/* HATRACK_ALLOW_TID_GIVEBACKS
+ *
+ * Per the note above, we want to avoid overrunning the reservations
+ * array that our memory management system uses.
+ *
+ * In all cases, the first HATRACK_THREADS_MAX threads to register
+ * with us get a steadily increasing id. But if you turn this on,
+ * threads will yield their TID altogether when they call the mmm
+ * thread cleanup routine-- mmm_clean_up_before_exit().
+ *
+ * The unused ID then goes on a linked list, and doesn't get touched
+ * until we run out of TIDs to give out.
+ *
+ */
+// #define HATRACK_ALLOW_TID_GIVEBACKS
+
+/* HATRACK_RETIRE_FREQ_LOG
+ *
+ * Each thread goes through its list of retired objects periodically,
  * and deletes anything that can never again be accessed. We basically
  * look every N times we go through the list, where N is a power of
  * two.  I believe this number can stay very low.
+ *
+ * On one hand, you don't want to keep scanning stuff over and over
+ * that isn't likely to be ready to free yet (in busy systems). On the
+ * other hand, you don't want to keep a huge backlog of unfreed
+ * records; it could also be problematic when busy.
+ *
+ * I've experimented a bit with this number on my laptop, and even a
+ * value of 0 isn't horrible-- about 1-5x slower than a 5 (when
+ * testing with lohat). The improvement starts slowing down quickly
+ * when you get to 4, and eventually gets insignificant. The real
+ * issue is how much memory you want to spend on dead
+ * records... cleaning them up is effectively a really tiny garbage
+ * collector pause.
+ *
+ * My initial conclusion is that 7 seems to be a good default to
+ * balance memory usage and performance (run the cleanup routine ever
+ * 128 allocs). It may also depend somewhat on the underlying system
+ * memory manager.
  */
 #ifndef HATRACK_RETIRE_FREQ_LOG
-#define HATRACK_RETIRE_FREQ_LOG 5
+#define HATRACK_RETIRE_FREQ_LOG 7
+#endif
+
+#ifdef HATRACK_RETIRE_FREQ
 #undef HATRACK_RETIRE_FREQ
 #endif
 
 #define HATRACK_RETIRE_FREQ (1 << HATRACK_RETIRE_FREQ_LOG)
 
-// Epochs are truncated to this many hex digits for brevity.
-#ifndef HATRACK_EPOCH_DEBUG_LEN
-#define HATRACK_EPOCH_DEBUG_LEN 8
-#endif
-
+/* HIHATa_MIGRATE_SLEEP_TIME_NS
+ *
+ * The hihat-a variant of the hihat algorithm has late migraters do
+ * some modest waiting to see if it can speed up migrations.
+ *
+ * Generally, this isn't likely to make migrations happen faster per
+ * se. The likely impact is that we'll reduce the number of clock
+ * cycles wasted, yielding cores for productive work. That seems to be
+ * the case so far-- I may expand this to other tables, and even make
+ * it a default, in which case the variable name might change to
+ * reflect its broaded applicability.
+ */
 #ifndef HIHATa_MIGRATE_SLEEP_TIME_NS
 #define HIHATa_MIGRATE_SLEEP_TIME_NS 500000
 #endif
+
+/* HATRACK_RETRY_THRESHOLD
+ *
+ * Witchhat and Woolhat make migrations wait-free by trying to
+ * perform their operations a fixed number of times... which either
+ * ends in a successful operation, or a migrate-then-retry.
+ *
+ * This variable controls how many times these algorithms attempt to
+ * retry, before falling back on our "helping" mechanism (basically
+ * forcing the table to grow on future resizes until help is not
+ * needed).
+ *
+ * Unless you've got workloads that both add and delete with great
+ * frequency and in fairly equal amounts, you will probably never,
+ * ever see 7 retries-- it's a logarithmic curve, and at least on my
+ * laptop, 6 seems to mean, "almost never use the helping mechanism".
+ */
 
 #ifndef HATRACK_RETRY_THRESHOLD
 #define HATRACK_RETRY_THRESHOLD 6
 #endif
 
-// Off by default. Uncommment, or turn them on via the compiler.
-// #define HATRACK_ALLOW_TID_GIVEBACKS
-// #define HATRACK_DEBUG
-// #define HATRACK_MMM_DEBUG
-// #define HATRACK_MMMALLOC_CTRS  (requires counters to be turned on).
-// #define SWIMCAP_CONSISTENT_VIEWS
-// #define HATRACK_MMMALLOC_CTRS
-// #define HATRACK_EXPAND_THRESHOLD
-// #define HATRACK_CONTRACT_THRESHOLD
-// #define HATRACK_ALWAYS_USE_QSORT
-// #define TOPHAT_USE_LOCKING_ALGORITHMS
+/* HATRACK_COUNTERS
+ *
+ * This controls whether the event counters get compiled in or not,
+ * which we have used to help better understand the performance
+ * implication of algorithmic decisions.  See counter.h and counter.c,
+ * as well as hatomic.h, that has a macro wrapping our
+ * compare-and-swap operation.
+ *
+ * If this variable is off, there is no performance penalty
+ * whatsoever.
+ *
+ */
+// #define HATRACK_COUNTERS
 
+/* HATRACK_MMMALLOC_CTRS
+ *
+ * If turned on, we will use our counters to count:
+ *
+ * 1) The number of records allocated via either mmm_alloc() or
+ *    mmm_alloc_committed()
+ *
+ * 2) The number of records actually freed (not just retired).
+ *
+ * 3) The number of records that were freed via mmm_retire_unused().
+ *
+ * See counter.{h, c} for more info.  Implies HATRACK_COUNTERS.
+ */
+// #define HATRACK_MMMALLOC_CTRS
+
+#if defined(HATRACK_MMMALLOC_CTRS) && !defined(HATRACK_COUNTERS)
+#define HATRACK_COUNTERS
 #endif
 
-// Sanity checks.
+/* SWIMCAP_CONSISTENT_VIEWS
+ *
+ * In swimcap, we give a compile time option to select whether you
+ * want consistent views, implemented by having the viewer grab the
+ * write lock.
+ *
+ * Being a single-writer hash table, and given that we have faster
+ * multi-writer lock-free tables, this should be pretty worthless
+ * to you either way-- don't use swimcap :)
+ */
+
+// #define SWIMCAP_CONSISTENT_VIEWS
+
+/* HATRACK_ALWAYS_USE_QUICKSORT
+ *
+ * For lohat-a and lohat-b, we explore the performance impact on sort
+ * operations, if we try different storage strategies. This is all
+ * explained in the lowhat-a source code, but: for whatever reason, it
+ * generally will make sense when we have partially-ordered arrays to
+ * switch from insertion sort, which is optimized for mostly-ordered
+ * arrays, and go to qsort(), which is great for general-purpose,
+ * randomized contents.
+ *
+ * If this variable isn't set, the lohat variants will start with an
+ * insertion sort, and switch to quicksort if the table gets too
+ * large (controlled by HATRACK_QSORT_THRESHOLD below).
+ *
+ * If this variable IS set, then those tables just will never use the
+ * insertion sort at all.
+ */
+// #define HATRACK_ALWAYS_USE_QSORT
+
+/* HATRACK_ALWAYS_USE_INSERTION_SORT
+ *
+ * This doesn't live up to its name-- it does not cause us *always*
+ * use an insertion sort. Only the lohat variants (lohat-a and
+ * lohat-b) support insertion sort as an option... no other algorithms
+ * should benefit from it.  Those algorithms are FORCED to use
+ * quicksort, if sorting is asked for.
+ *
+ * Therefore, this applies ONLY to lohat-a and lohat-b.
+ */
+// #define HATRACK_ALWAYS_USE_INSSORT
+
+#if defined(HATRACK_ALWAYS_USE_INSSORT) && defined(HATRACK_ALWAYS_USE_QSORT)
+#error                                                                         \
+    "Cannot have both HATRACK_ALWAYS_USE_INSSORT and "                      \
+       "HATRACK_ALWAYS_USE_QSORT"
+#endif
+
+/* HATRACK_QSORT_THRESHOLD
+ *
+ * This variable controls how big the table should be (in terms of
+ * number of buckets), before the lohat variants (lohat-a and lohat-b)
+ * switch from insertion sort to quicksort. If this is unset, and if
+ * HATRACK_ALWAYS_USE_QUICKSORT is also unset, then these algorithms
+ * will ALWAYS use an insertion sort.
+ *
+ * In my VERY limited testing so far, the best threshold on my laptop
+ * seems to be disappointingly low-- only about 256 elements. I don't
+ * yet understand what's going on, but haven't gotten around to
+ * exploring this yet.
+ */
+// #define HATRACK_QSORT_THRESHOLD 256
+
 #if defined(HATRACK_QSORT_THRESHOLD) && defined(HATRACK_ALWAYS_USE_QSORT)
 #error "Cannot have both HATRACK_QSORT_THRESHOLD and HATRACK_ALWAYS_USE_QSORT"
 #endif
 
-#if !defined(HATRACK_ALWAYS_USE_QSORT) && !defined(HATRACK_QSORT_THRESHOLD)
-// A reasonable default.
-#define HATRACK_QSORT_THRESHOLD 256
+#if defined(HATRACK_QSORT_THRESHOLD) && defined(HATRACK_ALWAYS_USE_INSSORT)
+#error "Cannot have both HATRACK_QSORT_THRESHOLD and HATRACK_ALWAYS_USE_INSSORT"
+#endif
+
+/* TOPHAT_USE_LOCKING_ALGORITHMS
+ *
+ * Tophat is a proof-of-concept that shows how a language or library
+ * can start with single-threaded hash tables, and then switch to
+ * multi-threaded hash tables seamlessly, the second a new thread
+ * spins up. See tophat.h for more details.
+ *
+ * This variable controls whether, when we migrate, we migrate to an
+ * algorithm that uses locks (newshat or ballcap), or a wait free
+ * algorithm (witchhat and woolhat).
+ *
+ * Selecting whether you want better linearization is done at runtime,
+ * however.  I did this because there generally doesn't seem to be a
+ * good reason to use the locking algorithms, except for performance
+ * comparisons.
+ *
+ * In contrast, one might want to be able to, if the program goes
+ * parallel, use witchhat for regular dictionaries to maximize
+ * performance, and woolhat for sets, where you need to perform set
+ * operations.
+ */
+
+// #define TOPHAT_USE_LOCKING_ALGORITHMS
+
 #endif

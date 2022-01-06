@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 // clang-format off
 typedef struct {
@@ -48,7 +49,7 @@ extern const char             __hatrack_hex_conversion_table[];
 extern __thread int64_t       mmm_mytid;
 
 void debug_dump         (uint64_t);
-void debug_thread       ();
+void debug_thread       (void);
 void debug_other_thread (int64_t);
 void debug_grep         (char *);
 void debug_pgrep        (uintptr_t);
@@ -105,14 +106,67 @@ hatrack_debug_ptr(void *addr, char *msg)
             HATRACK_DEBUG_MSG_SIZE - HATRACK_PTR_CHRS - HATRACK_PTR_FMT_CHRS);
 }
 
+static inline void
+debug_assert(bool        expression_result,
+             char       *assertion,
+             const char *function,
+             const char *file,
+             int         line)
+{
+    if (!expression_result) {
+        fprintf(stderr,
+                "%s:%d: Assertion \"%s\" failed (in function %s)\n",
+                file,
+                line,
+                assertion,
+                function);
+
+        debug_dump(HATRACK_ASSERT_FAIL_RECORD_LEN);
+
+        // Loop instead of crashing, so that we can attach a debugger.
+        while (true)
+            ;
+    }
+}
+
+static inline debug_assert_w_params(bool        expression_result,
+                                    char       *assertion,
+                                    const char *function,
+                                    const char *file,
+                                    int         line,
+                                    uint32_t    num_records,
+                                    bool        busy_wait)
+{
+    if (!expression_result) {
+        fprintf(stderr,
+                "%s:%d: Assertion \"%s\" failed (in function %s)\n",
+                file,
+                line,
+                assertion,
+                function);
+
+        debug_dump(num_records);
+
+        if (busy_wait) {
+            // Loop instead of crashing, so that we can attach a debugger.
+            while (true)
+                ;
+        }
+    }
+}
+
 #define DEBUG(x)        hatrack_debug(x)
 #define DEBUG_PTR(x, y) hatrack_debug_ptr((void *)(x), y)
+#define ASSERT(x)       debug_assert(x, #x, __FUNCTION__, __FILE__, __LINE__)
+#define XASSERT(x, n, b)                                                       \
+    debug_assert_w_params(x, #x, __FUNCTION__, __FILE__, __LINE__, n, b)
 
 #else
 
 #define DEBUG(x)
 #define DEBUG_PTR(x, y)
-
+#define ASSERT(x)
+#define XASSERT(x, n, b)
 #endif
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,9 @@
 
 #include "hatrack_common.h"
 
+/* Used when using quicksort to sort the contents of a hash table
+ * 'view' by insertion time (the sort_epoch field).
+ */
 int
 hatrack_quicksort_cmp(const void *bucket1, const void *bucket2)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -273,7 +273,6 @@ newshat_view(newshat_t *self, uint64_t *num, bool sort)
             cur++;
             continue;
         }
-        p->hv         = cur->hv;
         p->item       = contents.item;
         p->sort_epoch = contents.info;
         count++;
@@ -719,11 +718,14 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
     uint64_t          cur_last_slot;
     uint64_t          new_last_slot;
     uint64_t          i, n, bix;
-    uint64_t          items_to_migrate = 0;
+    uint64_t          items_to_migrate;
 
-    // Besides the mutex for each bucket, we have a migration mutex
-    // that ensures only one thread is working on migrations.
-    // We're definitely relying on a fair scheduler.
+    items_to_migrate = 0;
+
+    /* Besides the mutex for each bucket, we have a migration mutex
+     * that ensures only one thread is working on migrations.
+     * We're definitely relying on a fair scheduler.
+     */
     if (pthread_mutex_lock(&top->migrate_mutex)) {
         abort();
     }

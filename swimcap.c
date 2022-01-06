@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -380,7 +380,6 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
             cur++;
             continue;
         }
-        p->hv         = cur->hv;
         p->item       = contents.item;
         p->sort_epoch = contents.info;
         count++;

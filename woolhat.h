@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,7 +60,6 @@ struct woolhat_store_st {
     uint64_t                   last_slot;
     uint64_t                   threshold;
     _Atomic uint64_t           used_count;
-    _Atomic uint64_t           del_count;
     _Atomic(woolhat_store_t *) store_next;
     woolhat_history_t          hist_buckets[];
 };
@@ -68,6 +67,7 @@ struct woolhat_store_st {
 typedef struct woolhat_st {
     alignas(8)
     _Atomic(woolhat_store_t *) store_current;
+    _Atomic uint64_t           item_count;
     _Atomic uint64_t           help_needed;
 } woolhat_t;
 

@@ -376,7 +376,6 @@ oldhat_view(oldhat_t *self, uint64_t *num, bool sort)
         if (!record || !record->used) {
             continue;
         }
-        p->hv         = record->hv;
         p->item       = record->item;
         p->sort_epoch = mmm_get_create_epoch(record);
         p++;

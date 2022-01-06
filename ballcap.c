@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -212,7 +212,6 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
             continue;
         }
 
-        p->hv         = cur->hv;
         p->item       = record->item;
         p->sort_epoch = mmm_get_create_epoch(record);
 

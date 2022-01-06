@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           hihat_a.c
+ *  Name:           hihat-a.c
  *  Description:    Half-Interesting HAsh Table.
  *
  *                  This attempts to do some waiting if a migration
@@ -39,18 +39,18 @@
 #include "hihat.h"
 
 // clang-format off
-static hihat_store_t  *hihat_a_store_new    (uint64_t);
-static void            *hihat_a_store_get    (hihat_store_t *, hihat_t *,
-					      hatrack_hash_t *, bool *);
-static void            *hihat_a_store_put    (hihat_store_t *, hihat_t *,
-					      hatrack_hash_t *, void *, bool *);
-static void            *hihat_a_store_replace(hihat_store_t *, hihat_t *,
-					      hatrack_hash_t *, void *, bool *);
-static bool             hihat_a_store_add    (hihat_store_t *, hihat_t *,
-					      hatrack_hash_t *, void *);
-static void            *hihat_a_store_remove (hihat_store_t *, hihat_t *,
-					      hatrack_hash_t *, bool *);
-static hihat_store_t *hihat_a_store_migrate (hihat_store_t *, hihat_t *);
+static hihat_store_t *hihat_a_store_new    (uint64_t);
+static void          *hihat_a_store_get    (hihat_store_t *, hihat_t *,
+					    hatrack_hash_t *, bool *);
+static void          *hihat_a_store_put    (hihat_store_t *, hihat_t *,
+					    hatrack_hash_t *, void *, bool *);
+static void          *hihat_a_store_replace(hihat_store_t *, hihat_t *,
+					    hatrack_hash_t *, void *, bool *);
+static bool           hihat_a_store_add    (hihat_store_t *, hihat_t *,
+					    hatrack_hash_t *, void *);
+static void          *hihat_a_store_remove (hihat_store_t *, hihat_t *,
+					    hatrack_hash_t *, bool *);
+static hihat_store_t *hihat_a_store_migrate(hihat_store_t *, hihat_t *);
 
 void
 hihat_a_init(hihat_t *self)
@@ -150,12 +150,12 @@ hihat_a_view(hihat_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t  *view;
     hatrack_view_t  *p;
-    hatrack_hash_t   hv;
     hihat_bucket_t *cur;
     hihat_bucket_t *end;
     hihat_record_t  record;
     uint64_t         num_items;
     uint64_t         alloc_len;
+    uint64_t         record_epoch;
     hihat_store_t  *store;
 
     mmm_start_basic_op();
@@ -168,16 +168,15 @@ hihat_a_view(hihat_t *self, uint64_t *num, bool sort)
     end       = cur + (store->last_slot + 1);
 
     while (cur < end) {
-        record        = atomic_read(&cur->record);
-        p->sort_epoch = record.info & HIHAT_EPOCH_MASK;
-
-	if (!p->sort_epoch) {
+        record       = atomic_read(&cur->record);
+	record_epoch = record.info & HIHAT_EPOCH_MASK;
+	
+	if (!record_epoch) {
 	    cur++;
 	    continue;
 	}
 	
-        hv            = atomic_read(&cur->hv);
-        p->hv         = hv;
+        p->sort_epoch = record_epoch;
         p->item       = record.item;
 	
         p++;
@@ -601,17 +600,17 @@ hihat_a_store_migrate(hihat_store_t *self, hihat_t *top)
 	nanosleep(&sleep_time, NULL);
 	new_store = atomic_read(&self->store_next);
 	if (new_store == atomic_read(&top->store_current)) {
-	    HATRACK_CTR(HATRACK_CTR_HI2_SLEEP1a_WORKED);
+	    HATRACK_CTR(HATRACK_CTR_HIa_SLEEP1_WORKED);
 	    return new_store;
 	}
-	HATRACK_CTR(HATRACK_CTR_HI2_SLEEP1a_FAILED);
+	HATRACK_CTR(HATRACK_CTR_HIa_SLEEP1_FAILED);
 	nanosleep(&sleep_time, NULL);
 	new_store = atomic_read(&self->store_next);
 	if (new_store == atomic_read(&top->store_current)) {
-	    HATRACK_CTR(HATRACK_CTR_HI2_SLEEP1b_WORKED);    
+	    HATRACK_CTR(HATRACK_CTR_HIa_SLEEP2_WORKED);    
 	    return new_store;
 	}
-	HATRACK_CTR(HATRACK_CTR_HI2_SLEEP1b_FAILED);
+	HATRACK_CTR(HATRACK_CTR_HIa_SLEEP2_FAILED);
 		
 	goto have_new_store;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,11 @@
 
 #include <string.h>
 
+/*
+ * I use this union to help the compiler realize that the 128-bit
+ * result that we get from XXH3_128 is identical to the 128 bits of a
+ * hatrack_hash_t, without lots of nasty casting.
+ */
 typedef union {
     hatrack_hash_t lhv;
     XXH128_hash_t  xhv;

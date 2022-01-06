@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@
 #ifdef HATRACK_COUNTERS
 
 #include <stdio.h>
+#include <stdbool.h>
 
 // clang-format off
 _Atomic uint64_t hatrack_counters[HATRACK_COUNTERS_NUM]            = {};
@@ -38,6 +39,10 @@ char *hatrack_counter_names[HATRACK_COUNTERS_NUM] = {
     "mmm used retires",
     "mmm unused retires",
     "stores shrunk",
+    "hi-a sleep 1 worked",
+    "hi-a sleep 1 failed",    
+    "hi-a sleep 2 worked",
+    "hi-a sleep 2 failed",
     "wh help requests"
 };
 
@@ -129,6 +134,10 @@ char *hatrack_yn_counter_names[HATRACK_YN_COUNTERS_NUM] = {
 
 // clang-format on
 
+/*
+ * Used to output (to stderr) the difference between counters, from
+ * the last time counters_output_delta() was called, until now.
+ */
 void
 counters_output_delta(void)
 {

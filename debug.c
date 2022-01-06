@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,10 +52,11 @@ debug_dump(uint64_t max_msgs)
 
     if (oldest_sequence >= cur_sequence) {
         for (i = oldest_sequence; i < HATRACK_DEBUG_RING_SIZE; i++) {
-            printf("%06llu: (tid %ld) %s\n",
-                   __hatrack_debug[i].sequence,
-                   (long)__hatrack_debug[i].thread,
-                   __hatrack_debug[i].msg);
+            fprintf(stderr,
+                    "%06llu: (tid %ld) %s\n",
+                    __hatrack_debug[i].sequence,
+                    (long)__hatrack_debug[i].thread,
+                    __hatrack_debug[i].msg);
         }
         i = 0;
     }
@@ -63,10 +64,11 @@ debug_dump(uint64_t max_msgs)
         i = oldest_sequence;
     }
     for (; i < cur_sequence; i++) {
-        printf("%06llu: (tid %ld) %s\n",
-               __hatrack_debug[i].sequence,
-               (long)__hatrack_debug[i].thread,
-               __hatrack_debug[i].msg);
+        fprintf(stderr,
+                "%06llu: (tid %ld) %s\n",
+                __hatrack_debug[i].sequence,
+                (long)__hatrack_debug[i].thread,
+                __hatrack_debug[i].msg);
     }
 }
 
@@ -87,18 +89,20 @@ debug_other_thread(int64_t tid)
 
     for (i = start; i < HATRACK_DEBUG_RING_SIZE; i++) {
         if (tid == __hatrack_debug[i].thread) {
-            printf("%06llu: (tid %ld) %s\n",
-                   __hatrack_debug[i].sequence,
-                   (long)__hatrack_debug[i].thread,
-                   __hatrack_debug[i].msg);
+            fprintf(stderr,
+                    "%06llu: (tid %ld) %s\n",
+                    __hatrack_debug[i].sequence,
+                    (long)__hatrack_debug[i].thread,
+                    __hatrack_debug[i].msg);
         }
     }
     for (i = 0; i < start; i++) {
         if (tid == __hatrack_debug[i].thread) {
-            printf("%06llu: (tid %ld) %s\n",
-                   __hatrack_debug[i].sequence,
-                   (long)__hatrack_debug[i].thread,
-                   __hatrack_debug[i].msg);
+            fprintf(stderr,
+                    "%06llu: (tid %ld) %s\n",
+                    __hatrack_debug[i].sequence,
+                    (long)__hatrack_debug[i].thread,
+                    __hatrack_debug[i].msg);
         }
     }
 }
@@ -114,18 +118,20 @@ debug_grep(char *s)
 
     for (i = start; i < HATRACK_DEBUG_RING_SIZE; i++) {
         if (strstr(__hatrack_debug[i].msg, s)) {
-            printf("%06llu: (tid %ld) %s\n",
-                   __hatrack_debug[i].sequence,
-                   (long)__hatrack_debug[i].thread,
-                   __hatrack_debug[i].msg);
+            fprintf(stderr,
+                    "%06llu: (tid %ld) %s\n",
+                    __hatrack_debug[i].sequence,
+                    (long)__hatrack_debug[i].thread,
+                    __hatrack_debug[i].msg);
         }
     }
     for (i = 0; i < start; i++) {
         if (strstr(__hatrack_debug[i].msg, s)) {
-            printf("%06llu: (tid %ld) %s\n",
-                   __hatrack_debug[i].sequence,
-                   (long)__hatrack_debug[i].thread,
-                   __hatrack_debug[i].msg);
+            fprintf(stderr,
+                    "%06llu: (tid %ld) %s\n",
+                    __hatrack_debug[i].sequence,
+                    (long)__hatrack_debug[i].thread,
+                    __hatrack_debug[i].msg);
         }
     }
 }
@@ -145,4 +151,5 @@ debug_pgrep(uintptr_t n)
     debug_grep(s);
     return;
 }
+
 #endif

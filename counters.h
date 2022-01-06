@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,36 @@
  *
  *  Name:           counters.h
  *  Description:    In-memory counters for performance monitoring,
- *                  when HATRACK_DEBUG is on.
+ *                  when HATRACK_COUNTERS is on.
+ *
+ *                  When these are off, no counter-related code will
+ *                  be generated. For instance, hatomic.h has
+ *                  compare-and-swap wrapper macros that can increment
+ *                  a Yes / No counter, based on the result, but if
+ *                  HATRACK_COUNTERS is not defined, it just compiles
+ *                  down to atomic_compare_exchange_strong().
+ *
+ *                  When they're on, we still do what we can to
+ *                  minimize the performance impact, while keeping
+ *                  them atomic, using sequentially consistent updates
+ *                  (via atomic_fetch_add()), and keeping them in
+ *                  statically allocated memory (though, it would be
+ *                  better to keep them in dynamic memory, if it's in
+ *                  the same cache line as what we're operating on at
+ *                  the time).
+ *
+ *                  Right now, I'm primarily using these to monitor
+ *                  CAS success and fail rates, in lock free
+ *                  algorithms. And they do add about 80% overhead,
+ *                  since I'm putting these counters in critical
+ *                  sections and creating a lot of unnecessary cache
+ *                  misses.
+ *
+ *                  Still, even when monitoring every single CAS and
+ *                  more, while performance degrades, almost every
+ *                  program under the sun could tolerate keeping these
+ *                  on all the time.
+ *
  *
  *  Author:         John Viega, john@zork.org
  *
@@ -42,6 +71,10 @@ enum : uint64_t
     HATRACK_CTR_RETIRE_UNUSED,
     HATRACK_CTR_STORE_SHRINK,
     HATRACK_CTR_WH_HELP_REQUESTS,
+    HATRACK_CTR_HIa_SLEEP1_WORKED,
+    HATRACK_CTR_HIa_SLEEP1_FAILED,
+    HATRACK_CTR_HIa_SLEEP2_WORKED,
+    HATRACK_CTR_HIa_SLEEP2_FAILED,
     HATRACK_COUNTERS_NUM,
 };
 

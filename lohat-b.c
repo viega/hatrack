@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 John Viega
+ * Copyright © 2021-2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -196,7 +196,6 @@ lohat_b_view(lohat_b_t *self, uint64_t *out_num, bool sort)
     lohat_b_store_t   *store;
     hatrack_view_t    *view;
     hatrack_view_t    *p;
-    hatrack_hash_t     hv;
     lohat_record_t    *rec;
     uint64_t           epoch;
     uint64_t           sort_epoch;
@@ -215,7 +214,6 @@ lohat_b_view(lohat_b_t *self, uint64_t *out_num, bool sort)
     p    = view;
 
     while (cur < end) {
-        hv  = atomic_read(&cur->hv);
         rec = hatrack_pflag_clear(atomic_read(&cur->head),
                                   LOHAT_F_MOVING | LOHAT_F_MOVED);
 
@@ -247,7 +245,6 @@ lohat_b_view(lohat_b_t *self, uint64_t *out_num, bool sort)
             continue;
         }
 
-        p->hv         = hv;
         p->item       = rec->item;
         p->sort_epoch = mmm_get_create_epoch(rec);
 
