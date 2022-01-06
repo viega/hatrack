@@ -33,10 +33,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#ifndef HATRACK_MAX_HATS
-#define HATRACK_MAX_HATS 1024
-#endif
-
 typedef struct {
     char             *name;
     hatrack_vtable_t *vtable;
