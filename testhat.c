@@ -112,6 +112,18 @@ hatrack_vtable_t refhat_vtable = {
     .view    = (hatrack_view_func)refhat_view
 };
 
+hatrack_vtable_t refhat_a_vtable = {
+    .init    = (hatrack_init_func)refhat_a_init,
+    .get     = (hatrack_get_func)refhat_a_get,
+    .put     = (hatrack_put_func)refhat_a_put,
+    .replace = (hatrack_replace_func)refhat_a_replace,    
+    .add     = (hatrack_add_func)refhat_a_add,
+    .remove  = (hatrack_remove_func)refhat_a_remove,
+    .delete  = (hatrack_delete_func)refhat_a_delete,
+    .len     = (hatrack_len_func)refhat_a_len,
+    .view    = (hatrack_view_func)refhat_a_view
+};
+
 hatrack_vtable_t duncecap_vtable = {
     .init    = (hatrack_init_func)duncecap_init,
     .get     = (hatrack_get_func)duncecap_get,
@@ -208,18 +220,6 @@ hatrack_vtable_t lohat_a_vtable = {
     .view    = (hatrack_view_func)lohat_a_view
 };
 
-hatrack_vtable_t lohat_b_vtable = {
-    .init    = (hatrack_init_func)lohat_b_init,
-    .get     = (hatrack_get_func)lohat_b_get,
-    .put     = (hatrack_put_func)lohat_b_put,
-    .replace = (hatrack_replace_func)lohat_b_replace,    
-    .add     = (hatrack_add_func)lohat_b_add,    
-    .remove  = (hatrack_remove_func)lohat_b_remove,
-    .delete  = (hatrack_delete_func)lohat_b_delete,
-    .len     = (hatrack_len_func)lohat_b_len,
-    .view    = (hatrack_view_func)lohat_b_view
-};
-
 hatrack_vtable_t witchhat_vtable = {
     .init    = (hatrack_init_func)witchhat_init,
     .get     = (hatrack_get_func)witchhat_get,
@@ -286,6 +286,9 @@ static void
 testhat_init_default_algorithms()
 {
     testhat_register_algorithm("refhat", &refhat_vtable, sizeof(refhat_t));
+    testhat_register_algorithm("refhat-a",
+                               &refhat_a_vtable,
+                               sizeof(refhat_a_t));
     testhat_register_algorithm("oldhat", &oldhat_vtable, sizeof(oldhat_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
     testhat_register_algorithm("duncecap",
@@ -297,7 +300,6 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("hihat-a", &hihat_a_vtable, sizeof(hihat_t));
     testhat_register_algorithm("lohat", &lohat_vtable, sizeof(lohat_t));
     testhat_register_algorithm("lohat-a", &lohat_a_vtable, sizeof(lohat_a_t));
-    testhat_register_algorithm("lohat-b", &lohat_b_vtable, sizeof(lohat_b_t));
     testhat_register_algorithm("witchhat",
                                &witchhat_vtable,
                                sizeof(witchhat_t));

@@ -103,39 +103,6 @@ typedef struct {
     uint64_t          next_epoch;
 } refhat_t;
 
-/* refhat1_t
- *
- * This is the same as refhat_t, with a few additional fields to
- * support the "tophat" hash table. Tophat uses refhat as a store,
- * until it notices multiple threads accessing the table at once,
- * where at least one of the threads is a writer (multiple concurrent
- * readers are fine).
- *
- * New fields are:
- *
- * mutex   -- We put this around the hash table to protect for when
- *            multiple threads come along. If we were doing a
- *            programming language implementation, we'd probably
- *            actually leave off the mutex and memory management work
- *            we do, and do one-time work on first thread startup, to
- *            ensure that we only incur cost when we switch to
- *            multiple threads.
- *
- * backref -- This is used to recover the original tophat instance,
- *            when we're dealing w/ a refhat and realize we need to
- *            switch to another table type. See tophat.h / tophat.c
- */
-typedef struct {
-    alignas(8)    
-    uint64_t           last_slot;
-    uint64_t           threshold;
-    uint64_t           used_count;
-    uint64_t           item_count;
-    refhat_bucket_t   *buckets;
-    uint64_t           next_epoch;
-    pthread_mutex_t    mutex;
-    void              *backref;
-} refhat1_t;
 
 
 /* This API requires that you deal with hashing the key external to

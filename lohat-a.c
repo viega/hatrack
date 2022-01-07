@@ -282,26 +282,25 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
  *
  * In this table, the indirection buckets are the last item of the
  * struct, and declared as a variable sized array.  The history
- * buckets require an additional allocation, which is done here.
+ * buckets require an additional allocation, which is done here,
+ * after first allocating the store.
  */
 static lohat_a_store_t *
 lohat_a_store_new(uint64_t size)
 {
     lohat_a_store_t *store;
-    uint64_t         sz;
+    uint64_t         alloc_len;
+    uint64_t         threshold;
 
-    sz    = sizeof(lohat_a_store_t) + sizeof(lohat_a_indirect_t) * size;
-    store = (lohat_a_store_t *)mmm_alloc_committed(sz);
+    alloc_len = sizeof(lohat_a_store_t) + sizeof(lohat_a_indirect_t) * size;
+    store     = (lohat_a_store_t *)mmm_alloc_committed(alloc_len);
+    threshold = hatrack_compute_table_threshold(size);
+    alloc_len = threshold * sizeof(lohat_a_history_t);
 
-    store->last_slot = size - 1;
-    store->threshold = hatrack_compute_table_threshold(size);
-
-    sz                  = sizeof(lohat_a_history_t) * size;
-    store->hist_buckets = (lohat_a_history_t *)mmm_alloc_committed(sz);
+    store->last_slot    = size - 1;
+    store->hist_buckets = (lohat_a_history_t *)mmm_alloc_committed(alloc_len);
     store->hist_next    = store->hist_buckets;
-
-    store->hist_end
-        = store->hist_buckets + hatrack_compute_table_threshold(size);
+    store->hist_end     = store->hist_buckets + threshold;
 
     return store;
 }
@@ -387,7 +386,6 @@ lohat_a_store_put(lohat_a_store_t *self,
                   void            *item,
                   bool            *found)
 {
-    void               *ret;
     uint64_t            bix;
     uint64_t            i;
     hatrack_hash_t      hv2;
@@ -405,6 +403,13 @@ lohat_a_store_put(lohat_a_store_t *self,
 
         if (hatrack_bucket_unreserved(&hv2)) {
             if (LCAS(&ptrbucket->hv, &hv2, *hv1, LOHATa_CTR_BUCKET_ACQUIRE)) {
+                /* Other algorithms count how many buckets are
+                 * acquired in the table as part of their resize
+                 * metric. We skip that in lohat-a; since we have a
+                 * list of history buckets we give out in sequential
+                 * order, our threshold calculation is just based on
+                 * whether we give out all of those buckets.
+                 */
                 goto found_ptr_bucket;
             }
         }
@@ -424,6 +429,11 @@ found_ptr_bucket:
         bucket = atomic_read(&ptrbucket->ptr);
         if (!bucket) {
             new_bucket = atomic_fetch_add(&self->hist_next, 1);
+            /* This is us testing to see if we need to resize; once
+             * 'hist_next' advances to 'hist_end', we know we have
+             * given out all available ordered slots, which is set to
+             * 75% of the total size of the hash table.
+             */
             if (new_bucket >= self->hist_end) {
                 goto migrate_and_retry;
             }
@@ -489,30 +499,26 @@ found_history_bucket:
     mmm_commit_write(candidate);
 
     if (!head) {
+not_overwriting:
+        atomic_fetch_add(&top->item_count, 1);
+
         if (found) {
             *found = false;
         }
         return NULL;
     }
 
-    if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
-        atomic_fetch_sub(&self->del_count, 1);
-        if (found) {
-            *found = false;
-        }
-
-        ret = NULL;
-    }
-    else {
-        if (found) {
-            *found = true;
-        }
-        ret = head->item;
-    }
-
     mmm_retire(head);
 
-    return ret;
+    if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+        goto not_overwriting;
+    }
+
+    if (found) {
+        *found = true;
+    }
+
+    return head->item;
 }
 
 /* See the comments on lohat_a_store_put() for an overview of the
@@ -688,6 +694,8 @@ found_history_bucket:
         return false;
     }
 
+    atomic_fetch_add(&top->item_count, 1);
+
     if (head) {
         atomic_fetch_sub(&self->del_count, 1);
         mmm_help_commit(head);
@@ -791,7 +799,8 @@ migrate_and_retry:
         *found = true;
     }
 
-    atomic_fetch_add(&self->del_count, 1);
+    atomic_fetch_sub(&top->item_count, 1);
+
     return head->item;
 }
 
@@ -818,12 +827,12 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
     cur       = self->hist_buckets;
     store_end = self->hist_end;
 
-    /* Right now, lohat-a gets the same number of history buckets as
-     * it has top-level buckets. I've been expecting to size that down
-     * to the 'threshhold' value at some point, so instead of using a
-     * loop over an array index, we just dump a pointer on every
-     * iteration, to be more flexible here (stopping when we get to
-     * store_end).
+    /* While there are N buckets in the actual hash table's top-level
+     * buckets, the history array has .75N buckets, and we might want
+     * to mess around with the threshold function, which would lead to
+     * that multiple changing. So instead of using a loop over an
+     * array index, we just dump a pointer on every iteration, to be
+     * more flexible here (stopping when we get to store_end).
      */
     while (cur < store_end) {
         head = atomic_read(&cur->head);

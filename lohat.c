@@ -577,6 +577,7 @@ found_history_bucket:
     if (!head) {
 not_overwriting:
         atomic_fetch_add(&top->item_count, 1);
+
         if (found) {
             *found = false;
         }
@@ -885,6 +886,7 @@ migrate_and_retry:
     }
 
     atomic_fetch_sub(&top->item_count, 1);
+
     return head->item;
 }
 

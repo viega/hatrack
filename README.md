@@ -63,13 +63,13 @@ locks could be suspended for a long time, stalling threads that are
 running and could be doing work. With Lock Freedom, some thread is
 always able to get work done. And if a thread finds itself not getting
 work done, even though it's running, it's because other threads are
-being productive.  Of our algorithms, *hihat, oldhat, lohat, lohat-a*
-and *lohat-b* all provide lock freedom (and, in most cases, wait
-freedom).  We have found one other true hash table that is lock-free,
-written in Java by Cliff Click. Our lock-free tables are far simpler,
-work with C (Click doesn't have to worry about the hard task of
-parallel memory management, as he can simply depend on Java's garbage
-collection), and is more efficient.
+being productive.  Of our algorithms, *hihat, oldhat, lohat and
+lohat-a* all provide lock freedom (and, in most cases, wait freedom).
+We have found one other true hash table that is lock-free, written in
+Java by Cliff Click. Our lock-free tables are far simpler, work with C
+(Click doesn't have to worry about the hard task of parallel memory
+management, as he can simply depend on Java's garbage collection), and
+is more efficient.
 
 3). **Wait Freedom**. With lock freedom, individual threads can have
 operations that fail to make progress by "spinning" in the same
@@ -145,7 +145,7 @@ still provide *approximate* insertion ordering.
 1) Tables without consistent views (and thus would not be good for set
 operations): *swimcap, newshat, hihat, oldhat, witchhat*.
 
-2) Tables with consistent views: *ballcap, lohat, lohat-a, lohat-b, woolhat*.
+2) Tables with consistent views: *ballcap, lohat, lohat-a, woolhat*.
 
 3) Table with a compile-time option for consistent views: *duncecap*.
 
@@ -158,9 +158,8 @@ only consideration should be whether fully consistent views and order
 preservation are important.
 
 Note that, unlike some other parallel data structures that have an
-associative (dictionary-like) interface, most of these hash tables
-(with the exception of lohat-b), are true hash tables, with average
-O(1) insertions, lookups and deletes.
+associative (dictionary-like) interface, most these hash tables O(1)
+insertions, lookups and deletes.
 
 ## Getting started
 
@@ -261,22 +260,18 @@ Here is an overview of the tables in their 'logical' order:
                 computational complexity of getting an
                 order-preserving view.
 		
-9) **lohat-b**  Like lohat-a, but also trades off O(1) lookups to get
-                near-O(n) views (note: I do not generally recommend this
-		trade-off).
-
-10) **ballcap** Uses locks like newshat, but with consistent views,
-                meaning that when you ask for a view (e.g., to
-                iterate), you will get a moment-in-time snapshot with
-                all of the items, that can be sorted reliably by their
-                insertion order.  Really just meant for direct comparison
-		to lohat.
+9) **ballcap** Uses locks like newshat, but with consistent views,
+               meaning that when you ask for a view (e.g., to
+               iterate), you will get a moment-in-time snapshot with
+               all of the items, that can be sorted reliably by their
+               insertion order.  Really just meant for direct comparison
+  	       to lohat.
 		
-11) **witchhat** A fully wait-free version of hihat.
+10) **witchhat** A fully wait-free version of hihat.
 
-12) **woolhat**  A fully wait-free version of lohat.
+11) **woolhat**  A fully wait-free version of lohat.
 
-13) **tophat**  A proof of concept illustrating how language
+12) **tophat**  A proof of concept illustrating how language
                 implementations can get single-threaded performance
                 until a second thread starts, by waiting until that
                 time to migrate the table to a different

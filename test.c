@@ -657,7 +657,11 @@ test_condput(test_info_t *info)
     }
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 2) {
-            fprintf(stderr, "No consistency in final check\n");
+            fprintf(stderr,
+                    "No consistency in final check (expected: "
+                    "%llu, got: %u)\n",
+                    i + 2,
+                    test_get(info->dict, i + 1));
             return false;
         }
     }
@@ -874,17 +878,16 @@ uint32_t            write_rates[]   = {0x010a, 0x050a, 0x0a0a, 0};
 //  clang-format on
 
 char *threadsafe_dicts[] = {
-    
     "duncecap",
     "swimcap", 
     "newshat",
-    "hihat", "hihat-a",
+    "hihat",
+    "hihat-a",
     "witchhat", 
     "oldhat",
     "ballcap",
     "lohat",
     "lohat-a",
-    //    "lohat-b",
     "woolhat",
     "tophat-fast",    
     "tophat-cst",
@@ -892,23 +895,20 @@ char *threadsafe_dicts[] = {
 };
 char *all_dicts[]     = {
     "refhat",
+    "refhat-a",
     "duncecap",
     "swimcap", 
     "newshat",
-    "hihat", "hihat-a",
+    "hihat",
+    "hihat-a",
     "witchhat",    
     "oldhat",    
     "ballcap",
     "lohat",
     "lohat-a",
-    //    "lohat-b",
     "woolhat",    
     "tophat-fast",   
     "tophat-cst",
-    NULL
-};
-char *st_dicts[]      = {
-    "refhat",
     NULL
 };
 

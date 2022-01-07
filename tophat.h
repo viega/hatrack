@@ -29,7 +29,7 @@
 #include "hatrack_common.h"
 #include "witchhat.h"
 #include "woolhat.h"
-#include "refhat.h"
+#include "refhat-a.h"
 #include "hatvtable.h"
 
 // clang-format off

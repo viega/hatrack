@@ -91,14 +91,19 @@
  *                  and sorting times can indeed get very
  *                  good. However, it's at the expense of the number
  *                  of table migrations going up dramatically in cases
- *                  with a reasonable number of deletions. that makes
- *                  it not-so-great for general-purpose use.
+ *                  with a reasonable number of deletions. That makes
+ *                  it not-so-great for general-purpose use, and I've
+ *                  currently removed lohat-b from this project
+ *                  (though I probably will add it back in later; I
+ *                  just haven't kept it consistent with my other
+ *                  implementations, as I realized quickly its value
+ *                  was limited).
  *
- *                  Note that I built this off lohat, since lohat has
- *                  a clear table-wide linarization, but there's
- *                  ultimately no reason why you couldnt do the same
- *                  thing for hihat, if we're willing to accept a bit
- *                  less accuracy.
+ *                  Note that I built this based off of lohat, since
+ *                  lohat has a clear table-wide linarization, but
+ *                  there's ultimately no reason why you couldn't do
+ *                  the same thing for hihat, if we're willing to
+ *                  accept a bit less accuracy.
  *
  *                  Still, for most practical applications, sorts
  *                  aren't going to be incredibly frequent, so it
@@ -172,9 +177,6 @@ typedef struct {
  *               calculate our bucket index, instead of the generally
  *               much more expensive % operator.
  *
- * threshold     This is set when the table is created, to 75% of the
- *               number of unsorted buckets.
- *
  * del_count     This indicates how many buckets have been reserved,
  *               but are not currently in use. We update it every time
  *               it's appropriate, but it's just an approximation. We
@@ -198,7 +200,7 @@ typedef struct {
  * hist_end      This pointer is used to decide when to migrate the
  *               table-- once a bucket reservation would be given
  *               this pointer, then we know we've reached our 75%
- *               threshold.
+ *               threshold, and need to migrate the table.
  *
  * hist_next     A pointer to the next reservable bucket.
  *
@@ -210,9 +212,8 @@ typedef struct lohat_a_store_st lohat_a_store_t;
 // clang-format off
 struct lohat_a_store_st {
     alignas(8)
-    uint64_t                    last_slot;
-    uint64_t                    threshold;
-    _Atomic uint64_t            del_count;
+    uint64_t                     last_slot;
+    _Atomic uint64_t             del_count;
     lohat_a_history_t           *hist_end;
     _Atomic(lohat_a_history_t *) hist_next;
     _Atomic(lohat_a_store_t *)   store_next;

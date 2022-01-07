@@ -32,6 +32,7 @@
 
 #include "hatvtable.h"
 #include "refhat.h"
+#include "refhat-a.h"
 #include "duncecap.h"
 #include "swimcap.h"
 #include "newshat.h"
@@ -40,7 +41,6 @@
 #include "oldhat.h"
 #include "lohat.h"
 #include "lohat-a.h"
-#include "lohat-b.h"
 #include "witchhat.h"
 #include "woolhat.h"
 #include "tophat.h"
