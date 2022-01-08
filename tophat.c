@@ -14,10 +14,13 @@
  * limitations under the License.
  *
  *  Name:           tophat.c
+ *
  *  Description:    Adaptive hash table that starts off fast, but
  *                  migrates to a multi-reader / multi-writer
  *                  implementation once the table is accessed by
  *                  multiple threads simultaneously.
+ *
+ *                  See tophat.h for an overview.
  *
  *  Author:         John Viega, john@zork.org
  *
@@ -26,22 +29,21 @@
 #include "tophat.h"
 
 // clang-format off
-static void             tophat_init_base         (tophat_t *, bool);
-static void            *tophat_st_get            (refhat_a_t *, hatrack_hash_t *,
-						  bool *);
-static void            *tophat_st_put            (refhat_a_t *, hatrack_hash_t *,
-						  void *, bool *);
-static void            *tophat_st_replace        (refhat_a_t *, hatrack_hash_t *,
-						  void *, bool *);
-static bool            tophat_st_add             (refhat_a_t *, hatrack_hash_t *,
-						  void *);
-static void           *tophat_st_remove          (refhat_a_t *, hatrack_hash_t *,
-						  bool *);
-static void            tophat_st_delete          (refhat_a_t *);
-static void            tophat_st_delete_store    (refhat_a_t *);
-static uint64_t        tophat_st_len             (refhat_a_t *);
-static hatrack_view_t *tophat_st_view            (refhat_a_t *, uint64_t *,
-						  bool);
+static void             tophat_init_base     (tophat_t *, bool);
+static void            *tophat_st_get        (refhat_a_t *, hatrack_hash_t *,
+					      bool *);
+static void            *tophat_st_put        (refhat_a_t *, hatrack_hash_t *,
+					      void *, bool *);
+static void            *tophat_st_replace    (refhat_a_t *, hatrack_hash_t *,
+					      void *, bool *);
+static bool            tophat_st_add         (refhat_a_t *, hatrack_hash_t *,
+					      void *);
+static void           *tophat_st_remove      (refhat_a_t *, hatrack_hash_t *,
+					      bool *);
+static void            tophat_st_delete      (refhat_a_t *);
+static void            tophat_st_delete_store(refhat_a_t *);
+static uint64_t        tophat_st_len         (refhat_a_t *);
+static hatrack_view_t *tophat_st_view        (refhat_a_t *, uint64_t *, bool);
 
 #ifdef TOPHAT_USE_LOCKING_ALGORITHMS
 
@@ -54,6 +56,7 @@ static void tophat_migrate_to_newshat (tophat_t *, refhat_a_t *);
 extern ballcap_store_t *ballcap_store_new(uint64_t);
 extern newshat_store_t *newshat_store_new(uint64_t);
 
+// Virtual call tables for the two locking algorithms.
 static hatrack_vtable_t cst_vtable = {
     .init    = (hatrack_init_func)ballcap_init,
     .get     = (hatrack_get_func)ballcap_get,
@@ -86,6 +89,7 @@ static void tophat_migrate_to_witchhat(tophat_t *, refhat_a_t *);
 extern woolhat_store_t  *woolhat_store_new (uint64_t);
 extern witchhat_store_t *witchhat_store_new(uint64_t);
 
+// Virtual call tables for the two wait-free algorithms.
 static hatrack_vtable_t cst_vtable = {
     .init    = (hatrack_init_func)woolhat_init,
     .get     = (hatrack_get_func)woolhat_get,
@@ -112,6 +116,7 @@ static hatrack_vtable_t fast_vtable = {
 
 #endif
 
+// Virtual call table for our single-threaded vtable
 static hatrack_vtable_t st_vtable = {
     .get     = (hatrack_get_func)tophat_st_get,
     .put     = (hatrack_put_func)tophat_st_put,
@@ -594,9 +599,13 @@ static void
 tophat_migrate_to_witchhat(tophat_t *tophat, refhat_a_t *rhobj)
 {
     witchhat_t        *new_table;
-    refhat_a_bucket_t   *cur;    
-    uint64_t           n;
-    refhat_a_record_t  record;    
+    witchhat_bucket_t *new_bucket;
+    witchhat_record_t  new_record;
+    witchhat_record_t  expected_record;
+    hatrack_hash_t     expected_hv;
+    refhat_a_bucket_t *cur;
+    uint64_t           i, n, bix;
+    refhat_a_record_t  record;
     tophat_algo_info_t implementation;    
     
     new_table                = (witchhat_t *)malloc(sizeof(witchhat_t));
@@ -615,9 +624,32 @@ tophat_migrate_to_witchhat(tophat_t *tophat, refhat_a_t *rhobj)
 	if (!record.epoch) {
 	    continue;
 	}
-	// TODO: This doesn't preserve epoch; do the migration
-	// manually.
-	witchhat_add(new_table, &cur->hv, record.item);
+
+	bix = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
+
+	for (i = 0; i <= rhobj->last_slot; i++) {
+	    new_bucket  = &new_table->store_current->buckets[bix];
+	    expected_hv = atomic_read(&new_bucket->hv);
+	    
+	    if (hatrack_bucket_unreserved(&expected_hv)) {
+		if (CAS(&new_bucket->hv, &expected_hv, cur->hv)) {
+		    break;
+		}
+	    }
+	    if (!hatrack_hashes_eq(&expected_hv, &cur->hv)) {
+		bix = (bix + 1) & new_table->store_current->last_slot;
+		continue;
+	    }
+	    break;
+	}
+
+	new_record.info       = record.epoch;
+	new_record.item       = record.item;
+	expected_record.info  = 0;
+	expected_record.item  = NULL;
+
+	CAS(&new_bucket->record, &expected_record, new_record);
+	
     }
     implementation.htable = new_table;
     implementation.vtable = &fast_vtable;

@@ -810,6 +810,7 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
         for (j = 0; j <= new_store->last_slot; j++) {
             new_bucket     = &new_store->buckets[bix];
 	    expected_hv    = atomic_read(&new_bucket->hv);
+	    
 	    if (hatrack_bucket_unreserved(&expected_hv)) {
 		if (LCAS(&new_bucket->hv,
 			 &expected_hv,
