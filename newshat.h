@@ -199,11 +199,11 @@ typedef struct {
  * be consistent across runs, something fast and practical like XXH3.
  */
 void            newshat_init   (newshat_t *);
-void           *newshat_get    (newshat_t *, hatrack_hash_t *, bool *);
-void           *newshat_put    (newshat_t *, hatrack_hash_t *, void *, bool *);
-void           *newshat_replace(newshat_t *, hatrack_hash_t *, void *, bool *);
-bool            newshat_add    (newshat_t *, hatrack_hash_t *, void *);
-void           *newshat_remove (newshat_t *, hatrack_hash_t *, bool *);
+void           *newshat_get    (newshat_t *, hatrack_hash_t, bool *);
+void           *newshat_put    (newshat_t *, hatrack_hash_t, void *, bool *);
+void           *newshat_replace(newshat_t *, hatrack_hash_t, void *, bool *);
+bool            newshat_add    (newshat_t *, hatrack_hash_t, void *);
+void           *newshat_remove (newshat_t *, hatrack_hash_t, bool *);
 void            newshat_delete (newshat_t *);
 uint64_t        newshat_len    (newshat_t *);
 hatrack_view_t *newshat_view   (newshat_t *, uint64_t *, bool);

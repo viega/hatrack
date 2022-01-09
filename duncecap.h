@@ -114,7 +114,7 @@ typedef struct {
 typedef struct {
     alignas(16)
     _Atomic duncecap_record_t contents;
-    hatrack_hash_t           hv;
+    hatrack_hash_t            hv;
 } duncecap_bucket_t;
 
 /* duncecap_store_t
@@ -265,11 +265,11 @@ duncecap_reader_exit(duncecap_store_t *store)
  */
 // clang-format off
 void            duncecap_init   (duncecap_t *);
-void           *duncecap_get    (duncecap_t *, hatrack_hash_t *, bool *);
-void           *duncecap_put    (duncecap_t *, hatrack_hash_t *, void *, bool *);
-void           *duncecap_replace(duncecap_t *, hatrack_hash_t *, void *, bool *);
-bool            duncecap_add    (duncecap_t *, hatrack_hash_t *, void *);
-void           *duncecap_remove (duncecap_t *, hatrack_hash_t *, bool *);
+void           *duncecap_get    (duncecap_t *, hatrack_hash_t, bool *);
+void           *duncecap_put    (duncecap_t *, hatrack_hash_t, void *, bool *);
+void           *duncecap_replace(duncecap_t *, hatrack_hash_t, void *, bool *);
+bool            duncecap_add    (duncecap_t *, hatrack_hash_t, void *);
+void           *duncecap_remove (duncecap_t *, hatrack_hash_t, bool *);
 void            duncecap_delete (duncecap_t *);
 uint64_t        duncecap_len    (duncecap_t *);
 hatrack_view_t *duncecap_view   (duncecap_t *, uint64_t *, bool);

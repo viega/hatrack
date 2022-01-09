@@ -116,11 +116,11 @@ typedef struct {
  */
 
 void            refhat_init   (refhat_t *);
-void           *refhat_get    (refhat_t *, hatrack_hash_t *, bool *);
-void           *refhat_put    (refhat_t *, hatrack_hash_t *, void *, bool *);
-void           *refhat_replace(refhat_t *, hatrack_hash_t *, void *, bool *);
-bool            refhat_add    (refhat_t *, hatrack_hash_t *, void *);
-void           *refhat_remove (refhat_t *, hatrack_hash_t *, bool *);
+void           *refhat_get    (refhat_t *, hatrack_hash_t, bool *);
+void           *refhat_put    (refhat_t *, hatrack_hash_t, void *, bool *);
+void           *refhat_replace(refhat_t *, hatrack_hash_t, void *, bool *);
+bool            refhat_add    (refhat_t *, hatrack_hash_t, void *);
+void           *refhat_remove (refhat_t *, hatrack_hash_t, bool *);
 void            refhat_delete (refhat_t *);
 uint64_t        refhat_len    (refhat_t *);
 hatrack_view_t *refhat_view   (refhat_t *, uint64_t *, bool);

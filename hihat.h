@@ -154,7 +154,7 @@ struct hihat_store_st {
     _Atomic uint64_t           used_count;
     _Atomic(hihat_store_t *)   store_next;
     alignas(16)
-    hihat_bucket_t            buckets[];
+    hihat_bucket_t             buckets[];
 };
 
 /* hihat_t
@@ -193,11 +193,11 @@ typedef struct {
  * be consistent across runs, something fast and practical like XXH3.
  */
 void            hihat_init    (hihat_t *);
-void           *hihat_get     (hihat_t *, hatrack_hash_t *, bool *);
-void           *hihat_put     (hihat_t *, hatrack_hash_t *, void *, bool *);
-void           *hihat_replace (hihat_t *, hatrack_hash_t *, void *, bool *);
-bool            hihat_add     (hihat_t *, hatrack_hash_t *, void *);
-void           *hihat_remove  (hihat_t *, hatrack_hash_t *, bool *);
+void           *hihat_get     (hihat_t *, hatrack_hash_t, bool *);
+void           *hihat_put     (hihat_t *, hatrack_hash_t, void *, bool *);
+void           *hihat_replace (hihat_t *, hatrack_hash_t, void *, bool *);
+bool            hihat_add     (hihat_t *, hatrack_hash_t, void *);
+void           *hihat_remove  (hihat_t *, hatrack_hash_t, bool *);
 void            hihat_delete  (hihat_t *);
 uint64_t        hihat_len     (hihat_t *);
 hatrack_view_t *hihat_view    (hihat_t *, uint64_t *, bool);
@@ -212,11 +212,11 @@ hatrack_view_t *hihat_view    (hihat_t *, uint64_t *, bool);
  * function, we just copy all the methods.
  */
 void            hihat_a_init   (hihat_t *);
-void           *hihat_a_get    (hihat_t *, hatrack_hash_t *, bool *);
-void           *hihat_a_put    (hihat_t *, hatrack_hash_t *, void *, bool *);
-void           *hihat_a_replace(hihat_t *, hatrack_hash_t *, void *, bool *);
-bool            hihat_a_add    (hihat_t *, hatrack_hash_t *, void *);
-void           *hihat_a_remove (hihat_t *, hatrack_hash_t *, bool *);
+void           *hihat_a_get    (hihat_t *, hatrack_hash_t, bool *);
+void           *hihat_a_put    (hihat_t *, hatrack_hash_t, void *, bool *);
+void           *hihat_a_replace(hihat_t *, hatrack_hash_t, void *, bool *);
+bool            hihat_a_add    (hihat_t *, hatrack_hash_t, void *);
+void           *hihat_a_remove (hihat_t *, hatrack_hash_t, bool *);
 void            hihat_a_delete (hihat_t *);
 uint64_t        hihat_a_len    (hihat_t *);
 hatrack_view_t *hihat_a_view   (hihat_t *, uint64_t *, bool);

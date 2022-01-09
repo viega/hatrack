@@ -31,15 +31,15 @@
 
 static lohat_store_t  *lohat_store_new    (uint64_t);
 static void           *lohat_store_get    (lohat_store_t *, lohat_t *,
-					   hatrack_hash_t *, bool *);
+					   hatrack_hash_t, bool *);
 static void           *lohat_store_put    (lohat_store_t *, lohat_t *,
-					   hatrack_hash_t *, void *, bool *);
+					   hatrack_hash_t, void *, bool *);
 static void           *lohat_store_replace(lohat_store_t *, lohat_t *,
-					   hatrack_hash_t *, void *, bool *);
+					   hatrack_hash_t, void *, bool *);
 static bool            lohat_store_add    (lohat_store_t *, lohat_t *,
-					   hatrack_hash_t *, void *);
+					   hatrack_hash_t, void *);
 static void           *lohat_store_remove (lohat_store_t *, lohat_t *,
-					   hatrack_hash_t *, bool *);
+					   hatrack_hash_t, bool *);
 static lohat_store_t  *lohat_store_migrate(lohat_store_t *, lohat_t *);
 
 // clang-format on
@@ -82,7 +82,7 @@ lohat_init(lohat_t *self)
  * lower-level (per-store) operations.
  */
 void *
-lohat_get(lohat_t *self, hatrack_hash_t *hv, bool *found)
+lohat_get(lohat_t *self, hatrack_hash_t hv, bool *found)
 {
     void          *ret;
     lohat_store_t *store;
@@ -96,7 +96,7 @@ lohat_get(lohat_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-lohat_put(lohat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+lohat_put(lohat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void          *ret;
     lohat_store_t *store;
@@ -110,7 +110,7 @@ lohat_put(lohat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 void *
-lohat_replace(lohat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+lohat_replace(lohat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void          *ret;
     lohat_store_t *store;
@@ -124,7 +124,7 @@ lohat_replace(lohat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-lohat_add(lohat_t *self, hatrack_hash_t *hv, void *item)
+lohat_add(lohat_t *self, hatrack_hash_t hv, void *item)
 {
     bool           ret;
     lohat_store_t *store;
@@ -138,7 +138,7 @@ lohat_add(lohat_t *self, hatrack_hash_t *hv, void *item)
 }
 
 void *
-lohat_remove(lohat_t *self, hatrack_hash_t *hv, bool *found)
+lohat_remove(lohat_t *self, hatrack_hash_t hv, bool *found)
 {
     void          *ret;
     lohat_store_t *store;
@@ -421,7 +421,7 @@ lohat_store_new(uint64_t size)
 static void *
 lohat_store_get(lohat_store_t  *self,
                 lohat_t        *top,
-                hatrack_hash_t *hv1,
+                hatrack_hash_t  hv1,
                 bool           *found)
 {
     uint64_t         bix;
@@ -435,10 +435,10 @@ lohat_store_get(lohat_store_t  *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -474,7 +474,7 @@ found_history_bucket:
 static void *
 lohat_store_put(lohat_store_t  *self,
                 lohat_t        *top,
-                hatrack_hash_t *hv1,
+                hatrack_hash_t  hv1,
                 void           *item,
                 bool           *found)
 {
@@ -491,8 +491,8 @@ lohat_store_put(lohat_store_t  *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
-            if (LCAS(&bucket->hv, &hv2, *hv1, LOHAT_CTR_BUCKET_ACQUIRE)) {
+        if (hatrack_bucket_unreserved(hv2)) {
+            if (LCAS(&bucket->hv, &hv2, hv1, LOHAT_CTR_BUCKET_ACQUIRE)) {
                 used_count = atomic_fetch_add(&self->used_count, 1);
                 if (used_count >= self->threshold) {
                     goto migrate_and_retry;
@@ -500,7 +500,7 @@ lohat_store_put(lohat_store_t  *self,
                 goto found_history_bucket;
             }
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -612,7 +612,7 @@ not_overwriting:
 static void *
 lohat_store_replace(lohat_store_t  *self,
                     lohat_t        *top,
-                    hatrack_hash_t *hv1,
+                    hatrack_hash_t  hv1,
                     void           *item,
                     bool           *found)
 {
@@ -628,10 +628,10 @@ lohat_store_replace(lohat_store_t  *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -702,7 +702,7 @@ migrate_and_retry:
 static bool
 lohat_store_add(lohat_store_t  *self,
                 lohat_t        *top,
-                hatrack_hash_t *hv1,
+                hatrack_hash_t  hv1,
                 void           *item)
 {
     uint64_t         bix;
@@ -719,8 +719,8 @@ lohat_store_add(lohat_store_t  *self,
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
 
-        if (hatrack_bucket_unreserved(&hv2)) {
-            if (LCAS(&bucket->hv, &hv2, *hv1, LOHAT_CTR_BUCKET_ACQUIRE)) {
+        if (hatrack_bucket_unreserved(hv2)) {
+            if (LCAS(&bucket->hv, &hv2, hv1, LOHAT_CTR_BUCKET_ACQUIRE)) {
                 used_count = atomic_fetch_add(&self->used_count, 1);
                 if (used_count >= self->threshold) {
                     goto migrate_and_retry;
@@ -728,7 +728,7 @@ lohat_store_add(lohat_store_t  *self,
                 goto found_history_bucket;
             }
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -793,7 +793,7 @@ found_history_bucket:
 static void *
 lohat_store_remove(lohat_store_t  *self,
                    lohat_t        *top,
-                   hatrack_hash_t *hv1,
+                   hatrack_hash_t  hv1,
                    bool           *found)
 {
     uint64_t         bix;
@@ -808,11 +808,11 @@ lohat_store_remove(lohat_store_t  *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             break;
         }
 
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -1037,14 +1037,14 @@ didnt_win:
         // If it hasn't been moved, there's definitely an item in it,
         // as empty buckets got MOVED set in the first loop.
         hv  = atomic_read(&cur->hv);
-        bix = hatrack_bucket_index(&hv, new_store->last_slot);
+        bix = hatrack_bucket_index(hv, new_store->last_slot);
 
         for (j = 0; j <= new_store->last_slot; j++) {
             bucket         = &new_store->hist_buckets[bix];
             expected_hv.w1 = 0;
             expected_hv.w2 = 0;
             if (!LCAS(&bucket->hv, &expected_hv, hv, LOHAT_CTR_MIGRATE_HV)) {
-                if (!hatrack_hashes_eq(&expected_hv, &hv)) {
+                if (!hatrack_hashes_eq(expected_hv, hv)) {
                     bix = (bix + 1) & new_store->last_slot;
                     continue;
                 }

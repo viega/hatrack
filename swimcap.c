@@ -38,18 +38,18 @@
 // clang-format off
 static swimcap_store_t *swimcap_store_new    (uint64_t);
 static void            *swimcap_store_get    (swimcap_store_t *,
-					      hatrack_hash_t *, bool *);
+					      hatrack_hash_t, bool *);
 static void            *swimcap_store_put    (swimcap_store_t *,
-					      swimcap_t *, hatrack_hash_t *,
+					      swimcap_t *, hatrack_hash_t,
 					      void *, bool *);
 static void            *swimcap_store_replace(swimcap_store_t *,
-					      swimcap_t *, hatrack_hash_t *,
+					      swimcap_t *, hatrack_hash_t,
 					      void *, bool *);
 static bool             swimcap_store_add    (swimcap_store_t *,
-					      swimcap_t *, hatrack_hash_t *,
+					      swimcap_t *, hatrack_hash_t,
 					      void *);
 static void            *swimcap_store_remove (swimcap_store_t *,
-					      swimcap_t *, hatrack_hash_t *,
+					      swimcap_t *, hatrack_hash_t,
 					      bool *);
 static void             swimcap_migrate     (swimcap_t *);
 // clang-format on
@@ -120,7 +120,7 @@ swimcap_init(swimcap_t *self)
  * swimcap.c for more details if needed.
  */
 void *
-swimcap_get(swimcap_t *self, hatrack_hash_t *hv, bool *found)
+swimcap_get(swimcap_t *self, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -157,7 +157,7 @@ swimcap_get(swimcap_t *self, hatrack_hash_t *hv, bool *found)
  * in a single object in the item parameter.
  */
 void *
-swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
+swimcap_put(swimcap_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -193,7 +193,7 @@ swimcap_put(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * in a single object in the item parameter.
  */
 void *
-swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
+swimcap_replace(swimcap_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -226,7 +226,7 @@ swimcap_replace(swimcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * Returns true if the insertion is succesful, and false otherwise.
  */
 bool
-swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
+swimcap_add(swimcap_t *self, hatrack_hash_t hv, void *item)
 {
     bool ret;
 
@@ -265,7 +265,7 @@ swimcap_add(swimcap_t *self, hatrack_hash_t *hv, void *item)
  * behavior is the same as if the item was never in the table.
  */
 void *
-swimcap_remove(swimcap_t *self, hatrack_hash_t *hv, bool *found)
+swimcap_remove(swimcap_t *self, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -436,7 +436,7 @@ swimcap_store_new(uint64_t size)
 }
 
 static void *
-swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
+swimcap_store_get(swimcap_store_t *self, hatrack_hash_t hv, bool *found)
 {
     uint64_t          bix;
     uint64_t          last_slot;
@@ -449,7 +449,7 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             /* Since readers can run concurrently to writers, it is
              * possible the hash has been written, but no item has
              * been written yet. So we need to load atomically, then
@@ -469,7 +469,7 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
                 return NULL;
             }
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -483,7 +483,7 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t *hv, bool *found)
 static void *
 swimcap_store_put(swimcap_store_t *self,
                   swimcap_t       *top,
-                  hatrack_hash_t  *hv,
+                  hatrack_hash_t   hv,
                   void            *item,
                   bool            *found)
 {
@@ -499,7 +499,7 @@ swimcap_store_put(swimcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             contents = atomic_load(&cur->contents);
             /* If no epoch is set, it's either deleted or has never
              * been stored.  Either way, no worries.
@@ -526,7 +526,7 @@ swimcap_store_put(swimcap_store_t *self,
 
             return ret;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
                 return swimcap_store_put(top->store_current,
@@ -537,7 +537,7 @@ swimcap_store_put(swimcap_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv       = *hv;
+            cur->hv       = hv;
             contents.item = item;
             contents.info = top->next_epoch++;
             atomic_store(&cur->contents, contents);
@@ -555,7 +555,7 @@ swimcap_store_put(swimcap_store_t *self,
 static void *
 swimcap_store_replace(swimcap_store_t *self,
                       swimcap_t       *top,
-                      hatrack_hash_t  *hv,
+                      hatrack_hash_t   hv,
                       void            *item,
                       bool            *found)
 {
@@ -571,7 +571,7 @@ swimcap_store_replace(swimcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             contents = atomic_read(&cur->contents);
 
             if (!contents.info) {
@@ -590,7 +590,7 @@ swimcap_store_replace(swimcap_store_t *self,
             }
             return ret;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -604,7 +604,7 @@ swimcap_store_replace(swimcap_store_t *self,
 static bool
 swimcap_store_add(swimcap_store_t *self,
                   swimcap_t       *top,
-                  hatrack_hash_t  *hv,
+                  hatrack_hash_t   hv,
                   void            *item)
 {
     uint64_t          bix;
@@ -618,7 +618,7 @@ swimcap_store_add(swimcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             contents = atomic_read(&cur->contents);
 
             if (contents.info) {
@@ -633,14 +633,14 @@ swimcap_store_add(swimcap_store_t *self,
 
         // In this branch, there's definitely nothing there at the
         // time of the operation, and we should add.
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
                 return swimcap_store_add(top->store_current, top, hv, item);
             }
             self->used_count++;
             top->item_count++;
-            cur->hv       = *hv;
+            cur->hv       = hv;
             contents.item = item;
             contents.info = top->next_epoch++;
             atomic_store(&cur->contents, contents);
@@ -655,7 +655,7 @@ swimcap_store_add(swimcap_store_t *self,
 void *
 swimcap_store_remove(swimcap_store_t *self,
                      swimcap_t       *top,
-                     hatrack_hash_t  *hv,
+                     hatrack_hash_t   hv,
                      bool            *found)
 {
     uint64_t          bix;
@@ -670,7 +670,7 @@ swimcap_store_remove(swimcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             contents = atomic_read(&cur->contents);
 
             if (!contents.info) {
@@ -690,7 +690,7 @@ swimcap_store_remove(swimcap_store_t *self,
             }
             return ret;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -726,10 +726,10 @@ swimcap_migrate(swimcap_t *self)
         if (!contents.info) {
             continue;
         }
-        bix = hatrack_bucket_index(&cur->hv, new_last_slot);
+        bix = hatrack_bucket_index(cur->hv, new_last_slot);
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
-            if (hatrack_bucket_unreserved(&target->hv)) {
+            if (hatrack_bucket_unreserved(target->hv)) {
                 target->hv = cur->hv;
                 atomic_store(&target->contents, contents);
                 break;

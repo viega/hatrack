@@ -92,11 +92,11 @@ typedef struct {
 } ballcap_t;
 
 void            ballcap_init   (ballcap_t *);
-void           *ballcap_get    (ballcap_t *, hatrack_hash_t *, bool *);
-void           *ballcap_put    (ballcap_t *, hatrack_hash_t *, void *, bool *);
-void           *ballcap_replace(ballcap_t *, hatrack_hash_t *, void *, bool *);
-bool            ballcap_add    (ballcap_t *, hatrack_hash_t *, void *);
-void           *ballcap_remove (ballcap_t *, hatrack_hash_t *, bool *);
+void           *ballcap_get    (ballcap_t *, hatrack_hash_t, bool *);
+void           *ballcap_put    (ballcap_t *, hatrack_hash_t, void *, bool *);
+void           *ballcap_replace(ballcap_t *, hatrack_hash_t, void *, bool *);
+bool            ballcap_add    (ballcap_t *, hatrack_hash_t, void *);
+void           *ballcap_remove (ballcap_t *, hatrack_hash_t, bool *);
 void            ballcap_delete (ballcap_t *);
 uint64_t        ballcap_len    (ballcap_t *);
 hatrack_view_t *ballcap_view   (ballcap_t *, uint64_t *, bool);

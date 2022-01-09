@@ -30,15 +30,15 @@
 
 // clang-format off
 static void             tophat_init_base     (tophat_t *, bool);
-static void            *tophat_st_get        (refhat_a_t *, hatrack_hash_t *,
+static void            *tophat_st_get        (refhat_a_t *, hatrack_hash_t,
 					      bool *);
-static void            *tophat_st_put        (refhat_a_t *, hatrack_hash_t *,
+static void            *tophat_st_put        (refhat_a_t *, hatrack_hash_t,
 					      void *, bool *);
-static void            *tophat_st_replace    (refhat_a_t *, hatrack_hash_t *,
+static void            *tophat_st_replace    (refhat_a_t *, hatrack_hash_t,
 					      void *, bool *);
-static bool            tophat_st_add         (refhat_a_t *, hatrack_hash_t *,
+static bool            tophat_st_add         (refhat_a_t *, hatrack_hash_t,
 					      void *);
-static void           *tophat_st_remove      (refhat_a_t *, hatrack_hash_t *,
+static void           *tophat_st_remove      (refhat_a_t *, hatrack_hash_t,
 					      bool *);
 static void            tophat_st_delete      (refhat_a_t *);
 static void            tophat_st_delete_store(refhat_a_t *);
@@ -174,7 +174,7 @@ tophat_init_fast(tophat_t *self)
 }
 
 void *
-tophat_get(tophat_t *self, hatrack_hash_t *hv, bool *found)
+tophat_get(tophat_t *self, hatrack_hash_t hv, bool *found)
 {
     void               *ret;
     tophat_algo_info_t  info;
@@ -188,7 +188,7 @@ tophat_get(tophat_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-tophat_put(tophat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void               *ret;
     tophat_algo_info_t  info;
@@ -202,7 +202,7 @@ tophat_put(tophat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 void *
-tophat_replace(tophat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+tophat_replace(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void               *ret;
     tophat_algo_info_t  info;
@@ -216,7 +216,7 @@ tophat_replace(tophat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-tophat_add(tophat_t *self, hatrack_hash_t *hv, void *item)
+tophat_add(tophat_t *self, hatrack_hash_t hv, void *item)
 {
     bool                ret;
     tophat_algo_info_t  info;
@@ -230,7 +230,7 @@ tophat_add(tophat_t *self, hatrack_hash_t *hv, void *item)
 }
 
 void *
-tophat_remove(tophat_t *self, hatrack_hash_t *hv, bool *found)
+tophat_remove(tophat_t *self, hatrack_hash_t hv, bool *found)
 {
     void               *ret;
     tophat_algo_info_t  info;
@@ -313,7 +313,7 @@ tophat_init_base(tophat_t *self, bool cst)
 }
 
 static void *
-tophat_st_get(refhat_a_t *rhobj, hatrack_hash_t *hv, bool *found)
+tophat_st_get(refhat_a_t *rhobj, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -326,7 +326,7 @@ tophat_st_get(refhat_a_t *rhobj, hatrack_hash_t *hv, bool *found)
 }
 
 static void *
-tophat_st_put(refhat_a_t *rhobj, hatrack_hash_t *hv, void *item, bool *found)
+tophat_st_put(refhat_a_t *rhobj, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
     
@@ -345,7 +345,7 @@ tophat_st_put(refhat_a_t *rhobj, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 static void *
-tophat_st_replace(refhat_a_t *rhobj, hatrack_hash_t *hv, void *item, bool *found)
+tophat_st_replace(refhat_a_t *rhobj, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -363,7 +363,7 @@ tophat_st_replace(refhat_a_t *rhobj, hatrack_hash_t *hv, void *item, bool *found
 }
 
 static bool
-tophat_st_add(refhat_a_t *rhobj, hatrack_hash_t *hv, void *item)
+tophat_st_add(refhat_a_t *rhobj, hatrack_hash_t hv, void *item)
 {
     bool ret;
 
@@ -381,7 +381,7 @@ tophat_st_add(refhat_a_t *rhobj, hatrack_hash_t *hv, void *item)
 }
 
 static void *
-tophat_st_remove(refhat_a_t *rhobj, hatrack_hash_t *hv, bool *found)
+tophat_st_remove(refhat_a_t *rhobj, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -452,14 +452,14 @@ tophat_migrate_to_ballcap(tophat_t *tophat, refhat_a_t *rhobj)
 
     for (n = 0; n <= rhobj->last_slot; n++) {
 	cur = &rhobj->buckets[n];
-	if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+	if (cur->deleted || hatrack_bucket_unreserved(cur->hv)) {
 	    continue;
 	}
-	bix = hatrack_bucket_index(&cur->hv, rhobj->last_slot);	
+	bix = hatrack_bucket_index(cur->hv, rhobj->last_slot);	
 	for (i = 0; i <= rhobj->last_slot; i++) {
 	    target = &new_table->store->buckets[bix];
 	    
-	    if (hatrack_bucket_unreserved(&target->hv)) {	    
+	    if (hatrack_bucket_unreserved(target->hv)) {	    
 		    target->hv       = cur->hv;
 		    record           = mmm_alloc_committed(record_len);
 		    record->item     = cur->item;
@@ -501,14 +501,14 @@ tophat_migrate_to_newshat(tophat_t *tophat, refhat_a_t *rhobj)
 
     for (n = 0; n <= rhobj->last_slot; n++) {
 	cur = &rhobj->buckets[n];
-	if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+	if (cur->deleted || hatrack_bucket_unreserved(cur->hv)) {
 	    continue;
 	}
-	bix = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
+	bix = hatrack_bucket_index(cur->hv, rhobj->last_slot);
 	for (i = 0; i <= rhobj->last_slot; i++) {
 	    target = &new_table->store->buckets[bix];
 	    
-	    if (hatrack_bucket_unreserved(&target->hv)) {
+	    if (hatrack_bucket_unreserved(target->hv)) {
 		target->hv       = cur->hv;
 		target->item     = cur->item;
 		target->epoch    = cur->epoch;
@@ -540,14 +540,14 @@ tophat_migrate_to_newshat(tophat_t *tophat, refhat_a_t *rhobj)
 static void
 tophat_migrate_to_woolhat(tophat_t *tophat, refhat_a_t *rhobj)
 {
-    woolhat_t         *new_table;
-    uint64_t           n, i, bix, record_len;
-    hatrack_hash_t     hv;
-    refhat_a_bucket_t   *cur;
-    refhat_a_record_t  old_record;
-    woolhat_history_t *target;
-    woolhat_record_t  *cur_record;
-    tophat_algo_info_t implementation;
+    woolhat_t          *new_table;
+    uint64_t            n, i, bix, record_len;
+    hatrack_hash_t      hv;
+    refhat_a_bucket_t  *cur;
+    refhat_a_record_t   old_record;
+    woolhat_history_t  *target;
+    woolhat_record_t   *cur_record;
+    tophat_algo_info_t  implementation;
 
     new_table                = (woolhat_t *)malloc(sizeof(woolhat_t));
     new_table->store_current = woolhat_store_new(rhobj->last_slot + 1);
@@ -557,7 +557,7 @@ tophat_migrate_to_woolhat(tophat_t *tophat, refhat_a_t *rhobj)
     for (n = 0; n <= rhobj->last_slot; n++) {
 	cur = &rhobj->buckets[n];
 	
-	if (hatrack_bucket_unreserved(&cur->hv)) {
+	if (hatrack_bucket_unreserved(cur->hv)) {
 	    continue;
 	}
 
@@ -567,12 +567,12 @@ tophat_migrate_to_woolhat(tophat_t *tophat, refhat_a_t *rhobj)
 	    continue;
 	}
 
-	bix = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
+	bix = hatrack_bucket_index(cur->hv, rhobj->last_slot);
 	for (i = 0; i <= rhobj->last_slot; i++) {
 	    target = &new_table->store_current->hist_buckets[bix];
 	    hv     = atomic_load(&target->hv);
 	    
-	    if (hatrack_bucket_unreserved(&hv)) {
+	    if (hatrack_bucket_unreserved(hv)) {
 		cur_record         = (woolhat_record_t *)mmm_alloc(record_len);
 		cur_record->item   = old_record.item;
 		cur_record->next   = hatrack_pflag_set(NULL, WOOLHAT_F_USED);
@@ -615,7 +615,7 @@ tophat_migrate_to_witchhat(tophat_t *tophat, refhat_a_t *rhobj)
     for (n = 0; n <= rhobj->last_slot; n++) {
 	cur = &rhobj->buckets[n];
 	
-	if (hatrack_bucket_unreserved(&cur->hv)) {
+	if (hatrack_bucket_unreserved(cur->hv)) {
 	    continue;
 	}
 
@@ -625,18 +625,18 @@ tophat_migrate_to_witchhat(tophat_t *tophat, refhat_a_t *rhobj)
 	    continue;
 	}
 
-	bix = hatrack_bucket_index(&cur->hv, rhobj->last_slot);
+	bix = hatrack_bucket_index(cur->hv, rhobj->last_slot);
 
 	for (i = 0; i <= rhobj->last_slot; i++) {
 	    new_bucket  = &new_table->store_current->buckets[bix];
 	    expected_hv = atomic_read(&new_bucket->hv);
 	    
-	    if (hatrack_bucket_unreserved(&expected_hv)) {
+	    if (hatrack_bucket_unreserved(expected_hv)) {
 		if (CAS(&new_bucket->hv, &expected_hv, cur->hv)) {
 		    break;
 		}
 	    }
-	    if (!hatrack_hashes_eq(&expected_hv, &cur->hv)) {
+	    if (!hatrack_hashes_eq(expected_hv, cur->hv)) {
 		bix = (bix + 1) & new_table->store_current->last_slot;
 		continue;
 	    }

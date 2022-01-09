@@ -53,15 +53,15 @@
 
        ballcap_store_t *ballcap_store_new    (uint64_t);
 static void            *ballcap_store_get    (ballcap_store_t *, ballcap_t *,
-					      hatrack_hash_t *, bool *);
+					      hatrack_hash_t, bool *);
 static void            *ballcap_store_put    (ballcap_store_t *, ballcap_t *,
-					      hatrack_hash_t *, void *, bool *);
+					      hatrack_hash_t, void *, bool *);
 static void            *ballcap_store_replace(ballcap_store_t *, ballcap_t *,
-					      hatrack_hash_t *, void *, bool *);
+					      hatrack_hash_t, void *, bool *);
 static bool             ballcap_store_add    (ballcap_store_t *, ballcap_t *,
-					      hatrack_hash_t *, void *);
+					      hatrack_hash_t, void *);
 static void            *ballcap_store_remove (ballcap_store_t *, ballcap_t *,
-					      hatrack_hash_t *, bool *);
+					      hatrack_hash_t, bool *);
 static ballcap_store_t *ballcap_store_migrate(ballcap_store_t *, ballcap_t *);
 
 // clang-format on
@@ -82,7 +82,7 @@ ballcap_init(ballcap_t *self)
 }
 
 void *
-ballcap_get(ballcap_t *self, hatrack_hash_t *hv, bool *found)
+ballcap_get(ballcap_t *self, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -94,7 +94,7 @@ ballcap_get(ballcap_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-ballcap_put(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
+ballcap_put(ballcap_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -106,7 +106,7 @@ ballcap_put(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 void *
-ballcap_replace(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
+ballcap_replace(ballcap_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -118,7 +118,7 @@ ballcap_replace(ballcap_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-ballcap_add(ballcap_t *self, hatrack_hash_t *hv, void *item)
+ballcap_add(ballcap_t *self, hatrack_hash_t hv, void *item)
 {
     bool ret;
 
@@ -130,7 +130,7 @@ ballcap_add(ballcap_t *self, hatrack_hash_t *hv, void *item)
 }
 
 void *
-ballcap_remove(ballcap_t *self, hatrack_hash_t *hv, bool *found)
+ballcap_remove(ballcap_t *self, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -214,7 +214,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
     count     = 0;
 
     while (cur < end) {
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             cur++;
             continue;
         }
@@ -290,7 +290,7 @@ ballcap_store_new(uint64_t size)
 static void *
 ballcap_store_get(ballcap_store_t *self,
                   ballcap_t       *top,
-                  hatrack_hash_t  *hv,
+                  hatrack_hash_t   hv,
                   bool            *found)
 {
     uint64_t          bix;
@@ -305,7 +305,7 @@ ballcap_store_get(ballcap_store_t *self,
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
 
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             record = cur->record;
 
             if (!record || record->deleted) {
@@ -319,7 +319,7 @@ ballcap_store_get(ballcap_store_t *self,
             }
             return record->item;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -333,7 +333,7 @@ ballcap_store_get(ballcap_store_t *self,
 static void *
 ballcap_store_put(ballcap_store_t *self,
                   ballcap_t       *top,
-                  hatrack_hash_t  *hv,
+                  hatrack_hash_t   hv,
                   void            *item,
                   bool            *found)
 {
@@ -355,7 +355,7 @@ ballcap_store_put(ballcap_store_t *self,
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
 check_bucket_again:
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
@@ -399,7 +399,7 @@ check_bucket_again:
             return ret;
         }
 
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
@@ -412,7 +412,7 @@ check_bucket_again:
                                          item,
                                          found);
             }
-            if (!hatrack_bucket_unreserved(&cur->hv)) {
+            if (!hatrack_bucket_unreserved(cur->hv)) {
                 pthread_mutex_unlock(&cur->mutex);
                 goto check_bucket_again;
             }
@@ -425,7 +425,7 @@ check_bucket_again:
             }
             self->used_count++;
             top->item_count++;
-            cur->hv = *hv;
+            cur->hv = hv;
             ret     = NULL;
             if (found) {
                 *found = false;
@@ -444,7 +444,7 @@ check_bucket_again:
 static void *
 ballcap_store_replace(ballcap_store_t *self,
                       ballcap_t       *top,
-                      hatrack_hash_t  *hv,
+                      hatrack_hash_t   hv,
                       void            *item,
                       bool            *found)
 {
@@ -461,13 +461,13 @@ ballcap_store_replace(ballcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
             return NULL;
         }
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
@@ -519,7 +519,7 @@ ballcap_store_replace(ballcap_store_t *self,
 bool
 ballcap_store_add(ballcap_store_t *self,
                   ballcap_t       *top,
-                  hatrack_hash_t  *hv,
+                  hatrack_hash_t   hv,
                   void            *item)
 {
     uint64_t          bix;
@@ -534,7 +534,7 @@ ballcap_store_add(ballcap_store_t *self,
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
 check_bucket_again:
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
@@ -548,7 +548,7 @@ check_bucket_again:
             }
             goto fill_record;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
@@ -556,7 +556,7 @@ check_bucket_again:
                 pthread_mutex_unlock(&cur->mutex);
                 return ballcap_store_add(top->store_current, top, hv, item);
             }
-            if (!hatrack_bucket_unreserved(&cur->hv)) {
+            if (!hatrack_bucket_unreserved(cur->hv)) {
                 pthread_mutex_unlock(&cur->mutex);
                 goto check_bucket_again;
             }
@@ -567,7 +567,7 @@ check_bucket_again:
             }
             self->used_count++;
             top->item_count++;
-            cur->hv = *hv;
+            cur->hv = hv;
 
 fill_record:
             record          = mmm_alloc(sizeof(ballcap_record_t));
@@ -591,7 +591,7 @@ fill_record:
 void *
 ballcap_store_remove(ballcap_store_t *self,
                      ballcap_t       *top,
-                     hatrack_hash_t  *hv,
+                     hatrack_hash_t   hv,
                      bool            *found)
 {
     uint64_t          bix;
@@ -606,13 +606,13 @@ ballcap_store_remove(ballcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
             return NULL;
         }
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
@@ -693,17 +693,17 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
         cur           = &store->buckets[n];
         cur->migrated = true;
 
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             continue;
         }
         if (cur->record->deleted) {
             mmm_retire(cur->record);
             continue;
         }
-        bix = hatrack_bucket_index(&cur->hv, new_last_slot);
+        bix = hatrack_bucket_index(cur->hv, new_last_slot);
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
-            if (hatrack_bucket_unreserved(&target->hv)) {
+            if (hatrack_bucket_unreserved(target->hv)) {
                 target->hv     = cur->hv;
                 target->record = cur->record;
                 break;

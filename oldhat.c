@@ -70,15 +70,15 @@
 static oldhat_store_t  *oldhat_store_new    (uint64_t);
 static void             oldhat_store_delete (oldhat_store_t *);
 static void            *oldhat_store_get    (oldhat_store_t *, oldhat_t *,
-					      hatrack_hash_t *, bool *);
+					      hatrack_hash_t, bool *);
 static void            *oldhat_store_put    (oldhat_store_t *, oldhat_t *,
-					      hatrack_hash_t *, void *, bool *);
+					      hatrack_hash_t, void *, bool *);
 static void            *oldhat_store_replace(oldhat_store_t *, oldhat_t *,
-					      hatrack_hash_t *, void *, bool *);
+					      hatrack_hash_t, void *, bool *);
 static bool             oldhat_store_add    (oldhat_store_t *, oldhat_t *,
-					      hatrack_hash_t *, void *);
+					      hatrack_hash_t, void *);
 static void            *oldhat_store_remove (oldhat_store_t *, oldhat_t *,
-					      hatrack_hash_t *, bool *);
+					      hatrack_hash_t, bool *);
 static oldhat_store_t  *oldhat_store_migrate(oldhat_store_t *, oldhat_t *);
 // clang-format on
 
@@ -167,7 +167,7 @@ oldhat_init(oldhat_t *self)
  * key, being 128 bits, is sufficient to handle identity.
  */
 void *
-oldhat_get(oldhat_t *self, hatrack_hash_t *hv, bool *found)
+oldhat_get(oldhat_t *self, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -189,7 +189,7 @@ oldhat_get(oldhat_t *self, hatrack_hash_t *hv, bool *found)
  * that is also a valid value for the table, thus the extra parameter.
  */
 void *
-oldhat_put(oldhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+oldhat_put(oldhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -210,7 +210,7 @@ oldhat_put(oldhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * valid value for the table, thus the extra parameter.
  */
 void *
-oldhat_replace(oldhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+oldhat_replace(oldhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -228,7 +228,7 @@ oldhat_replace(oldhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * item added or not.
  */
 bool
-oldhat_add(oldhat_t *self, hatrack_hash_t *hv, void *item)
+oldhat_add(oldhat_t *self, hatrack_hash_t hv, void *item)
 {
     bool ret;
 
@@ -248,7 +248,7 @@ oldhat_add(oldhat_t *self, hatrack_hash_t *hv, void *item)
  * with the _put and _replace operations.
  */
 void *
-oldhat_remove(oldhat_t *self, hatrack_hash_t *hv, bool *found)
+oldhat_remove(oldhat_t *self, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -464,21 +464,21 @@ oldhat_store_delete(oldhat_store_t *self)
 static void *
 oldhat_store_get(oldhat_store_t *self,
                  oldhat_t       *top,
-                 hatrack_hash_t *hvp,
+                 hatrack_hash_t  hv,
                  bool           *found)
 {
     uint64_t         bix;
     uint64_t         i;
     oldhat_record_t *record;
 
-    bix = hatrack_bucket_index(hvp, self->last_slot);
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
         if (!record) {
             break;
         }
-        if (!hatrack_hashes_eq(hvp, &record->hv)) {
+        if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -538,7 +538,7 @@ oldhat_store_get(oldhat_store_t *self,
 static void *
 oldhat_store_put(oldhat_store_t *self,
                  oldhat_t       *top,
-                 hatrack_hash_t *hvp,
+                 hatrack_hash_t  hv,
                  void           *item,
                  bool           *found)
 {
@@ -554,7 +554,7 @@ oldhat_store_put(oldhat_store_t *self,
      * mmm_retire_unused().
      */
     candidate       = mmm_alloc_committed(sizeof(oldhat_record_t));
-    candidate->hv   = *hvp;
+    candidate->hv   = hv;
     candidate->item = item;
     candidate->used = true;
 
@@ -563,7 +563,7 @@ oldhat_store_put(oldhat_store_t *self,
      * table size), for cases when the bucket is occupied by an entry
      * with a different hash value.
      */
-    bix = hatrack_bucket_index(hvp, self->last_slot);
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
@@ -606,7 +606,7 @@ oldhat_store_put(oldhat_store_t *self,
          * bucket in sequence. Otherwise, jump a few lines down to
          * continue, now that we've found our bucket.
          */
-        if (!hatrack_hashes_eq(hvp, &record->hv)) {
+        if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -631,7 +631,7 @@ migrate_and_retry:
      * it wants to do it for us.
      */
     self = oldhat_store_migrate(self, top);
-    return oldhat_store_put(self, top, hvp, item, found);
+    return oldhat_store_put(self, top, hv, item, found);
 
 found_bucket:
     /* If there's no record here, it would be equally valid to be a
@@ -723,7 +723,7 @@ found_bucket:
 static void *
 oldhat_store_replace(oldhat_store_t *self,
                      oldhat_t       *top,
-                     hatrack_hash_t *hvp,
+                     hatrack_hash_t  hv,
                      void           *item,
                      bool           *found)
 {
@@ -733,18 +733,18 @@ oldhat_store_replace(oldhat_store_t *self,
     uint64_t         i;
 
     candidate       = mmm_alloc_committed(sizeof(oldhat_record_t));
-    candidate->hv   = *hvp;
+    candidate->hv   = hv;
     candidate->item = item;
     candidate->used = true;
 
-    bix = hatrack_bucket_index(hvp, self->last_slot);
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
         if (!record) {
             goto not_found;
         }
-        if (!hatrack_hashes_eq(hvp, &record->hv)) {
+        if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -761,7 +761,7 @@ not_found:
 migrate_and_retry:
     mmm_retire_unused(candidate);
     self = oldhat_store_migrate(self, top);
-    return oldhat_store_replace(self, top, hvp, item, found);
+    return oldhat_store_replace(self, top, hv, item, found);
 
 found_bucket:
     if (record->moving) {
@@ -802,7 +802,7 @@ found_bucket:
 static bool
 oldhat_store_add(oldhat_store_t *self,
                  oldhat_t       *top,
-                 hatrack_hash_t *hvp,
+                 hatrack_hash_t  hv,
                  void           *item)
 {
     oldhat_record_t *candidate;
@@ -811,11 +811,11 @@ oldhat_store_add(oldhat_store_t *self,
     uint64_t         i;
 
     candidate       = mmm_alloc_committed(sizeof(oldhat_record_t));
-    candidate->hv   = *hvp;
+    candidate->hv   = hv;
     candidate->item = item;
     candidate->used = true;
 
-    bix = hatrack_bucket_index(hvp, self->last_slot);
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
@@ -827,7 +827,7 @@ oldhat_store_add(oldhat_store_t *self,
                 return true;
             }
         }
-        if (!hatrack_hashes_eq(hvp, &record->hv)) {
+        if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -837,7 +837,7 @@ oldhat_store_add(oldhat_store_t *self,
 migrate_and_retry:
     mmm_retire_unused(candidate);
     self = oldhat_store_migrate(self, top);
-    return oldhat_store_add(self, top, hvp, item);
+    return oldhat_store_add(self, top, hv, item);
 
 found_bucket:
     if (record->moving) {
@@ -872,7 +872,7 @@ found_bucket:
 static void *
 oldhat_store_remove(oldhat_store_t *self,
                     oldhat_t       *top,
-                    hatrack_hash_t *hvp,
+                    hatrack_hash_t  hv,
                     bool           *found)
 {
     oldhat_record_t *candidate;
@@ -881,17 +881,17 @@ oldhat_store_remove(oldhat_store_t *self,
     uint64_t         i;
 
     candidate       = mmm_alloc_committed(sizeof(oldhat_record_t));
-    candidate->hv   = *hvp;
+    candidate->hv   = hv;
     candidate->used = false;
 
-    bix = hatrack_bucket_index(hvp, self->last_slot);
+    bix = hatrack_bucket_index(hv, self->last_slot);
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
         if (!record) {
             goto not_found;
         }
-        if (!hatrack_hashes_eq(hvp, &record->hv)) {
+        if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -908,7 +908,7 @@ not_found:
 migrate_and_retry:
     mmm_retire_unused(candidate);
     self = oldhat_store_migrate(self, top);
-    return oldhat_store_remove(self, top, hvp, found);
+    return oldhat_store_remove(self, top, hv, found);
 
 found_bucket:
     if (record->moving) {
@@ -1203,7 +1203,7 @@ add_to_length:
         // Note that, if we're here, then there's definitely a record
         // in place; for items w/o a record in place, 'moved' gets
         // set.
-        bix = hatrack_bucket_index(&record->hv, new_store->last_slot);
+        bix = hatrack_bucket_index(record->hv, new_store->last_slot);
         candidate_record->hv     = record->hv;
         candidate_record->item   = record->item;
         candidate_record->used   = true;
@@ -1220,7 +1220,7 @@ add_to_length:
                     goto next_migration;
                 }
             }
-            if (!hatrack_hashes_eq(&record->hv, &candidate_record->hv)) {
+            if (!hatrack_hashes_eq(record->hv, candidate_record->hv)) {
                 bix = (bix + 1) & new_store->last_slot;
                 continue;
             }

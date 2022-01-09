@@ -144,9 +144,9 @@ hatrack_new_size(uint64_t last_bucket, uint64_t size)
 }
 
 static inline bool
-hatrack_hashes_eq(hatrack_hash_t *hv1, hatrack_hash_t *hv2)
+hatrack_hashes_eq(hatrack_hash_t hv1, hatrack_hash_t hv2)
 {
-    return (hv1->w1 == hv2->w1) && (hv1->w2 == hv2->w2);
+    return (hv1.w1 == hv2.w1) && (hv1.w2 == hv2.w2);
 }
 
 /* Since we use 128-bit hash values, we can safely use the null hash
@@ -154,9 +154,9 @@ hatrack_hashes_eq(hatrack_hash_t *hv1, hatrack_hash_t *hv2)
  * tables).
  */
 static inline bool
-hatrack_bucket_unreserved(hatrack_hash_t *hv)
+hatrack_bucket_unreserved(hatrack_hash_t hv)
 {
-    return !hv->w1 && !hv->w2;
+    return !hv.w1 && !hv.w2;
 }
 
 /*
@@ -176,9 +176,9 @@ hatrack_bucket_unreserved(hatrack_hash_t *hv)
  * chunk).
  */
 static inline uint64_t
-hatrack_bucket_index(hatrack_hash_t *hv, uint64_t last_slot)
+hatrack_bucket_index(hatrack_hash_t hv, uint64_t last_slot)
 {
-    return hv->w1 & last_slot;
+    return hv.w1 & last_slot;
 }
 
 /* These are just basic bitwise operations, but performing them on

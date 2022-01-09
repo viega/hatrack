@@ -34,18 +34,18 @@
 // export this explicitly; it's effectively a "friend" function not public.
        woolhat_store_t *woolhat_store_new    (uint64_t);
 static void            *woolhat_store_get    (woolhat_store_t *, woolhat_t *,
-					      hatrack_hash_t *, bool *);
+					      hatrack_hash_t, bool *);
 static void            *woolhat_store_put    (woolhat_store_t *, woolhat_t *,
-					      hatrack_hash_t *, void *, bool *,
+					      hatrack_hash_t, void *, bool *,
 					      uint64_t);
 static void            *woolhat_store_replace(woolhat_store_t *, woolhat_t *,
-					      hatrack_hash_t *, void *, bool *,
+					      hatrack_hash_t, void *, bool *,
 					      uint64_t);
 static bool             woolhat_store_add    (woolhat_store_t *, woolhat_t *,
-					      hatrack_hash_t *, void *,
+					      hatrack_hash_t, void *,
 					      uint64_t);
 static void            *woolhat_store_remove (woolhat_store_t *, woolhat_t *,
-					      hatrack_hash_t *, bool *,
+					      hatrack_hash_t, bool *,
 					      uint64_t);
 static woolhat_store_t *woolhat_store_migrate(woolhat_store_t *, woolhat_t *);
 static inline bool      woolhat_help_required(uint64_t);
@@ -66,7 +66,7 @@ woolhat_init(woolhat_t *self)
 }
 
 void *
-woolhat_get(woolhat_t *self, hatrack_hash_t *hv, bool *found)
+woolhat_get(woolhat_t *self, hatrack_hash_t hv, bool *found)
 {
     void            *ret;
     woolhat_store_t *store;
@@ -80,7 +80,7 @@ woolhat_get(woolhat_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-woolhat_put(woolhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+woolhat_put(woolhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void            *ret;
     woolhat_store_t *store;
@@ -94,7 +94,7 @@ woolhat_put(woolhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 void *
-woolhat_replace(woolhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+woolhat_replace(woolhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void            *ret;
     woolhat_store_t *store;
@@ -108,7 +108,7 @@ woolhat_replace(woolhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-woolhat_add(woolhat_t *self, hatrack_hash_t *hv, void *item)
+woolhat_add(woolhat_t *self, hatrack_hash_t hv, void *item)
 {
     bool             ret;
     woolhat_store_t *store;
@@ -122,7 +122,7 @@ woolhat_add(woolhat_t *self, hatrack_hash_t *hv, void *item)
 }
 
 void *
-woolhat_remove(woolhat_t *self, hatrack_hash_t *hv, bool *found)
+woolhat_remove(woolhat_t *self, hatrack_hash_t hv, bool *found)
 {
     void            *ret;
     woolhat_store_t *store;
@@ -261,7 +261,7 @@ woolhat_store_new(uint64_t size)
 static void *
 woolhat_store_get(woolhat_store_t *self,
                   woolhat_t       *top,
-                  hatrack_hash_t  *hv1,
+                  hatrack_hash_t   hv1,
                   bool            *found)
 {
     uint64_t           bix;
@@ -275,10 +275,10 @@ woolhat_store_get(woolhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -306,7 +306,7 @@ found_history_bucket:
 static void *
 woolhat_store_put(woolhat_store_t *self,
                   woolhat_t       *top,
-                  hatrack_hash_t  *hv1,
+                  hatrack_hash_t   hv1,
                   void            *item,
                   bool            *found,
                   uint64_t         count)
@@ -325,8 +325,8 @@ woolhat_store_put(woolhat_store_t *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
-            if (LCAS(&bucket->hv, &hv2, *hv1, WOOLHAT_CTR_BUCKET_ACQUIRE)) {
+        if (hatrack_bucket_unreserved(hv2)) {
+            if (LCAS(&bucket->hv, &hv2, hv1, WOOLHAT_CTR_BUCKET_ACQUIRE)) {
                 used_count = atomic_fetch_add(&self->used_count, 1);
                 if (used_count >= self->threshold) {
                     goto migrate_and_retry;
@@ -334,7 +334,7 @@ woolhat_store_put(woolhat_store_t *self,
                 goto found_history_bucket;
             }
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -449,7 +449,7 @@ not_overwriting:
 static void *
 woolhat_store_replace(woolhat_store_t *self,
                       woolhat_t       *top,
-                      hatrack_hash_t  *hv1,
+                      hatrack_hash_t   hv1,
                       void            *item,
                       bool            *found,
                       uint64_t         count)
@@ -467,10 +467,10 @@ woolhat_store_replace(woolhat_store_t *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -564,7 +564,7 @@ migrate_and_retry:
 static bool
 woolhat_store_add(woolhat_store_t *self,
                   woolhat_t       *top,
-                  hatrack_hash_t  *hv1,
+                  hatrack_hash_t   hv1,
                   void            *item,
                   uint64_t         count)
 {
@@ -582,8 +582,8 @@ woolhat_store_add(woolhat_store_t *self,
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
 
-        if (hatrack_bucket_unreserved(&hv2)) {
-            if (LCAS(&bucket->hv, &hv2, *hv1, WOOLHAT_CTR_BUCKET_ACQUIRE)) {
+        if (hatrack_bucket_unreserved(hv2)) {
+            if (LCAS(&bucket->hv, &hv2, hv1, WOOLHAT_CTR_BUCKET_ACQUIRE)) {
                 used_count = atomic_fetch_add(&self->used_count, 1);
                 if (used_count >= self->threshold) {
                     goto migrate_and_retry;
@@ -591,7 +591,7 @@ woolhat_store_add(woolhat_store_t *self,
                 goto found_history_bucket;
             }
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -657,7 +657,7 @@ found_history_bucket:
 static void *
 woolhat_store_remove(woolhat_store_t *self,
                      woolhat_t       *top,
-                     hatrack_hash_t  *hv1,
+                     hatrack_hash_t   hv1,
                      bool            *found,
                      uint64_t         count)
 {
@@ -673,10 +673,10 @@ woolhat_store_remove(woolhat_store_t *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             break;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -890,14 +890,14 @@ didnt_win:
         }
 
         hv  = atomic_read(&cur->hv);
-        bix = hatrack_bucket_index(&hv, new_store->last_slot);
+        bix = hatrack_bucket_index(hv, new_store->last_slot);
 
         for (j = 0; j <= new_store->last_slot; j++) {
             bucket         = &new_store->hist_buckets[bix];
             expected_hv.w1 = 0;
             expected_hv.w2 = 0;
             if (!LCAS(&bucket->hv, &expected_hv, hv, WOOLHAT_CTR_MIGRATE_HV)) {
-                if (!hatrack_hashes_eq(&expected_hv, &hv)) {
+                if (!hatrack_hashes_eq(expected_hv, hv)) {
                     bix = (bix + 1) & new_store->last_slot;
                     continue;
                 }

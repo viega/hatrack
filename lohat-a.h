@@ -228,11 +228,11 @@ typedef struct {
 } lohat_a_t;
 
 void            lohat_a_init   (lohat_a_t *);
-void           *lohat_a_get    (lohat_a_t *, hatrack_hash_t *, bool *);
-void           *lohat_a_put    (lohat_a_t *, hatrack_hash_t *, void *, bool *);
-void           *lohat_a_replace(lohat_a_t *, hatrack_hash_t *, void *, bool *);
-bool            lohat_a_add    (lohat_a_t *, hatrack_hash_t *, void *);
-void           *lohat_a_remove (lohat_a_t *, hatrack_hash_t *, bool *);
+void           *lohat_a_get    (lohat_a_t *, hatrack_hash_t, bool *);
+void           *lohat_a_put    (lohat_a_t *, hatrack_hash_t, void *, bool *);
+void           *lohat_a_replace(lohat_a_t *, hatrack_hash_t, void *, bool *);
+bool            lohat_a_add    (lohat_a_t *, hatrack_hash_t, void *);
+void           *lohat_a_remove (lohat_a_t *, hatrack_hash_t, bool *);
 void            lohat_a_delete (lohat_a_t *);
 uint64_t        lohat_a_len    (lohat_a_t *);
 hatrack_view_t *lohat_a_view   (lohat_a_t *, uint64_t *, bool);

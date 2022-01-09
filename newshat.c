@@ -33,17 +33,17 @@
        newshat_store_t *newshat_store_new    (uint64_t);
 static void             newshat_store_delete (newshat_store_t *);
 static void            *newshat_store_get    (newshat_store_t *, newshat_t *,
-					      hatrack_hash_t *, bool *);
+					      hatrack_hash_t, bool *);
 static void            *newshat_store_put    (newshat_store_t *, newshat_t *,
-					      hatrack_hash_t *, void *,
+					      hatrack_hash_t, void *,
 					      bool *);
 static void            *newshat_store_replace(newshat_store_t *, newshat_t *,
-					      hatrack_hash_t *, void *,
+					      hatrack_hash_t, void *,
 					      bool *);
 static bool             newshat_store_add    (newshat_store_t *, newshat_t *,
-					      hatrack_hash_t *, void *);
+					      hatrack_hash_t, void *);
 static void            *newshat_store_remove (newshat_store_t *, newshat_t *,
-					      hatrack_hash_t *, bool *);
+					      hatrack_hash_t, bool *);
 static newshat_store_t *newshat_store_migrate(newshat_store_t *, newshat_t *);
 
 // clang-format on
@@ -117,7 +117,7 @@ newshat_init(newshat_t *self)
  * parameters, if needed.
  */
 void *
-newshat_get(newshat_t *self, hatrack_hash_t *hv, bool *found)
+newshat_get(newshat_t *self, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -129,7 +129,7 @@ newshat_get(newshat_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-newshat_put(newshat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+newshat_put(newshat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -141,7 +141,7 @@ newshat_put(newshat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 void *
-newshat_replace(newshat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+newshat_replace(newshat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void *ret;
 
@@ -153,7 +153,7 @@ newshat_replace(newshat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-newshat_add(newshat_t *self, hatrack_hash_t *hv, void *item)
+newshat_add(newshat_t *self, hatrack_hash_t hv, void *item)
 {
     bool ret;
 
@@ -165,7 +165,7 @@ newshat_add(newshat_t *self, hatrack_hash_t *hv, void *item)
 }
 
 void *
-newshat_remove(newshat_t *self, hatrack_hash_t *hv, bool *found)
+newshat_remove(newshat_t *self, hatrack_hash_t hv, bool *found)
 {
     void *ret;
 
@@ -359,7 +359,7 @@ newshat_store_delete(newshat_store_t *self)
 static void *
 newshat_store_get(newshat_store_t *self,
                   newshat_t       *top,
-                  hatrack_hash_t  *hv,
+                  hatrack_hash_t   hv,
                   bool            *found)
 {
     uint64_t          bix;
@@ -374,7 +374,7 @@ newshat_store_get(newshat_store_t *self,
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
 
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             contents = atomic_read(&cur->contents);
 
             if (!contents.info) {
@@ -388,7 +388,7 @@ newshat_store_get(newshat_store_t *self,
             }
             return contents.item;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -402,7 +402,7 @@ newshat_store_get(newshat_store_t *self,
 static void *
 newshat_store_put(newshat_store_t *self,
                   newshat_t       *top,
-                  hatrack_hash_t  *hv,
+                  hatrack_hash_t   hv,
                   void            *item,
                   bool            *found)
 {
@@ -443,7 +443,7 @@ newshat_store_put(newshat_store_t *self,
             }
             return newshat_store_put(top->store_current, top, hv, item, found);
         }
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             contents = atomic_read(&cur->contents);
 
             if (!contents.info) {
@@ -472,7 +472,7 @@ newshat_store_put(newshat_store_t *self,
             }
             return ret;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count == self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
@@ -482,7 +482,7 @@ newshat_store_put(newshat_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv       = *hv;
+            cur->hv       = hv;
             contents.item = item;
             contents.info = top->next_epoch++;
             atomic_store(&cur->contents, contents);
@@ -505,7 +505,7 @@ newshat_store_put(newshat_store_t *self,
 static void *
 newshat_store_replace(newshat_store_t *self,
                       newshat_t       *top,
-                      hatrack_hash_t  *hv,
+                      hatrack_hash_t   hv,
                       void            *item,
                       bool            *found)
 {
@@ -525,7 +525,7 @@ newshat_store_replace(newshat_store_t *self,
         // Unlike put and add operations, we only need to lock the
         // bucket once we've made sure we've found the right one.
         // See the note in newshat_store_put() for more detail.
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
@@ -562,7 +562,7 @@ newshat_store_replace(newshat_store_t *self,
             }
             return ret;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -576,7 +576,7 @@ newshat_store_replace(newshat_store_t *self,
 bool
 newshat_store_add(newshat_store_t *self,
                   newshat_t       *top,
-                  hatrack_hash_t  *hv,
+                  hatrack_hash_t   hv,
                   void            *item)
 {
     uint64_t          bix;
@@ -602,7 +602,7 @@ newshat_store_add(newshat_store_t *self,
             }
             return newshat_store_add(top->store_current, top, hv, item);
         }
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             contents = atomic_read(&cur->contents);
             if (!contents.info) {
                 contents.item = item;
@@ -619,7 +619,7 @@ newshat_store_add(newshat_store_t *self,
             }
             return false;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count == self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
@@ -629,7 +629,7 @@ newshat_store_add(newshat_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv       = *hv;
+            cur->hv       = hv;
             contents.item = item;
             contents.info = top->next_epoch++;
             atomic_store(&cur->contents, contents);
@@ -649,7 +649,7 @@ newshat_store_add(newshat_store_t *self,
 void *
 newshat_store_remove(newshat_store_t *self,
                      newshat_t       *top,
-                     hatrack_hash_t  *hv,
+                     hatrack_hash_t   hv,
                      bool            *found)
 {
     uint64_t          bix;
@@ -664,13 +664,13 @@ newshat_store_remove(newshat_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
             return NULL;
         }
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
@@ -777,10 +777,10 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
         if (!contents.info) {
             continue;
         }
-        bix = hatrack_bucket_index(&cur->hv, new_last_slot);
+        bix = hatrack_bucket_index(cur->hv, new_last_slot);
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
-            if (hatrack_bucket_unreserved(&target->hv)) {
+            if (hatrack_bucket_unreserved(target->hv)) {
                 target->hv = cur->hv;
                 atomic_store(&target->contents, contents);
                 break;

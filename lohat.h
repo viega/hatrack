@@ -566,11 +566,11 @@ typedef struct lohat_st {
 
 // clang-format off
 void            lohat_init   (lohat_t *);
-void           *lohat_get    (lohat_t *, hatrack_hash_t *, bool *);
-void           *lohat_put    (lohat_t *, hatrack_hash_t *, void *, bool *);
-void           *lohat_replace(lohat_t *, hatrack_hash_t *, void *, bool *);
-bool            lohat_add    (lohat_t *, hatrack_hash_t *, void *);
-void           *lohat_remove (lohat_t *, hatrack_hash_t *, bool *);
+void           *lohat_get    (lohat_t *, hatrack_hash_t, bool *);
+void           *lohat_put    (lohat_t *, hatrack_hash_t, void *, bool *);
+void           *lohat_replace(lohat_t *, hatrack_hash_t, void *, bool *);
+bool            lohat_add    (lohat_t *, hatrack_hash_t, void *);
+void           *lohat_remove (lohat_t *, hatrack_hash_t, bool *);
 void            lohat_delete (lohat_t *);
 uint64_t        lohat_len    (lohat_t *);
 hatrack_view_t *lohat_view   (lohat_t *, uint64_t *, bool);

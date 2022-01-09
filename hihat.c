@@ -29,15 +29,15 @@
 // clang-format off
 static hihat_store_t *hihat_store_new    (uint64_t);
 static void          *hihat_store_get    (hihat_store_t *, hihat_t *,
-					  hatrack_hash_t *, bool *);
+					  hatrack_hash_t, bool *);
 static void          *hihat_store_put    (hihat_store_t *, hihat_t *,
-					  hatrack_hash_t *, void *, bool *);
+					  hatrack_hash_t, void *, bool *);
 static void          *hihat_store_replace(hihat_store_t *, hihat_t *,
-					  hatrack_hash_t *, void *, bool *);
+					  hatrack_hash_t, void *, bool *);
 static bool           hihat_store_add    (hihat_store_t *, hihat_t *,
-					  hatrack_hash_t *, void *);
+					  hatrack_hash_t, void *);
 static void          *hihat_store_remove (hihat_store_t *, hihat_t *,
-					  hatrack_hash_t *, bool *);
+					  hatrack_hash_t, bool *);
 static hihat_store_t *hihat_store_migrate(hihat_store_t *, hihat_t *);
 
 /* hihat_init()
@@ -131,7 +131,7 @@ hihat_init(hihat_t *self)
  * parameters, if needed.
  */
 void *
-hihat_get(hihat_t *self, hatrack_hash_t *hv, bool *found)
+hihat_get(hihat_t *self, hatrack_hash_t hv, bool *found)
 {
     void           *ret;
     hihat_store_t *store;
@@ -145,7 +145,7 @@ hihat_get(hihat_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-hihat_put(hihat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+hihat_put(hihat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void           *ret;
     hihat_store_t *store;
@@ -159,7 +159,7 @@ hihat_put(hihat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 void *
-hihat_replace(hihat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+hihat_replace(hihat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void           *ret;
     hihat_store_t *store;
@@ -173,7 +173,7 @@ hihat_replace(hihat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-hihat_add(hihat_t *self, hatrack_hash_t *hv, void *item)
+hihat_add(hihat_t *self, hatrack_hash_t hv, void *item)
 {
     bool            ret;
     hihat_store_t *store;
@@ -187,7 +187,7 @@ hihat_add(hihat_t *self, hatrack_hash_t *hv, void *item)
 }
 
 void *
-hihat_remove(hihat_t *self, hatrack_hash_t *hv, bool *found)
+hihat_remove(hihat_t *self, hatrack_hash_t hv, bool *found)
 {
     void           *ret;
     hihat_store_t *store;
@@ -410,10 +410,10 @@ hihat_store_new(uint64_t size)
  * value we got.
  */
 static void *
-hihat_store_get(hihat_store_t *self,
+hihat_store_get(hihat_store_t  *self,
                  hihat_t       *top,
-                 hatrack_hash_t *hv1,
-                 bool           *found)
+                 hatrack_hash_t hv1,
+                 bool          *found)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -426,10 +426,10 @@ hihat_store_get(hihat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -494,7 +494,7 @@ not_found:
 static void *
 hihat_store_put(hihat_store_t *self,
                  hihat_t       *top,
-                 hatrack_hash_t *hv1,
+                 hatrack_hash_t  hv1,
                  void           *item,
                  bool           *found)
 {
@@ -523,7 +523,7 @@ hihat_store_put(hihat_store_t *self,
 	 * case.
 	 */
 	hv2    = atomic_read(&bucket->hv);
-	if (hatrack_bucket_unreserved(&hv2)) {
+	if (hatrack_bucket_unreserved(hv2)) {
 	    /* Note that our compare-and-swap macro is defined in hatomic.h.
 	     * It includes a facility where, if we have counters turned on,
 	     * we can keep track of how often individual operations succed
@@ -533,7 +533,7 @@ hihat_store_put(hihat_store_t *self,
 	     * directly to a C11 atomic_compare_exchange_strong()
 	     * operation.
 	     */
-	    if (LCAS(&bucket->hv, &hv2, *hv1, HIHAT_CTR_BUCKET_ACQUIRE)) {
+	    if (LCAS(&bucket->hv, &hv2, hv1, HIHAT_CTR_BUCKET_ACQUIRE)) {
 		/* Our resize metric. If this insert puts us at the
 		 * 75% mark, then we need to resize. If this CAS
 		 * fails, we're not contributing to filling up the
@@ -546,7 +546,7 @@ hihat_store_put(hihat_store_t *self,
 		goto found_bucket;
 	    }
 	}
-	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	if (!hatrack_hashes_eq(hv1, hv2)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
@@ -651,9 +651,9 @@ hihat_store_put(hihat_store_t *self,
  * ourselves to concerns (somewhat) specific to a replace operation.
  */
 static void *
-hihat_store_replace(hihat_store_t *self,
-		     hihat_t       *top,
-		     hatrack_hash_t *hv1,
+hihat_store_replace(hihat_store_t   *self,
+		     hihat_t        *top,
+		     hatrack_hash_t  hv1,
 		     void           *item,
 		     bool           *found)
 {
@@ -670,10 +670,10 @@ hihat_store_replace(hihat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
 	hv2    = atomic_read(&bucket->hv);
-	if (hatrack_bucket_unreserved(&hv2)) {
+	if (hatrack_bucket_unreserved(hv2)) {
 	    goto not_found;
 	}
-	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	if (!hatrack_hashes_eq(hv1, hv2)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
@@ -751,9 +751,9 @@ hihat_store_replace(hihat_store_t *self,
  * parameter being passed.
  */
 static bool
-hihat_store_add(hihat_store_t *self,
-		 hihat_t       *top,
-		 hatrack_hash_t *hv1,
+hihat_store_add(hihat_store_t   *self,
+		 hihat_t        *top,
+		 hatrack_hash_t  hv1,
 		 void           *item)
 {
     uint64_t         bix;
@@ -768,15 +768,15 @@ hihat_store_add(hihat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
 	hv2    = atomic_read(&bucket->hv);
-	if (hatrack_bucket_unreserved(&hv2)) {
-	    if (LCAS(&bucket->hv, &hv2, *hv1, HIHAT_CTR_BUCKET_ACQUIRE)) {
+	if (hatrack_bucket_unreserved(hv2)) {
+	    if (LCAS(&bucket->hv, &hv2, hv1, HIHAT_CTR_BUCKET_ACQUIRE)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
 		    goto migrate_and_retry;
 		}
 		goto found_bucket;
 	    }
 	}
-	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	if (!hatrack_hashes_eq(hv1, hv2)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
@@ -824,9 +824,9 @@ found_bucket:
  * previous value for the sake of memory management.
  */
 static void *
-hihat_store_remove(hihat_store_t *self,
-                    hihat_t       *top,
-                    hatrack_hash_t *hv1,
+hihat_store_remove(hihat_store_t   *self,
+                    hihat_t        *top,
+                    hatrack_hash_t  hv1,
                     bool           *found)
 {
     void            *old_item;
@@ -842,10 +842,10 @@ hihat_store_remove(hihat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             break;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -1147,14 +1147,14 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
 	// If it hasn't been moved, there's definitely an item in it,
 	// as empty buckets got MOVED set in the first loop.
         hv  = atomic_read(&bucket->hv);
-        bix = hatrack_bucket_index(&hv, new_store->last_slot);
+        bix = hatrack_bucket_index(hv, new_store->last_slot);
 
 	// This loop acquires a bucket in the destination hash table,
 	// with the same bucket acquisition logic as operations above.
         for (j = 0; j <= new_store->last_slot; j++) {
             new_bucket     = &new_store->buckets[bix];
 	    expected_hv    = atomic_read(&new_bucket->hv);
-	    if (hatrack_bucket_unreserved(&expected_hv)) {
+	    if (hatrack_bucket_unreserved(expected_hv)) {
 		if (LCAS(&new_bucket->hv,
 			 &expected_hv,
 			 hv,
@@ -1162,7 +1162,7 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
 		    break;
 		}
 	    }
-	    if (!hatrack_hashes_eq(&expected_hv, &hv)) {
+	    if (!hatrack_hashes_eq(expected_hv, hv)) {
 		bix = (bix + 1) & new_store->last_slot;
 		continue;
             }

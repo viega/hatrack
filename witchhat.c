@@ -42,22 +42,22 @@
        witchhat_store_t  *witchhat_store_new    (uint64_t);
 static void              *witchhat_store_get    (witchhat_store_t *,
 						 witchhat_t *,
-						 hatrack_hash_t *, bool *);
+						 hatrack_hash_t, bool *);
 static void              *witchhat_store_put    (witchhat_store_t *,
 						 witchhat_t *,
-						 hatrack_hash_t *, 
+						 hatrack_hash_t, 
 						 void *, bool *, uint64_t);
 static void              *witchhat_store_replace(witchhat_store_t *,
 						 witchhat_t *,
-						 hatrack_hash_t *, 
+						 hatrack_hash_t, 
 						 void *, bool *, uint64_t);
 static bool               witchhat_store_add    (witchhat_store_t *,
 						 witchhat_t *,
-						 hatrack_hash_t *,
+						 hatrack_hash_t,
 						 void *, uint64_t);
 static void              *witchhat_store_remove (witchhat_store_t *,
 						 witchhat_t *,
-						 hatrack_hash_t *,
+						 hatrack_hash_t,
 						 bool *, uint64_t);
 static witchhat_store_t  *witchhat_store_migrate(witchhat_store_t *,
 						 witchhat_t *);
@@ -77,7 +77,7 @@ witchhat_init(witchhat_t *self)
 }
 
 void *
-witchhat_get(witchhat_t *self, hatrack_hash_t *hv, bool *found)
+witchhat_get(witchhat_t *self, hatrack_hash_t hv, bool *found)
 {
     void           *ret;
     witchhat_store_t *store;
@@ -91,7 +91,7 @@ witchhat_get(witchhat_t *self, hatrack_hash_t *hv, bool *found)
 }
 
 void *
-witchhat_put(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+witchhat_put(witchhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void           *ret;
     witchhat_store_t *store;
@@ -105,7 +105,7 @@ witchhat_put(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 void *
-witchhat_replace(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+witchhat_replace(witchhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     void           *ret;
     witchhat_store_t *store;
@@ -119,7 +119,7 @@ witchhat_replace(witchhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 }
 
 bool
-witchhat_add(witchhat_t *self, hatrack_hash_t *hv, void *item)
+witchhat_add(witchhat_t *self, hatrack_hash_t hv, void *item)
 {
     bool            ret;
     witchhat_store_t *store;
@@ -133,7 +133,7 @@ witchhat_add(witchhat_t *self, hatrack_hash_t *hv, void *item)
 }
 
 void *
-witchhat_remove(witchhat_t *self, hatrack_hash_t *hv, bool *found)
+witchhat_remove(witchhat_t *self, hatrack_hash_t hv, bool *found)
 {
     void           *ret;
     witchhat_store_t *store;
@@ -231,13 +231,13 @@ witchhat_store_new(uint64_t size)
 
 static void *
 witchhat_store_get(witchhat_store_t *self,
-                 witchhat_t       *top,
-                 hatrack_hash_t *hv1,
-                 bool           *found)
+                 witchhat_t         *top,
+                 hatrack_hash_t      hv1,
+                 bool               *found)
 {
-    uint64_t         bix;
-    uint64_t         i;
-    hatrack_hash_t   hv2;
+    uint64_t           bix;
+    uint64_t           i;
+    hatrack_hash_t     hv2;
     witchhat_bucket_t *bucket;
     witchhat_record_t  record;
 
@@ -246,10 +246,10 @@ witchhat_store_get(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
-        if (!hatrack_hashes_eq(hv1, &hv2)) {
+        if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
@@ -273,7 +273,7 @@ not_found:
 static void *
 witchhat_store_put(witchhat_store_t *self,
 		   witchhat_t       *top,
-		   hatrack_hash_t   *hv1,
+		   hatrack_hash_t    hv1,
 		   void             *item,
 		   bool             *found,
 		   uint64_t          count)
@@ -292,15 +292,15 @@ witchhat_store_put(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
 	hv2    = atomic_read(&bucket->hv);
-	if (hatrack_bucket_unreserved(&hv2)) {
-	    if (LCAS(&bucket->hv, &hv2, *hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
+	if (hatrack_bucket_unreserved(hv2)) {
+	    if (LCAS(&bucket->hv, &hv2, hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
 		    goto migrate_and_retry;
 		}
 		goto found_bucket;
 	    }
 	}
-	if (hatrack_hashes_eq(hv1, &hv2)) {
+	if (hatrack_hashes_eq(hv1, hv2)) {
 	    goto found_bucket;
 	}
 	bix = (bix + 1) & self->last_slot;
@@ -406,7 +406,7 @@ witchhat_store_put(witchhat_store_t *self,
 static void *
 witchhat_store_replace(witchhat_store_t *self,
 		       witchhat_t       *top,
-		       hatrack_hash_t   *hv1,
+		       hatrack_hash_t    hv1,
 		       void             *item,
 		       bool             *found,
 		       uint64_t          count)
@@ -424,10 +424,10 @@ witchhat_store_replace(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
 	hv2    = atomic_read(&bucket->hv);
-	if (hatrack_bucket_unreserved(&hv2)) {
+	if (hatrack_bucket_unreserved(hv2)) {
 	    goto not_found;
 	}
-	if (hatrack_hashes_eq(hv1, &hv2)) {
+	if (hatrack_hashes_eq(hv1, hv2)) {
 	    goto found_bucket;
 	}
 	bix = (bix + 1) & self->last_slot;
@@ -517,7 +517,7 @@ witchhat_store_replace(witchhat_store_t *self,
 static bool
 witchhat_store_add(witchhat_store_t *self,
 		   witchhat_t       *top,
-		   hatrack_hash_t   *hv1,
+		   hatrack_hash_t    hv1,
 		   void             *item,
 		   uint64_t          count)
 {
@@ -533,15 +533,15 @@ witchhat_store_add(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
 	hv2    = atomic_read(&bucket->hv);
-	if (hatrack_bucket_unreserved(&hv2)) {
-	    if (LCAS(&bucket->hv, &hv2, *hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
+	if (hatrack_bucket_unreserved(hv2)) {
+	    if (LCAS(&bucket->hv, &hv2, hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
 		    goto migrate_and_retry;
 		}
 		goto found_bucket;
 	    }
 	}
-	if (!hatrack_hashes_eq(hv1, &hv2)) {
+	if (!hatrack_hashes_eq(hv1, hv2)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
@@ -593,7 +593,7 @@ found_bucket:
 static void *
 witchhat_store_remove(witchhat_store_t *self,
 		      witchhat_t       *top,
-		      hatrack_hash_t   *hv1,
+		      hatrack_hash_t    hv1,
 		      bool             *found,
 		      uint64_t          count)
 {
@@ -610,10 +610,10 @@ witchhat_store_remove(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_read(&bucket->hv);
-        if (hatrack_bucket_unreserved(&hv2)) {
+        if (hatrack_bucket_unreserved(hv2)) {
             break;
         }
-        if (hatrack_hashes_eq(hv1, &hv2)) {
+        if (hatrack_hashes_eq(hv1, hv2)) {
 	    goto found_bucket;
         }
 	bix = (bix + 1) & self->last_slot;
@@ -692,18 +692,18 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
 {
     witchhat_store_t  *new_store;
     witchhat_store_t  *candidate_store;
-    uint64_t         new_size;
+    uint64_t           new_size;
     witchhat_bucket_t *bucket;
     witchhat_bucket_t *new_bucket;
     witchhat_record_t  record;
     witchhat_record_t  candidate_record;
     witchhat_record_t  expected_record;
-    hatrack_hash_t   expected_hv;
-    hatrack_hash_t   hv;
-    uint64_t         i, j;
-    uint64_t         bix;
-    uint64_t         new_used;
-    uint64_t         expected_used;
+    hatrack_hash_t     expected_hv;
+    hatrack_hash_t     hv;
+    uint64_t           i, j;
+    uint64_t           bix;
+    uint64_t           new_used;
+    uint64_t           expected_used;
 
     new_used  = 0;
     new_store = atomic_read(&top->store_current);
@@ -805,13 +805,13 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
         }
 
         hv  = atomic_read(&bucket->hv);
-        bix = hatrack_bucket_index(&hv, new_store->last_slot);
+        bix = hatrack_bucket_index(hv, new_store->last_slot);
 
         for (j = 0; j <= new_store->last_slot; j++) {
             new_bucket     = &new_store->buckets[bix];
 	    expected_hv    = atomic_read(&new_bucket->hv);
 	    
-	    if (hatrack_bucket_unreserved(&expected_hv)) {
+	    if (hatrack_bucket_unreserved(expected_hv)) {
 		if (LCAS(&new_bucket->hv,
 			 &expected_hv,
 			 hv,
@@ -819,7 +819,7 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
 		    break;
 		}
 	    }
-	    if (!hatrack_hashes_eq(&expected_hv, &hv)) {
+	    if (!hatrack_hashes_eq(expected_hv, hv)) {
 		bix = (bix + 1) & new_store->last_slot;
 		continue;
             }

@@ -110,11 +110,11 @@ enum : uint64_t {
 
 void            tophat_init_cst  (tophat_t *);
 void            tophat_init_fast (tophat_t *);
-void           *tophat_get       (tophat_t *, hatrack_hash_t *, bool *);
-void           *tophat_put       (tophat_t *, hatrack_hash_t *, void *, bool *);
-void           *tophat_replace   (tophat_t *, hatrack_hash_t *, void *, bool *);
-bool            tophat_add       (tophat_t *, hatrack_hash_t *, void *);
-void           *tophat_remove    (tophat_t *, hatrack_hash_t *, bool *);
+void           *tophat_get       (tophat_t *, hatrack_hash_t, bool *);
+void           *tophat_put       (tophat_t *, hatrack_hash_t, void *, bool *);
+void           *tophat_replace   (tophat_t *, hatrack_hash_t, void *, bool *);
+bool            tophat_add       (tophat_t *, hatrack_hash_t, void *);
+void           *tophat_remove    (tophat_t *, hatrack_hash_t, bool *);
 void            tophat_delete    (tophat_t *);
 uint64_t        tophat_len       (tophat_t *);
 hatrack_view_t *tophat_view      (tophat_t *, uint64_t *, bool);

@@ -96,7 +96,7 @@ refhat_init(refhat_t *self)
  * hatrack_common.h for definitions, if needed.
  */
 void *
-refhat_get(refhat_t *self, hatrack_hash_t *hv, bool *found)
+refhat_get(refhat_t *self, hatrack_hash_t hv, bool *found)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -106,7 +106,7 @@ refhat_get(refhat_t *self, hatrack_hash_t *hv, bool *found)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (cur->deleted) {
                 if (found) {
                     *found = false;
@@ -118,7 +118,7 @@ refhat_get(refhat_t *self, hatrack_hash_t *hv, bool *found)
             }
             return cur->item;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -148,7 +148,7 @@ refhat_get(refhat_t *self, hatrack_hash_t *hv, bool *found)
  * in a single object in the item parameter.
  */
 void *
-refhat_put(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+refhat_put(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -159,7 +159,7 @@ refhat_put(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
@@ -178,14 +178,14 @@ refhat_put(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
             }
             return ret;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 refhat_migrate(self);
                 return refhat_put(self, hv, item, found);
             }
             self->used_count++;
             self->item_count++;
-            cur->hv    = *hv;
+            cur->hv    = hv;
             cur->item  = item;
             cur->epoch = self->next_epoch++;
 
@@ -214,7 +214,7 @@ refhat_put(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * in a single object in the item parameter.
  */
 void *
-refhat_replace(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+refhat_replace(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -225,7 +225,7 @@ refhat_replace(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (cur->deleted) {
                 if (found) {
                     *found = false;
@@ -239,7 +239,7 @@ refhat_replace(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
             }
             return ret;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -260,7 +260,7 @@ refhat_replace(refhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
  * Returns true if the insertion is succesful, and false otherwise.
  */
 bool
-refhat_add(refhat_t *self, hatrack_hash_t *hv, void *item)
+refhat_add(refhat_t *self, hatrack_hash_t hv, void *item)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -270,7 +270,7 @@ refhat_add(refhat_t *self, hatrack_hash_t *hv, void *item)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (cur->deleted) {
                 cur->item    = item;
                 cur->deleted = false;
@@ -281,14 +281,14 @@ refhat_add(refhat_t *self, hatrack_hash_t *hv, void *item)
             }
             return false;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 refhat_migrate(self);
                 return refhat_add(self, hv, item);
             }
             self->used_count++;
             self->item_count++;
-            cur->hv    = *hv;
+            cur->hv    = hv;
             cur->item  = item;
             cur->epoch = self->next_epoch++;
 
@@ -306,7 +306,7 @@ refhat_add(refhat_t *self, hatrack_hash_t *hv, void *item)
  * appropriately, if an address is passed in.
  */
 void *
-refhat_remove(refhat_t *self, hatrack_hash_t *hv, bool *found)
+refhat_remove(refhat_t *self, hatrack_hash_t hv, bool *found)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -317,7 +317,7 @@ refhat_remove(refhat_t *self, hatrack_hash_t *hv, bool *found)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
-        if (hatrack_hashes_eq(hv, &cur->hv)) {
+        if (hatrack_hashes_eq(hv, cur->hv)) {
             if (cur->deleted) {
                 if (found) {
                     *found = false;
@@ -334,7 +334,7 @@ refhat_remove(refhat_t *self, hatrack_hash_t *hv, bool *found)
             }
             return ret;
         }
-        if (hatrack_bucket_unreserved(&cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
@@ -404,7 +404,7 @@ refhat_view(refhat_t *self, uint64_t *num, bool sort)
     end  = cur + (self->last_slot + 1);
 
     while (cur < end) {
-        if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+        if (cur->deleted || hatrack_bucket_unreserved(cur->hv)) {
             cur++;
             continue;
         }
@@ -459,16 +459,15 @@ refhat_migrate(refhat_t *self)
 
     for (n = 0; n <= self->last_slot; n++) {
         cur = &self->buckets[n];
-        if (cur->deleted || hatrack_bucket_unreserved(&cur->hv)) {
+        if (cur->deleted || hatrack_bucket_unreserved(cur->hv)) {
             continue;
         }
-        bix = hatrack_bucket_index(&cur->hv, new_last_slot);
+        bix = hatrack_bucket_index(cur->hv, new_last_slot);
         for (i = 0; i < num_buckets; i++) {
             target = &new_buckets[bix];
-            if (hatrack_bucket_unreserved(&target->hv)) {
-                target->hv.w1 = cur->hv.w1;
-                target->hv.w2 = cur->hv.w2;
-                target->item  = cur->item;
+            if (hatrack_bucket_unreserved(target->hv)) {
+                target->hv   = cur->hv;
+                target->item = cur->item;
                 break;
             }
             bix = (bix + 1) & new_last_slot;

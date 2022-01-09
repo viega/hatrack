@@ -53,31 +53,31 @@ typedef struct {
 testhat_t *testhat_new(char *);
 
 static inline void *
-testhat_get(testhat_t *self, hatrack_hash_t *hv, bool *found)
+testhat_get(testhat_t *self, hatrack_hash_t hv, bool *found)
 {
     return (*self->vtable.get)(self->htable, hv, found);
 }
 
 static inline void *
-testhat_put(testhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+testhat_put(testhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     return (*self->vtable.put)(self->htable, hv, item, found);
 }
 
 static inline void *
-testhat_replace(testhat_t *self, hatrack_hash_t *hv, void *item, bool *found)
+testhat_replace(testhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
     return (*self->vtable.replace)(self->htable, hv, item, found);
 }
 
 static inline bool
-testhat_add(testhat_t *self, hatrack_hash_t *hv, void *item)
+testhat_add(testhat_t *self, hatrack_hash_t hv, void *item)
 {
     return (*self->vtable.add)(self->htable, hv, item);
 }
 
 static inline void *
-testhat_remove(testhat_t *self, hatrack_hash_t *hv, bool *found)
+testhat_remove(testhat_t *self, hatrack_hash_t hv, bool *found)
 {
     return (*self->vtable.remove)(self->htable, hv, found);
 }

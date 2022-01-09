@@ -48,7 +48,7 @@ test_put(testhat_t *self, uint32_t key, uint32_t value)
     item.s.key   = key;
     item.s.value = value;
 
-    testhat_put(self, &precomputed_hashes[key], (void *)item.i, NULL);
+    testhat_put(self, precomputed_hashes[key], (void *)item.i, NULL);
 }
 
 /*static*/ inline void
@@ -59,7 +59,7 @@ test_replace(testhat_t *self, uint32_t key, uint32_t value)
     item.s.key   = key;
     item.s.value = value;
 
-    testhat_replace(self, &precomputed_hashes[key], (void *)item.i, NULL);
+    testhat_replace(self, precomputed_hashes[key], (void *)item.i, NULL);
 }
 
 static inline bool
@@ -70,7 +70,7 @@ test_add(testhat_t *self, uint32_t key, uint32_t value)
     item.s.key   = key;
     item.s.value = value;
 
-    return testhat_add(self, &precomputed_hashes[key], (void *)item.i);
+    return testhat_add(self, precomputed_hashes[key], (void *)item.i);
 }
 
 static inline uint32_t
@@ -78,7 +78,7 @@ test_get(testhat_t *self, uint32_t key)
 {
     test_item item;
 
-    item.i = (uint64_t)testhat_get(self, &precomputed_hashes[key], NULL);
+    item.i = (uint64_t)testhat_get(self, precomputed_hashes[key], NULL);
 
     return item.s.value;
 }
@@ -86,7 +86,7 @@ test_get(testhat_t *self, uint32_t key)
 static inline void
 test_remove(testhat_t *self, uint32_t key)
 {
-    testhat_remove(self, &precomputed_hashes[key], NULL);
+    testhat_remove(self, precomputed_hashes[key], NULL);
 }
 
 static inline hatrack_view_t *
