@@ -32,7 +32,6 @@
 
 #include "hatvtable.h"
 #include "refhat.h"
-#include "refhat-a.h"
 #include "duncecap.h"
 #include "swimcap.h"
 #include "newshat.h"

@@ -112,18 +112,6 @@ hatrack_vtable_t refhat_vtable = {
     .view    = (hatrack_view_func)refhat_view
 };
 
-hatrack_vtable_t refhat_a_vtable = {
-    .init    = (hatrack_init_func)refhat_a_init,
-    .get     = (hatrack_get_func)refhat_a_get,
-    .put     = (hatrack_put_func)refhat_a_put,
-    .replace = (hatrack_replace_func)refhat_a_replace,    
-    .add     = (hatrack_add_func)refhat_a_add,
-    .remove  = (hatrack_remove_func)refhat_a_remove,
-    .delete  = (hatrack_delete_func)refhat_a_delete,
-    .len     = (hatrack_len_func)refhat_a_len,
-    .view    = (hatrack_view_func)refhat_a_view
-};
-
 hatrack_vtable_t duncecap_vtable = {
     .init    = (hatrack_init_func)duncecap_init,
     .get     = (hatrack_get_func)duncecap_get,
@@ -244,30 +232,6 @@ hatrack_vtable_t woolhat_vtable = {
     .view    = (hatrack_view_func)woolhat_view
 };
 
-hatrack_vtable_t tophat_cst_vtable = {
-    .init    = (hatrack_init_func)tophat_init_cst,
-    .get     = (hatrack_get_func)tophat_get,
-    .put     = (hatrack_put_func)tophat_put,
-    .replace = (hatrack_replace_func)tophat_replace,    
-    .add     = (hatrack_add_func)tophat_add,
-    .remove  = (hatrack_remove_func)tophat_remove,
-    .delete  = (hatrack_delete_func)tophat_delete,
-    .len     = (hatrack_len_func)tophat_len,
-    .view    = (hatrack_view_func)tophat_view
-};
-
-hatrack_vtable_t tophat_fast_vtable = {
-    .init    = (hatrack_init_func)tophat_init_fast,
-    .get     = (hatrack_get_func)tophat_get,
-    .put     = (hatrack_put_func)tophat_put,
-    .replace = (hatrack_replace_func)tophat_replace,    
-    .add     = (hatrack_add_func)tophat_add,
-    .remove  = (hatrack_remove_func)tophat_remove,
-    .delete  = (hatrack_delete_func)tophat_delete,
-    .len     = (hatrack_len_func)tophat_len,
-    .view    = (hatrack_view_func)tophat_view
-};
-
 hatrack_vtable_t oldhat_vtable = {
     .init    = (hatrack_init_func)oldhat_init,
     .get     = (hatrack_get_func)oldhat_get,
@@ -280,15 +244,60 @@ hatrack_vtable_t oldhat_vtable = {
     .view    = (hatrack_view_func)oldhat_view
 };
 
+hatrack_vtable_t tophat_fmx_vtable = {
+    .init    = (hatrack_init_func)tophat_init_fast_mx,
+    .get     = (hatrack_get_func)tophat_get,
+    .put     = (hatrack_put_func)tophat_put,
+    .replace = (hatrack_replace_func)tophat_replace,    
+    .add     = (hatrack_add_func)tophat_add,
+    .remove  = (hatrack_remove_func)tophat_remove,
+    .delete  = (hatrack_delete_func)tophat_delete,
+    .len     = (hatrack_len_func)tophat_len,
+    .view    = (hatrack_view_func)tophat_view
+};
+
+hatrack_vtable_t tophat_fwf_vtable = {
+    .init    = (hatrack_init_func)tophat_init_fast_wf,
+    .get     = (hatrack_get_func)tophat_get,
+    .put     = (hatrack_put_func)tophat_put,
+    .replace = (hatrack_replace_func)tophat_replace,    
+    .add     = (hatrack_add_func)tophat_add,
+    .remove  = (hatrack_remove_func)tophat_remove,
+    .delete  = (hatrack_delete_func)tophat_delete,
+    .len     = (hatrack_len_func)tophat_len,
+    .view    = (hatrack_view_func)tophat_view
+};
+
+hatrack_vtable_t tophat_cmx_vtable = {
+    .init    = (hatrack_init_func)tophat_init_cst_mx,
+    .get     = (hatrack_get_func)tophat_get,
+    .put     = (hatrack_put_func)tophat_put,
+    .replace = (hatrack_replace_func)tophat_replace,    
+    .add     = (hatrack_add_func)tophat_add,
+    .remove  = (hatrack_remove_func)tophat_remove,
+    .delete  = (hatrack_delete_func)tophat_delete,
+    .len     = (hatrack_len_func)tophat_len,
+    .view    = (hatrack_view_func)tophat_view
+};
+
+hatrack_vtable_t tophat_cwf_vtable = {
+    .init    = (hatrack_init_func)tophat_init_cst_wf,
+    .get     = (hatrack_get_func)tophat_get,
+    .put     = (hatrack_put_func)tophat_put,
+    .replace = (hatrack_replace_func)tophat_replace,    
+    .add     = (hatrack_add_func)tophat_add,
+    .remove  = (hatrack_remove_func)tophat_remove,
+    .delete  = (hatrack_delete_func)tophat_delete,
+    .len     = (hatrack_len_func)tophat_len,
+    .view    = (hatrack_view_func)tophat_view
+};
+
 // clang-format on
 
 static void
 testhat_init_default_algorithms()
 {
     testhat_register_algorithm("refhat", &refhat_vtable, sizeof(refhat_t));
-    testhat_register_algorithm("refhat-a",
-                               &refhat_a_vtable,
-                               sizeof(refhat_a_t));
     testhat_register_algorithm("oldhat", &oldhat_vtable, sizeof(oldhat_t));
     testhat_register_algorithm("swimcap", &swimcap_vtable, sizeof(swimcap_t));
     testhat_register_algorithm("duncecap",
@@ -304,10 +313,16 @@ testhat_init_default_algorithms()
                                &witchhat_vtable,
                                sizeof(witchhat_t));
     testhat_register_algorithm("woolhat", &woolhat_vtable, sizeof(woolhat_t));
-    testhat_register_algorithm("tophat-cst",
-                               &tophat_cst_vtable,
+    testhat_register_algorithm("tophat-fmx",
+                               &tophat_fmx_vtable,
                                sizeof(tophat_t));
-    testhat_register_algorithm("tophat-fast",
-                               &tophat_fast_vtable,
+    testhat_register_algorithm("tophat-fwf",
+                               &tophat_fwf_vtable,
+                               sizeof(tophat_t));
+    testhat_register_algorithm("tophat-cmx",
+                               &tophat_cmx_vtable,
+                               sizeof(tophat_t));
+    testhat_register_algorithm("tophat-cwf",
+                               &tophat_cwf_vtable,
                                sizeof(tophat_t));
 }

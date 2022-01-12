@@ -889,13 +889,14 @@ char *threadsafe_dicts[] = {
     "lohat",
     "lohat-a",
     "woolhat",
-    "tophat-fast",    
-    "tophat-cst",
+    "tophat-fmx",
+    "tophat-fwf",        
+    "tophat-cmx",
+    "tophat-cwf",    
     NULL
 };
 char *all_dicts[]     = {
     "refhat",
-    "refhat-a",
     "duncecap",
     "swimcap", 
     "newshat",
@@ -907,8 +908,10 @@ char *all_dicts[]     = {
     "lohat",
     "lohat-a",
     "woolhat",    
-    "tophat-fast",   
-    "tophat-cst",
+    "tophat-fmx",
+    "tophat-fwf",        
+    "tophat-cmx",
+    "tophat-cwf",    
     NULL
 };
 
@@ -1035,6 +1038,7 @@ main(int argc, char *argv[], char *envp[])
                   sort_sizes,
                   basic_threads,
                   write_rates);
+    counters_output_delta();    
     run_time_test("contend",
                   test_sort_contention,
                   HATRACK_DEFAULT_ITERS/10,

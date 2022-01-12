@@ -271,15 +271,15 @@ Here is an overview of the tables in their 'logical' order:
 
 11) **woolhat**  A fully wait-free version of lohat.
 
-12) **tophat**  A proof of concept illustrating how language
-                implementations can get single-threaded performance
-                until a second thread starts, by waiting until that
-                time to migrate the table to a different
-                implementation. Note, however, that, for general
-                purpose use, witchhat and woolhat both perform
-                admirably, even for single-threaded applications
-                (especially witchhat, when multi-threaded order
-                preservation and consistency are unimportant).
+12) **tophat** A proof of concept illustrating how language
+                implementations can maximize performance until a
+                second thread starts, by waiting until that time to
+                migrate the table to a different implementation. Note,
+                however, that, for general purpose use, witchhat and
+                woolhat both perform admirably, even for
+                single-threaded applications (especially witchhat,
+                when multi-threaded order preservation and consistency
+                are unimportant).
 
 In general, looking at refhat will give you a good idea of the overall
 structure of all these tables, including what the top-level API for
@@ -291,7 +291,8 @@ of exposition, as does Lohat, since it's the first one that adds in
 full linearization of operations table-wide.
 
 But, in terms of ones I'd actually pick up and use, I recommend
-witchhat and woolhat (if you need the linearization).
+woolhat (if you need the linearization) and witchhat (if you don't,
+and are looking to maximize efficiency).
 
 ## Status of this work
 

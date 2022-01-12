@@ -27,639 +27,1036 @@
  */
 
 #include "tophat.h"
+#include "newshat.h"
+#include "witchhat.h"
+#include "ballcap.h"
+#include "woolhat.h"
 
 // clang-format off
-static void             tophat_init_base     (tophat_t *, bool);
-static void            *tophat_st_get        (refhat_a_t *, hatrack_hash_t,
-					      bool *);
-static void            *tophat_st_put        (refhat_a_t *, hatrack_hash_t,
-					      void *, bool *);
-static void            *tophat_st_replace    (refhat_a_t *, hatrack_hash_t,
-					      void *, bool *);
-static bool            tophat_st_add         (refhat_a_t *, hatrack_hash_t,
-					      void *);
-static void           *tophat_st_remove      (refhat_a_t *, hatrack_hash_t,
-					      bool *);
-static void            tophat_st_delete      (refhat_a_t *);
-static void            tophat_st_delete_store(refhat_a_t *);
-static uint64_t        tophat_st_len         (refhat_a_t *);
-static hatrack_view_t *tophat_st_view        (refhat_a_t *, uint64_t *, bool);
+static void             tophat_init_base     (tophat_t *);
+static void		tophat_st_migrate    (tophat_st_ctx_t *);
 
-#ifdef TOPHAT_USE_LOCKING_ALGORITHMS
+// The migration algorithms can be selected dynamically, but
+// at the time of initialization of the tophat_t object.
+static void *tophat_migrate_to_newshat (tophat_t *);
+static void *tophat_migrate_to_ballcap (tophat_t *);
+static void *tophat_migrate_to_witchhat(tophat_t *);
+static void *tophat_migrate_to_woolhat (tophat_t *);
 
-#include "ballcap.h"
-#include "newshat.h"
-
-static void tophat_migrate_to_ballcap (tophat_t *, refhat_a_t *);
-static void tophat_migrate_to_newshat (tophat_t *, refhat_a_t *);
-
-extern ballcap_store_t *ballcap_store_new(uint64_t);
-extern newshat_store_t *newshat_store_new(uint64_t);
-
-// Virtual call tables for the two locking algorithms.
-static hatrack_vtable_t cst_vtable = {
-    .init    = (hatrack_init_func)ballcap_init,
-    .get     = (hatrack_get_func)ballcap_get,
-    .put     = (hatrack_put_func)ballcap_put,
-    .replace = (hatrack_replace_func)ballcap_replace,    
-    .add     = (hatrack_add_func)ballcap_add,    
-    .remove  = (hatrack_remove_func)ballcap_remove,
-    .delete  = (hatrack_delete_func)ballcap_delete,
-    .len     = (hatrack_len_func)ballcap_len,
-    .view    = (hatrack_view_func)ballcap_view
-};
-
-static hatrack_vtable_t fast_vtable = {
-    .init    = (hatrack_init_func)newshat_init,
-    .get     = (hatrack_get_func)newshat_get,
-    .put     = (hatrack_put_func)newshat_put,
-    .replace = (hatrack_replace_func)newshat_replace,    
-    .add     = (hatrack_add_func)newshat_add,    
-    .remove  = (hatrack_remove_func)newshat_remove,
-    .delete  = (hatrack_delete_func)newshat_delete,
-    .len     = (hatrack_len_func)newshat_len,
-    .view    = (hatrack_view_func)newshat_view
-};
-
-#else
-static void tophat_migrate_to_woolhat (tophat_t *, refhat_a_t *);
-static void tophat_migrate_to_witchhat(tophat_t *, refhat_a_t *);
-
-
-extern woolhat_store_t  *woolhat_store_new (uint64_t);
+/* These are meant to be "friend" methods; private to others, but we
+ * need access to them. So they're not in the .h files, just re-declared
+ * as extern methods here.
+ *
+ * We simply dispatch to the right migration method based on the
+ * dst_type field, set at initialization time.
+ */
+extern newshat_store_t  *newshat_store_new (uint64_t);
 extern witchhat_store_t *witchhat_store_new(uint64_t);
+extern ballcap_store_t  *ballcap_store_new (uint64_t);
+extern woolhat_store_t  *woolhat_store_new (uint64_t);
 
-// Virtual call tables for the two wait-free algorithms.
-static hatrack_vtable_t cst_vtable = {
-    .init    = (hatrack_init_func)woolhat_init,
-    .get     = (hatrack_get_func)woolhat_get,
-    .put     = (hatrack_put_func)woolhat_put,
-    .replace = (hatrack_replace_func)woolhat_replace,    
-    .add     = (hatrack_add_func)woolhat_add,
-    .remove  = (hatrack_remove_func)woolhat_remove,
-    .delete  = (hatrack_delete_func)woolhat_delete,
-    .len     = (hatrack_len_func)woolhat_len,
-    .view    = (hatrack_view_func)woolhat_view
-};
-
-static hatrack_vtable_t fast_vtable = {
-    .init    = (hatrack_init_func)witchhat_init,
-    .get     = (hatrack_get_func)witchhat_get,
-    .put     = (hatrack_put_func)witchhat_put,
-    .replace = (hatrack_replace_func)witchhat_replace,    
-    .add     = (hatrack_add_func)witchhat_add,
-    .remove  = (hatrack_remove_func)witchhat_remove,
-    .delete  = (hatrack_delete_func)witchhat_delete,
-    .len     = (hatrack_len_func)witchhat_len,
-    .view    = (hatrack_view_func)witchhat_view
-};
-
-#endif
-
-// Virtual call table for our single-threaded vtable
-static hatrack_vtable_t st_vtable = {
-    .get     = (hatrack_get_func)tophat_st_get,
-    .put     = (hatrack_put_func)tophat_st_put,
-    .replace = (hatrack_replace_func)tophat_st_replace,    
-    .add     = (hatrack_add_func)tophat_st_add,
-    .remove  = (hatrack_remove_func)tophat_st_remove,
-    .delete  = (hatrack_delete_func)tophat_st_delete,
-    .len     = (hatrack_len_func)tophat_st_len,
-    .view    = (hatrack_view_func)tophat_st_view
-};
-
-
-static inline void
+static inline void *
 tophat_migrate(tophat_t *self)
 {
-    tophat_algo_info_t implementation;
+    switch (self->dst_type) {
+    case TOPHAT_T_FAST_LOCKING:
+	return tophat_migrate_to_newshat(self);
+    case TOPHAT_T_FAST_WAIT_FREE:
+	return tophat_migrate_to_witchhat(self);
+    case TOPHAT_T_CONSISTENT_LOCKING:
+	return tophat_migrate_to_ballcap(self);
+    case TOPHAT_T_CONSISTENT_WAIT_FREE:
+	return tophat_migrate_to_woolhat(self);
+    default:
+	__builtin_unreachable();
+    }
+}    
 
-    // This could have swapped out while we were waiting for the lock.
-    // Check the implementation's vtable to see if it's still refhat.
-    implementation = atomic_read(&self->implementation);
-
-    if (implementation.vtable != &st_vtable) {
-	return;
-    }
-    
-#ifdef TOPHAT_USE_LOCKING_ALGORITHMS
-    if (self->flags & TOPHAT_F_CONSISTENT_VIEWS) {
-	tophat_migrate_to_ballcap(self, (refhat_a_t *)implementation.htable);
-    } else {
-	tophat_migrate_to_newshat(self, (refhat_a_t *)implementation.htable);
-    }
-#else
-    if (self->flags & TOPHAT_F_CONSISTENT_VIEWS) {
-	tophat_migrate_to_woolhat(self, (refhat_a_t *)implementation.htable);
-    } else {
-	tophat_migrate_to_witchhat(self, (refhat_a_t *)implementation.htable);
-    }
-#endif
+/* The different initialization functions simply set up the right
+ * virtual call table for the multi-threaded instance (in case it's
+ * needed), and takes note of which table type it will be migrating
+ * to.
+ */
+void
+tophat_init_fast_mx(tophat_t *self)
+{
+    tophat_init_base(self);
+    self->dst_type  = TOPHAT_T_FAST_LOCKING;
+    self->mt_vtable.init    = (hatrack_init_func)newshat_init;
+    self->mt_vtable.get     = (hatrack_get_func)newshat_get;
+    self->mt_vtable.put     = (hatrack_put_func)newshat_put;
+    self->mt_vtable.replace = (hatrack_replace_func)newshat_replace;
+    self->mt_vtable.add     = (hatrack_add_func)newshat_add;
+    self->mt_vtable.remove  = (hatrack_remove_func)newshat_remove;
+    self->mt_vtable.delete  = (hatrack_delete_func)newshat_delete;
+    self->mt_vtable.len     = (hatrack_len_func)newshat_len;
+    self->mt_vtable.view    = (hatrack_view_func)newshat_view;
 }
 
 void
-tophat_init_cst(tophat_t *self)
+tophat_init_fast_wf(tophat_t *self)
 {
-    tophat_init_base(self, true);
-    
-    return;
+    tophat_init_base(self);
+    self->dst_type  = TOPHAT_T_FAST_WAIT_FREE;
+    self->mt_vtable.init    = (hatrack_init_func)witchhat_init;
+    self->mt_vtable.get     = (hatrack_get_func)witchhat_get;
+    self->mt_vtable.put     = (hatrack_put_func)witchhat_put;
+    self->mt_vtable.replace = (hatrack_replace_func)witchhat_replace;
+    self->mt_vtable.add     = (hatrack_add_func)witchhat_add;
+    self->mt_vtable.remove  = (hatrack_remove_func)witchhat_remove;
+    self->mt_vtable.delete  = (hatrack_delete_func)witchhat_delete;
+    self->mt_vtable.len     = (hatrack_len_func)witchhat_len;
+    self->mt_vtable.view    = (hatrack_view_func)witchhat_view;
+}
+
+
+void
+tophat_init_cst_mx(tophat_t *self)
+{
+    tophat_init_base(self);    
+    self->dst_type  = TOPHAT_T_CONSISTENT_LOCKING;
+    self->mt_vtable.init    = (hatrack_init_func)ballcap_init;
+    self->mt_vtable.get     = (hatrack_get_func)ballcap_get;
+    self->mt_vtable.put     = (hatrack_put_func)ballcap_put;
+    self->mt_vtable.replace = (hatrack_replace_func)ballcap_replace;
+    self->mt_vtable.add     = (hatrack_add_func)ballcap_add;
+    self->mt_vtable.remove  = (hatrack_remove_func)ballcap_remove;
+    self->mt_vtable.delete  = (hatrack_delete_func)ballcap_delete;
+    self->mt_vtable.len     = (hatrack_len_func)ballcap_len;
+    self->mt_vtable.view    = (hatrack_view_func)ballcap_view;
+
 }
 
 void
-tophat_init_fast(tophat_t *self)
+tophat_init_cst_wf(tophat_t *self)
 {
-    tophat_init_base(self, false);
-
-    return;
+    tophat_init_base(self);
+    self->dst_type  = TOPHAT_T_CONSISTENT_WAIT_FREE;
+    self->mt_vtable.init    = (hatrack_init_func)woolhat_init;
+    self->mt_vtable.get     = (hatrack_get_func)woolhat_get;
+    self->mt_vtable.put     = (hatrack_put_func)woolhat_put;
+    self->mt_vtable.replace = (hatrack_replace_func)woolhat_replace;    
+    self->mt_vtable.add     = (hatrack_add_func)woolhat_add;
+    self->mt_vtable.remove  = (hatrack_remove_func)woolhat_remove;
+    self->mt_vtable.delete  = (hatrack_delete_func)woolhat_delete;
+    self->mt_vtable.len     = (hatrack_len_func)woolhat_len;
+    self->mt_vtable.view    = (hatrack_view_func)woolhat_view;
 }
 
 void *
-tophat_get(tophat_t *self, hatrack_hash_t hv, bool *found)
-{
-    void               *ret;
-    tophat_algo_info_t  info;
-    
-    mmm_start_basic_op();
-    info   = atomic_read(&self->implementation);
-    ret    = (*info.vtable->get)(info.htable, hv, found);
-    mmm_end_op();
+tophat_get(tophat_t *self, hatrack_hash_t hv, bool *found) {
+    void               *mt_table;
+    uint64_t            bix, i;
+    tophat_st_ctx_t    *ctx;
+    tophat_st_bucket_t *cur;
+    tophat_st_record_t  record;
 
-    return ret;
+    /* The high-level approach here is to see if we're using a
+     * multi-threaded table, and dispatch to it, if so.
+     *
+     * If not, we need to protect our reads of the underlying table
+     * store, via mmm. If the underlying language implementation can
+     * enforce single-threaded access until the threading system
+     * starts, then this is unnecessary-- here, we are assuming that
+     * our implementation is responsible for detecting concurrent
+     * access.
+     *
+     * We do the detection in writer-threads, and do it in a way that
+     * actually supports mutiple readers and a single, concurrent
+     * writer.
+     *
+     * Note that we call the mmm wrappers whether or not we need to
+     * use them. They're cheap enough that it doesn't seem to much
+     * matter from a performance perspective (mmm_start_basic_op()
+     * just loads the current epoch and our thread ID, using the later
+     * to index into an array to store the epoch; mmm_end_op() stores
+     * a constant value in the same place).
+     *
+     * If we don't do this, we need to complicate the logic and load
+     * mt_table twice to avoid a race condition.
+     */
+
+    mmm_start_basic_op();
+    mt_table = atomic_read(&self->mt_table);
+    if (mt_table) {
+	mmm_end_op();
+	return (*self->mt_vtable.get)(mt_table, hv, found);
+    }
+
+    /* Note that the call to mmm_start_basic_op() guaranteed that, if
+     * mt_table was NULL, we will be safe to read self->st_table.
+     * That's because mmm_retire() won't get called by the migrating
+     * thread until AFTER it sets mt_table. So if we read that NULL,
+     * then we know a concurrent write thread will respect our
+     * reservation, and not free the single threaded table out from
+     * under us.
+     */
+    ctx = self->st_table;
+
+    /* From this point down, the implementation is basically the same
+     * as in refhat, except for the calls to mmm_end_op(), and the
+     * somewhat different data structure layout so that we can
+     * atomically read the item and the epoch in one read, just in
+     * case there are readers running concurrently with a writer.
+     */
+    bix = hatrack_bucket_index(hv, ctx->last_slot);
+
+    for (i = 0; i <= ctx->last_slot; i++) {
+	cur = &ctx->buckets[bix];
+	if (hatrack_hashes_eq(hv, cur->hv)) {
+	    record = atomic_read(&cur->record);
+	    if (!record.epoch) {
+		if (found) {
+		    *found = false;
+		}
+		mmm_end_op();
+		return NULL;
+	    }
+	    if (found) {
+		*found = true;
+	    }
+	    mmm_end_op();
+	    return record.item;
+	}
+	if (hatrack_bucket_unreserved(cur->hv)) {
+	    if (found) {
+		*found = false;
+	    }
+	    mmm_end_op();
+	    return NULL;	    
+	}
+	bix = (bix + 1) & ctx->last_slot;
+    }
+    __builtin_unreachable();
 }
 
 void *
-tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
-{
+tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found) {
+    void               *mt_table;
+    tophat_st_ctx_t    *ctx;
+    uint64_t            bix;
+    uint64_t            i;
+    tophat_st_bucket_t *cur;
+    tophat_st_record_t  record;
     void               *ret;
-    tophat_algo_info_t  info;
-    
-    mmm_start_basic_op();
-    info   = atomic_read(&self->implementation);
-    ret    = (*info.vtable->put)(info.htable, hv, item, found);
-    mmm_end_op();
 
-    return ret;
+
+    /* Unlike with readers, we use a lock to prevent multiple
+     * simultaneous writers in the single-threaded implementation.
+     *
+     * Obviously, once we've migrated, we do not want to use this lock
+     * on write operations. Therefore, we attempt to load mt_table
+     * right away, and only lock if it's not initialized.
+     *
+     * Of course, it could end up initialized while we're waiting on
+     * the lock, so we need to check again once the lock is acquired.
+     *
+     * As with the read operation above, there's really no reason for
+     * this extra complexity if the language is willing to perform
+     * migrations from within the threading subsystem's initilization
+     * process, making all of this overhead go away (even though it's
+     * already exceptionally small).
+     */
+    mt_table = atomic_load(&self->mt_table);
+
+    if (mt_table) {
+	return (*self->mt_vtable.put)(mt_table, hv, item, found);
+    }
+
+    if (pthread_mutex_trylock(&self->mutex)) {
+	/* If we get here, we found someone else had the write-lock.
+	 * Once they're done, we'll first see if someone else
+	 * completed the migration, by trying to read mt_table (any
+	 * thread that came before us and noticed a migration was
+	 * necessary will have set it, before releasing the lock).  If
+	 * not, we'll do a migration, and then retry in the new table.
+	 */
+	if (pthread_mutex_lock(&self->mutex)) {
+	    abort();
+	}
+	mt_table = atomic_read(&self->mt_table);
+	if (!mt_table) {
+	    mt_table = tophat_migrate(self);
+	}
+	if (pthread_mutex_unlock(&self->mutex)) {
+	    abort();
+	}
+	mt_table = atomic_load(&self->mt_table);
+	return (*self->mt_vtable.put)(mt_table, hv, item, found);
+    } 
+    /* Here we successfully acquired the lock, so we didn't detect
+     * multiple concurrent writers, so we can proceed with our write
+     * without any worries; no migration to a different table type can
+     * begin until after we yield the lock.
+     *
+     * This is semantically identical to refhat, except for the calls
+     * to pthread_mutex_unlock(), and the differtent data structure
+     * layout to ensure readers can run in parallel (we store the
+     * epoch and item as one unit, via atomic_store()).
+     */
+    ctx = self->st_table;    
+    bix = hatrack_bucket_index(hv, ctx->last_slot);
+
+    for (i = 0; i <= ctx->last_slot; i++) {
+	cur = &ctx->buckets[bix];
+	if (hatrack_hashes_eq(hv, cur->hv)) {
+	    record = atomic_read(&cur->record);
+	    if (!record.epoch) {
+		record.item  = item;
+		record.epoch = ctx->next_epoch++;
+		ctx->item_count++;
+
+		atomic_store(&cur->record, record);
+
+		if (found) {
+		    *found = false;
+		}
+		pthread_mutex_unlock(&self->mutex);
+		return NULL;
+	    }
+	    ret = record.item;
+	    record.item = item;
+	    atomic_store(&cur->record, record);
+
+	    if (found) {
+		*found = true;
+	    }
+	    pthread_mutex_unlock(&self->mutex);
+	    return ret;
+	}
+	if (hatrack_bucket_unreserved(cur->hv)) {
+	    if (ctx->used_count + 1 == ctx->threshold) {
+		tophat_st_migrate(ctx);
+		pthread_mutex_unlock(&self->mutex);
+		return tophat_put(self, hv, item, found);
+	    }
+	    ctx->used_count++;
+	    ctx->item_count++;
+
+	    cur->hv = hv;
+	    record.item = item;
+	    record.epoch = ctx->next_epoch++;
+
+	    atomic_store(&cur->record, record);
+
+	    if (found) {
+		*found = false;
+	    }
+	    pthread_mutex_unlock(&self->mutex);
+	    return NULL;
+	}
+	bix = (bix + 1) & ctx->last_slot;
+    }
+
+    __builtin_unreachable();
 }
 
+// See tophat_put for notes on the overall approach.
 void *
 tophat_replace(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
+    void               *mt_table;
+    tophat_st_ctx_t    *ctx;
+    uint64_t            bix;
+    uint64_t            i;
+    tophat_st_bucket_t *cur;
+    tophat_st_record_t  record;
     void               *ret;
-    tophat_algo_info_t  info;
-    
-    mmm_start_basic_op();
-    info   = atomic_read(&self->implementation);
-    ret    = (*info.vtable->replace)(info.htable, hv, item, found);
-    mmm_end_op();
 
-    return ret;
+    mt_table = atomic_load(&self->mt_table);
+
+    if (mt_table) {
+	return (*self->mt_vtable.replace)(mt_table, hv, item, found);
+    }
+
+    if (pthread_mutex_trylock(&self->mutex)) {
+	if (pthread_mutex_lock(&self->mutex)) {
+	    abort();
+	}
+	mt_table = atomic_read(&self->mt_table);
+	if (!mt_table) {
+	    mt_table = tophat_migrate(self);
+	}
+	if (pthread_mutex_unlock(&self->mutex)) {
+	    abort();
+	}
+	mt_table = atomic_load(&self->mt_table);
+	return (*self->mt_vtable.replace)(mt_table, hv, item, found);
+    }
+
+    ctx = self->st_table;
+    bix = hatrack_bucket_index(hv, ctx->last_slot);
+
+    for (i = 0; i <= ctx->last_slot; i++) {
+        cur = &ctx->buckets[bix];
+        if (hatrack_hashes_eq(hv, cur->hv)) {
+            record = atomic_read(&cur->record);
+            if (!record.epoch) {
+	    empty:
+                if (found) {
+                    *found = false;
+                }
+		pthread_mutex_unlock(&self->mutex);
+                return NULL;
+            }
+            ret         = record.item;
+            record.item = item;
+
+            atomic_store(&cur->record, record);
+
+            if (found) {
+                *found = true;
+            }
+	    pthread_mutex_unlock(&self->mutex);
+            return ret;
+        }
+        if (hatrack_bucket_unreserved(cur->hv)) {
+	    goto empty;
+        }
+        bix = (bix + 1) & ctx->last_slot;
+    }
+    __builtin_unreachable();
 }
 
+// See tophat_put for notes on the overall approach.
 bool
 tophat_add(tophat_t *self, hatrack_hash_t hv, void *item)
 {
-    bool                ret;
-    tophat_algo_info_t  info;
+    void               *mt_table;
+    tophat_st_ctx_t    *ctx;
+    uint64_t            bix;
+    uint64_t            i;
+    tophat_st_bucket_t *cur;
+    tophat_st_record_t  record;
     
-    mmm_start_basic_op();
-    info   = atomic_read(&self->implementation);
-    ret    = (*info.vtable->add)(info.htable, hv, item);
-    mmm_end_op();
 
-    return ret;
-}
+    mt_table = atomic_load(&self->mt_table);
 
+    if (mt_table) {
+	return (*self->mt_vtable.add)(mt_table, hv, item);
+    }
+
+    if (pthread_mutex_trylock(&self->mutex)) {
+	if (pthread_mutex_lock(&self->mutex)) {
+	    abort();
+	}
+	mt_table = atomic_read(&self->mt_table);
+	if (!mt_table) {
+	    mt_table = tophat_migrate(self);
+	}
+	if (pthread_mutex_unlock(&self->mutex)) {
+	    abort();
+	}
+	mt_table = atomic_load(&self->mt_table);
+	return (*self->mt_vtable.add)(mt_table, hv, item);
+    }
+
+    ctx = self->st_table;
+    bix = hatrack_bucket_index(hv, ctx->last_slot);
+
+    for (i = 0; i <= ctx->last_slot; i++) {
+        cur = &ctx->buckets[bix];
+        if (hatrack_hashes_eq(hv, cur->hv)) {
+            record = atomic_read(&cur->record);
+            if (!record.epoch) {
+                record.item  = item;
+                record.epoch = ctx->next_epoch++;
+
+                atomic_store(&cur->record, record);
+
+                ctx->item_count++;
+		pthread_mutex_unlock(&self->mutex);
+                return true;
+            }
+	    pthread_mutex_unlock(&self->mutex);	    
+            return false;
+        }
+        if (hatrack_bucket_unreserved(cur->hv)) {
+            if (ctx->used_count + 1 == ctx->threshold) {
+                tophat_st_migrate(ctx);
+		pthread_mutex_unlock(&self->mutex);		
+                return tophat_add(self, hv, item);
+            }
+            ctx->used_count++;
+            ctx->item_count++;
+            cur->hv = hv;
+
+            record.item  = item;
+            record.epoch = ctx->next_epoch++;
+
+            atomic_store(&cur->record, record);
+	    pthread_mutex_unlock(&self->mutex);
+            return true;
+        }
+        bix = (bix + 1) & ctx->last_slot;
+    }
+    __builtin_unreachable();
+ }
+
+// See tophat_put for notes on the overall approach.
 void *
 tophat_remove(tophat_t *self, hatrack_hash_t hv, bool *found)
 {
+    void               *mt_table;
+    tophat_st_ctx_t    *ctx;
+    uint64_t            bix;
+    uint64_t            i;
+    tophat_st_bucket_t *cur;
+    tophat_st_record_t  record;
     void               *ret;
-    tophat_algo_info_t  info;
     
-    mmm_start_basic_op();
-    info   = atomic_read(&self->implementation);
-    ret    = (*info.vtable->remove)(info.htable, hv, found);
-    mmm_end_op();
 
-    return ret;
+    mt_table = atomic_load(&self->mt_table);
+
+    if (mt_table) {
+	return (*self->mt_vtable.remove)(mt_table, hv, found);
+    }
+
+    if (pthread_mutex_trylock(&self->mutex)) {
+	if (pthread_mutex_lock(&self->mutex)) {
+	    abort();
+	}
+	mt_table = atomic_read(&self->mt_table);
+	if (!mt_table) {
+	    mt_table = tophat_migrate(self);
+	}
+	if (pthread_mutex_unlock(&self->mutex)) {
+	    abort();
+	}
+	mt_table = atomic_load(&self->mt_table);
+	return (*self->mt_vtable.remove)(mt_table, hv, found);
+    } else 
+
+    ctx = self->st_table;
+    bix = hatrack_bucket_index(hv, ctx->last_slot);
+
+    for (i = 0; i <= ctx->last_slot; i++) {
+        cur = &ctx->buckets[bix];
+        if (hatrack_hashes_eq(hv, cur->hv)) {
+            record = atomic_read(&cur->record);
+            if (!record.epoch) {
+                if (found) {
+                    *found = false;
+                }
+		if (pthread_mutex_unlock(&self->mutex)) {
+		    abort();
+		}
+                return NULL;
+            }
+
+            // No need to write over the item pointer; we won't
+            // ever access it if epoch == 0.
+            ret          = record.item;
+            record.epoch = 0;
+
+            atomic_store(&cur->record, record);
+
+            --ctx->item_count;
+
+            if (found) {
+                *found = true;
+            }
+	    if (pthread_mutex_unlock(&self->mutex)) {
+		abort();
+	    }
+            return ret;
+        }
+        if (hatrack_bucket_unreserved(cur->hv)) {
+            if (found) {
+                *found = false;
+            }
+	    if (pthread_mutex_unlock(&self->mutex)) {
+		abort();
+	    }
+	    return NULL;
+        }
+        bix = (bix + 1) & ctx->last_slot;
+    }
+    __builtin_unreachable();
 }
 
+/* If we've migrated to a multi-threaded table, then the
+ * single-threaded implementation is already cleaned up, except for
+ * deallocating the mutex.
+ * 
+ * Similarly, if we never migrate, then there's nothing there to clean
+ * up.
+ */
 void
-tophat_delete(tophat_t *self) {
-    tophat_algo_info_t info;
-
-    info = atomic_read(&self->implementation);
-    (info.vtable->delete)(info.htable);
-    free(self);
+tophat_delete(tophat_t *self)
+{
+    if (atomic_load(&self->mt_table)) {
+	(*self->mt_vtable.delete)(self->mt_table);
+    }
+    else {
+	mmm_retire(self->st_table->buckets);
+	mmm_retire(self->st_table);
+    }
+    
+    pthread_mutex_destroy(&self->mutex);
 }
 
 uint64_t
 tophat_len(tophat_t *self)
 {
-    uint64_t            ret;
-    tophat_algo_info_t  info;
-    
-    mmm_start_basic_op();
-    info   = atomic_read(&self->implementation);
-    ret    = (*info.vtable->len)(info.htable);
-    mmm_end_op();
+    void            *mt_table;
+    uint64_t         ret;
 
+    /* In case mt_table isn't found, protect our ability to read into
+     * st_table by creating an mmm_reservation.
+     *
+     * Again, this works because the migration function won't retire
+     * self->st_table until mt_table is set. So as long as we get our
+     * reservation in before checking mt_table, we're guaranteed that,
+     * if mt_table is NULL, we will be able to read st_tbale.
+     */
+    mmm_start_basic_op();    
+    mt_table = atomic_load(&self->mt_table);
+    if (mt_table) {
+	mmm_end_op();
+	return (*self->mt_vtable.len)(mt_table);	    
+    }
+    
+    ret = self->st_table->item_count;
+    mmm_end_op();
+    
     return ret;
 }
 
 hatrack_view_t *
 tophat_view(tophat_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t     *ret;
-    tophat_algo_info_t  info;    
+    tophat_st_ctx_t    *ctx;
+    void               *mt_table;
+    hatrack_view_t     *view;
+    hatrack_view_t     *p;
+    tophat_st_record_t  record;
+    tophat_st_bucket_t *cur;
+    tophat_st_bucket_t *end;
+    uint64_t            alloc_len;
+    uint64_t            n;
+ 
 
-    mmm_start_linearized_op();
-    info = atomic_read(&self->implementation);
-    ret  = (*info.vtable->view)(info.htable, num, sort);
+    /* The view operation being a reader, we wrap our single-threaded
+     * activity using mmm_start_basic_op() and mmm_end_op() to protect
+     * against the underlying single threaded hash table (or its
+     * buckets) being deleted while we are using it.
+     *
+     * Otherwise, the single-threaded code is algorithmically
+     * identical to refhat (though laid out a bit differently, since
+     * we atomically load the epoch and item together).
+     */
+    mmm_start_basic_op();
+    mt_table = atomic_load(&self->mt_table);
+    if (mt_table) {
+	mmm_end_op();
+	return (*self->mt_vtable.view)(mt_table, num, sort);
+    }
+    ctx = self->st_table;
+
+    /* Allow for concurrent writes by resizing down.  Upper
+     * bound for buckets needed is the table size.
+     * The variable n will track the actual size used.
+     */
+    alloc_len = sizeof(hatrack_view_t) * (ctx->last_slot + 1);
+    n         = 0;
+    view      = (hatrack_view_t *)malloc(alloc_len);
+    p         = view;
+    cur       = ctx->buckets;
+    end       = cur + (ctx->last_slot + 1);
+
+    while (cur < end) {
+        if (hatrack_bucket_unreserved(cur->hv)) {
+            cur++;
+            continue;
+        }
+
+        record = atomic_read(&cur->record);
+
+        if (!record.epoch) {
+            cur++;
+            continue;
+        }
+
+        p->item       = record.item;
+        p->sort_epoch = record.epoch;
+
+	n++;
+        p++;
+        cur++;
+    }
+
+    *num = n;
+
+    if (sort) {
+        qsort(view, n, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
+    
     mmm_end_op();
 
-    return ret;
+    return view;
 }
 
+/* tophat tables all start out in single-threaded mode. So we just
+ * allocate the single-threaded implementation.
+ */
 static void
-tophat_init_base(tophat_t *self, bool cst)
+tophat_init_base(tophat_t *self)
 {
-    uint64_t           alloc_len;
-    refhat_a_t         *initial_table;
-    tophat_algo_info_t info;    
+    uint64_t            size;
+    uint64_t            alloc_len;
+    tophat_st_ctx_t    *table;
     
-    alloc_len     = sizeof(refhat_a_t);
+    alloc_len         = sizeof(tophat_st_ctx_t);
+    table             = (tophat_st_ctx_t *)mmm_alloc_committed(alloc_len);
+    self->st_table    = table;
+    self->mt_table    = NULL;
+    size              = HATRACK_MIN_SIZE; 
+    alloc_len         = sizeof(tophat_st_bucket_t) * size;
+    table->last_slot  = size - 1;
+    table->threshold  = hatrack_compute_table_threshold(size);
+    table->next_epoch = 1; // 0 is reserved for deleted.
+    table->buckets    = (tophat_st_bucket_t *)mmm_alloc_committed(alloc_len);
 
-    initial_table = (refhat_a_t *)mmm_alloc_committed(alloc_len);
-    info.htable   = initial_table;
-    info.vtable   = &st_vtable;
-    
-    refhat_a_init((refhat_a_t *)initial_table);
-    initial_table->backref   = (void *)self;
-    
-    atomic_store(&initial_table->readers, 0);
-    
-
-    pthread_mutex_init(&initial_table->mutex, NULL);
-    atomic_store(&self->implementation, info);
-
-    if (cst) {
-	self->flags = TOPHAT_F_CONSISTENT_VIEWS;
-    }
-    else {
-	self->flags = 0;
-    }
+    pthread_mutex_init(&self->mutex, NULL);
 
     return;
 }
 
-static void *
-tophat_st_get(refhat_a_t *rhobj, hatrack_hash_t hv, bool *found)
-{
-    void *ret;
-
-    atomic_fetch_add(&rhobj->readers, 1);
-    ret = refhat_a_get((refhat_a_t *)rhobj, hv, found);
-    atomic_fetch_sub(&rhobj->readers, 1);
-
-    return ret;
-    
-}
-
-static void *
-tophat_st_put(refhat_a_t *rhobj, hatrack_hash_t hv, void *item, bool *found)
-{
-    void *ret;
-    
-    if(pthread_mutex_trylock(&rhobj->mutex)) {
-	pthread_mutex_lock(&rhobj->mutex);
-	tophat_migrate((tophat_t *)rhobj->backref);
-	pthread_mutex_unlock(&rhobj->mutex);	
-	return tophat_put((tophat_t *)rhobj->backref, hv, item, found);
-    }
-
-    ret = refhat_a_put((refhat_a_t *)rhobj, hv, item, found);
-    
-    pthread_mutex_unlock(&rhobj->mutex);
-
-    return ret;
-}
-
-static void *
-tophat_st_replace(refhat_a_t *rhobj, hatrack_hash_t hv, void *item, bool *found)
-{
-    void *ret;
-
-    if (pthread_mutex_trylock(&rhobj->mutex)) {
-	tophat_migrate((tophat_t *)rhobj->backref);
-	pthread_mutex_unlock(&rhobj->mutex);	
-	return tophat_replace((tophat_t *)rhobj->backref, hv, item, found);
-    }
-
-    ret = refhat_a_replace((refhat_a_t *)rhobj, hv, item, found);
-    
-    pthread_mutex_unlock(&rhobj->mutex);
-
-    return ret;
-}
-
-static bool
-tophat_st_add(refhat_a_t *rhobj, hatrack_hash_t hv, void *item)
-{
-    bool ret;
-
-    if (pthread_mutex_lock(&rhobj->mutex)) {
-	tophat_migrate((tophat_t *)rhobj->backref);
-	pthread_mutex_unlock(&rhobj->mutex);
-	return tophat_add((tophat_t *)rhobj->backref, hv, item);
-    }
-    
-    ret = refhat_a_add((refhat_a_t *)rhobj, hv, item);
-    
-    pthread_mutex_unlock(&rhobj->mutex);
-
-    return ret;
-}
-
-static void *
-tophat_st_remove(refhat_a_t *rhobj, hatrack_hash_t hv, bool *found)
-{
-    void *ret;
-
-    if (pthread_mutex_lock(&rhobj->mutex)) {    
-	tophat_migrate((tophat_t *)rhobj->backref);
-	pthread_mutex_unlock(&rhobj->mutex);
-	return tophat_remove((tophat_t *)rhobj->backref, hv, found);
-    }
-
-    ret = refhat_a_remove((refhat_a_t *)rhobj, hv, found);
-    
-    pthread_mutex_unlock(&rhobj->mutex);    
-
-    return ret;
-}
-
+/* This migration function is the one used by single-threaded
+ * instances to migrate stores when we're staying single-threaded.
+ *
+ * Per above, it's identical to refhat's implementation, except for
+ * the atomic reading / writing of the item/epoch, and the slightly
+ * different data structure layout that results.
+ */
 static void
-tophat_st_delete(refhat_a_t *rhobj)
+tophat_st_migrate(tophat_st_ctx_t *ctx)
 {
-    mmm_add_cleanup_handler(rhobj, (void (*)(void *))tophat_st_delete_store);
-    mmm_retire(rhobj);
+    tophat_st_bucket_t *new_buckets;
+    tophat_st_bucket_t *cur_bucket;
+    tophat_st_bucket_t *new_bucket;
+    tophat_st_record_t  record;
+    uint64_t            bucket_size;
+    uint64_t            num_buckets;
+    uint64_t            new_last_slot;
+    uint64_t            size;
+    uint64_t            i, n, bix;
+
+    bucket_size   = sizeof(tophat_st_bucket_t);
+    num_buckets   = hatrack_new_size(ctx->last_slot, ctx->item_count + 1);
+    new_last_slot = num_buckets - 1;
+    size          = num_buckets * bucket_size;
+    new_buckets   = (tophat_st_bucket_t *)mmm_alloc_committed(size);
+
+    for (n = 0; n <= ctx->last_slot; n++) {
+        cur_bucket = &ctx->buckets[n];
+
+        if (hatrack_bucket_unreserved(cur_bucket->hv)) {
+            continue;
+        }
+
+        record = atomic_read(&cur_bucket->record);
+
+        if (!record.epoch) {
+            continue;
+        }
+
+        bix = hatrack_bucket_index(cur_bucket->hv, new_last_slot);
+        for (i = 0; i < num_buckets; i++) {
+            new_bucket = &new_buckets[bix];
+            if (hatrack_bucket_unreserved(new_bucket->hv)) {
+                new_bucket->hv     = cur_bucket->hv;
+                new_bucket->record = record;
+                break;
+            }
+            bix = (bix + 1) & new_last_slot;
+        }
+    }
+    mmm_retire(ctx->buckets);
+
+    ctx->used_count = ctx->item_count;
+    ctx->buckets    = new_buckets;
+    ctx->last_slot  = new_last_slot;
+    ctx->threshold  = hatrack_compute_table_threshold(num_buckets);
 }
 
-static void
-tophat_st_delete_store(refhat_a_t *rhobj)
+/* Remember that we already have a lock at this point. So the
+ * migration is fairly straightforward, and will look not unlike the
+ * newshat->newshat migration.
+ */
+static void *
+tophat_migrate_to_newshat(tophat_t *self)
 {
-    free(rhobj->buckets);
-    pthread_mutex_destroy(&rhobj->mutex);
-}
-
-static uint64_t
-tophat_st_len(refhat_a_t *rhobj) {
-    uint64_t ret;
+    tophat_st_ctx_t    *ctx;        // essentially, the current table.
+    newshat_t          *new_table;
+    tophat_st_bucket_t *cur_bucket; // pointer to the st bucket
+    newshat_bucket_t   *new_bucket; // pointer to the newshat bucket
+    tophat_st_record_t  cur_record;
+    newshat_record_t    new_record;
+    uint64_t            n, i, bix;
     
-    pthread_mutex_lock(&rhobj->mutex);
-    ret = refhat_a_len((refhat_a_t *)rhobj);
-    pthread_mutex_unlock(&rhobj->mutex);
 
-    return ret;
-}
+    ctx                      = self->st_table;
+    new_table                = (newshat_t *)malloc(sizeof(newshat_t));
+    new_table->store_current = newshat_store_new(ctx->last_slot + 1);
 
-static hatrack_view_t *
-tophat_st_view(refhat_a_t *rhobj, uint64_t *num, bool sort) {
-    hatrack_view_t *ret;
-    
-    pthread_mutex_lock(&rhobj->mutex);
-    ret = refhat_a_view((refhat_a_t *)rhobj, num, sort);
-    pthread_mutex_unlock(&rhobj->mutex);
-
-    return ret;
-}
-
-#ifdef TOPHAT_USE_LOCKING_ALGORITHMS
-
-static void
-tophat_migrate_to_ballcap(tophat_t *tophat, refhat_a_t *rhobj)
-{
-    ballcap_t         *new_table;
-    uint64_t           i, n, bix, record_len;
-    refhat_a_bucket_t   *cur;
-    ballcap_bucket_t  *target;
-    ballcap_record_t  *record;
-    tophat_algo_info_t implementation;
-
-    new_table        = (ballcap_t *)malloc(sizeof(ballcap_t));
-    new_table->store = ballcap_store_new(rhobj->last_slot + 1);
-    record_len       = sizeof(ballcap_record_t);
-
-    for (n = 0; n <= rhobj->last_slot; n++) {
-	cur = &rhobj->buckets[n];
-	if (cur->deleted || hatrack_bucket_unreserved(cur->hv)) {
+    for (n = 0; n <= ctx->last_slot; n++) {
+	cur_bucket = &ctx->buckets[n];
+	if (hatrack_bucket_unreserved(cur_bucket->hv)) {
 	    continue;
 	}
-	bix = hatrack_bucket_index(cur->hv, rhobj->last_slot);	
-	for (i = 0; i <= rhobj->last_slot; i++) {
-	    target = &new_table->store->buckets[bix];
-	    
-	    if (hatrack_bucket_unreserved(target->hv)) {	    
-		    target->hv       = cur->hv;
-		    record           = mmm_alloc_committed(record_len);
-		    record->item     = cur->item;
-		    target->migrated = false;
-		    target->record   = record;
-		    mmm_set_create_epoch(record, cur->epoch);
-		    break;
-	    }
-	    bix = (bix + 1) & rhobj->last_slot;
-	}
-    }
-
-    new_table->store->used_count = rhobj->item_count;
-    new_table->item_count        = rhobj->item_count;
-    new_table->next_epoch        = rhobj->next_epoch;
-    implementation.htable        = new_table;
-    implementation.vtable        = &cst_vtable;
-    
-    pthread_mutex_init(&new_table->migrate_mutex, NULL);
-    
-    atomic_store(&tophat->implementation, implementation);
-
-    while (rhobj->readers)
-	;
-    tophat_st_delete(rhobj);
-}
-
-static void
-tophat_migrate_to_newshat(tophat_t *tophat, refhat_a_t *rhobj)
-{
-    newshat_t         *new_table;
-    uint64_t           n, i, bix;
-    refhat_a_bucket_t   *cur;
-    newshat_bucket_t  *target;
-    tophat_algo_info_t implementation;
-
-    new_table        = (newshat_t *)malloc(sizeof(newshat_t));
-    new_table->store = newshat_store_new(rhobj->last_slot + 1);
-
-    for (n = 0; n <= rhobj->last_slot; n++) {
-	cur = &rhobj->buckets[n];
-	if (cur->deleted || hatrack_bucket_unreserved(cur->hv)) {
+	cur_record = atomic_read(&cur_bucket->record);
+	if (!cur_record.epoch) {
 	    continue;
 	}
-	bix = hatrack_bucket_index(cur->hv, rhobj->last_slot);
-	for (i = 0; i <= rhobj->last_slot; i++) {
-	    target = &new_table->store->buckets[bix];
-	    
-	    if (hatrack_bucket_unreserved(target->hv)) {
-		target->hv       = cur->hv;
-		target->item     = cur->item;
-		target->epoch    = cur->epoch;
-		target->migrated = false;
+	bix    = hatrack_bucket_index(cur_bucket->hv, ctx->last_slot);
+	for (i = 0; i <= ctx->last_slot; i++) {
+	    new_bucket = &new_table->store_current->buckets[bix];
+
+	    /* Note that the implementation of our st buckets and
+	     * newshat's are compatible, but due to the atomics, it's
+	     * pretty challenging to get the cast to work, without
+	     * significant uglification.
+	     *
+	     * Just go ahead and copy the data; the compiler will
+	     * probably be able to optimize this away, and if not,
+	     * it's a small bit of one-time overhead when we migrate
+	     * anyway; it should amortize out.
+	     */
+	    if (hatrack_bucket_unreserved(new_bucket->hv)) {
+		new_bucket->hv       = cur_bucket->hv;
+		new_record.item      = cur_record.item;
+		new_record.info      = cur_record.epoch;
+		new_bucket->contents = new_record;
+		new_bucket->migrated = false;
 		break;
 	    }
-	    bix = (bix + 1) & rhobj->last_slot;
+	    bix = (bix + 1) & ctx->last_slot;
 	}
     }
 
-    new_table->store->used_count = rhobj->item_count;
-    new_table->item_count        = rhobj->item_count;
-    new_table->next_epoch        = rhobj->next_epoch;
+    new_table->store_current->used_count = ctx->item_count;
+    new_table->item_count                = ctx->item_count;
+    new_table->next_epoch                = ctx->next_epoch;
     
     pthread_mutex_init(&new_table->migrate_mutex, NULL);
     
-    implementation.htable = new_table;
-    implementation.vtable = &fast_vtable;
-    
-    atomic_store(&tophat->implementation, implementation);
+    atomic_store(&self->mt_table, new_table);
 
-    while (rhobj->readers)
-	;
-    tophat_st_delete(rhobj);    
+    // Now that mt_table is set, we can retire the st implementation.    
+    mmm_retire(ctx->buckets);
+    mmm_retire(ctx);
+
+    return (void *)new_table;
 }
 
-#else
-
-static void
-tophat_migrate_to_woolhat(tophat_t *tophat, refhat_a_t *rhobj)
+/* Unlike witchhat's migration function, we're doing this from the
+ * comfort of a single thread, so don't need to do any CAS operations;
+ * we can perform direct stores.
+ */
+static void *
+tophat_migrate_to_witchhat(tophat_t *self)
 {
-    woolhat_t          *new_table;
-    uint64_t            n, i, bix, record_len;
+    tophat_st_ctx_t    *ctx;
+    witchhat_t         *new_table;
+    tophat_st_bucket_t *cur_bucket;
+    witchhat_bucket_t  *new_bucket;
     hatrack_hash_t      hv;
-    refhat_a_bucket_t  *cur;
-    refhat_a_record_t   old_record;
-    woolhat_history_t  *target;
-    woolhat_record_t   *cur_record;
-    tophat_algo_info_t  implementation;
+    tophat_st_record_t  cur_record;
+    witchhat_record_t   new_record;    
+    uint64_t            i, n, bix;
 
+    ctx                      = self->st_table;
+    new_table                = (witchhat_t *)malloc(sizeof(witchhat_t));
+    new_table->store_current = witchhat_store_new(ctx->last_slot + 1);
+    new_table->next_epoch    = ctx->next_epoch;
+    new_table->item_count    = ctx->item_count;
+
+    for (n = 0; n <= ctx->last_slot; n++) {
+	cur_bucket = &ctx->buckets[n];
+	
+	if (hatrack_bucket_unreserved(cur_bucket->hv)) {
+	    continue;
+	}
+	cur_record = atomic_read(&cur_bucket->record);
+	if (!cur_record.epoch) {
+	    continue;
+	}
+	
+	bix = hatrack_bucket_index(cur_bucket->hv, ctx->last_slot);
+
+	for (i = 0; i <= ctx->last_slot; i++) {
+	    new_bucket = &new_table->store_current->buckets[bix];
+	    hv         = atomic_read(&new_bucket->hv);
+	    
+	    if (hatrack_bucket_unreserved(hv)) {
+		atomic_store(&new_bucket->hv, cur_bucket->hv);
+		break;
+	    }
+	    if (hatrack_hashes_eq(hv, cur_bucket->hv)) {
+		break;
+	    }
+	    bix = (bix + 1) & new_table->store_current->last_slot;
+	    continue;
+	}
+
+	/* Data structure layout is compatable.
+	 *
+	 * Witchhat does steal two bits from MSB of the second word
+	 * for status, but they will definitely be zero in the source
+	 * (unless you've used a full 62 bits of epoch space, which is
+	 * not even remotely realistic).
+	 *
+	 * Still, per above, we make a local copy into new_record,
+	 * instead of just casting... just because it's challenging
+	 * enough to get the cast to work, that it really makes the
+	 * code ugly.
+	 */
+	new_record.item = cur_record.item;
+	new_record.info = cur_record.epoch;
+	
+	atomic_store(&new_bucket->record, new_record);
+    }
+    
+    atomic_store(&new_table->help_needed, 0);
+    atomic_store(&new_table->store_current->used_count, ctx->item_count);
+    atomic_store(&self->mt_table, new_table);
+
+    // Now that mt_table is set, we can retire the st implementation.
+    mmm_retire(ctx->buckets);
+    mmm_retire(ctx);
+
+    return (void *)new_table;
+}
+
+static void *
+tophat_migrate_to_ballcap(tophat_t *self)
+{
+    tophat_st_ctx_t    *ctx;
+    ballcap_t          *new_table;
+    tophat_st_bucket_t *cur_bucket;
+    ballcap_bucket_t   *new_bucket;
+    tophat_st_record_t  cur_record;
+    ballcap_record_t   *new_record;
+    uint64_t            i, n, bix, record_len;
+
+
+    ctx                      = self->st_table;
+    new_table                = (ballcap_t *)malloc(sizeof(ballcap_t));
+    new_table->store_current = ballcap_store_new(ctx->last_slot + 1);
+    record_len               = sizeof(ballcap_record_t);
+
+    for (n = 0; n <= ctx->last_slot; n++) {
+	cur_bucket = &ctx->buckets[n];
+	if (hatrack_bucket_unreserved(cur_bucket->hv)) {
+	    continue;
+	}
+
+	cur_record = atomic_read(&cur_bucket->record);
+	if (!cur_record.epoch) {
+	    continue;
+	}
+	
+	bix = hatrack_bucket_index(cur_bucket->hv, ctx->last_slot);
+	
+	for (i = 0; i <= ctx->last_slot; i++) {
+	    new_bucket = &new_table->store_current->buckets[bix];
+	    
+	    if (hatrack_bucket_unreserved(new_bucket->hv)) {	    
+		    new_bucket->hv       = cur_bucket->hv;
+		    new_record           = mmm_alloc_committed(record_len);
+		    new_record->item     = cur_record.item;
+		    new_bucket->migrated = false;
+		    new_bucket->record   = new_record;
+		    mmm_set_create_epoch(new_record, cur_record.epoch);
+		    break;
+	    }
+	    bix = (bix + 1) & ctx->last_slot;
+	}
+    }
+
+    new_table->store_current->used_count = ctx->item_count;
+    new_table->item_count                = ctx->item_count;
+    new_table->next_epoch                = ctx->next_epoch;
+    
+    pthread_mutex_init(&new_table->migrate_mutex, NULL);
+
+    atomic_store(&self->mt_table, new_table);
+
+    // Now that mt_table is set, we can retire the st implementation.
+    mmm_retire(ctx->buckets);
+    mmm_retire(ctx);
+
+    return (void *)new_table;
+}
+
+/*
+ * This follows the logic of the woolhat migration, but since we're
+ * running the initial migration with a lock on writers, we have the
+ * luxury of direct stores, instead of compare-and-swap operations.
+ */
+static void *
+tophat_migrate_to_woolhat(tophat_t *self)
+{
+    tophat_st_ctx_t    *ctx;    
+    woolhat_t          *new_table;
+    tophat_st_bucket_t *cur_bucket;
+    woolhat_history_t  *new_bucket;
+    hatrack_hash_t      hv;
+    tophat_st_record_t  cur_record;
+    woolhat_record_t   *new_record;
+    uint64_t            n, i, bix, record_len;
+
+    ctx = self->st_table;
     new_table                = (woolhat_t *)malloc(sizeof(woolhat_t));
-    new_table->store_current = woolhat_store_new(rhobj->last_slot + 1);
+    new_table->store_current = woolhat_store_new(ctx->last_slot + 1);
     record_len               = sizeof(woolhat_record_t);
     atomic_store(&new_table->help_needed, 0);
 
-    for (n = 0; n <= rhobj->last_slot; n++) {
-	cur = &rhobj->buckets[n];
+    for (n = 0; n <= ctx->last_slot; n++) {
+	cur_bucket = &ctx->buckets[n];
 	
-	if (hatrack_bucket_unreserved(cur->hv)) {
+	if (hatrack_bucket_unreserved(cur_bucket->hv)) {
 	    continue;
 	}
 
-	old_record = atomic_read(&cur->record);
+	cur_record = atomic_read(&cur_bucket->record);
 
-	if (!old_record.epoch) {
+	if (!cur_record.epoch) {
 	    continue;
 	}
 
-	bix = hatrack_bucket_index(cur->hv, rhobj->last_slot);
-	for (i = 0; i <= rhobj->last_slot; i++) {
-	    target = &new_table->store_current->hist_buckets[bix];
-	    hv     = atomic_load(&target->hv);
+	bix = hatrack_bucket_index(cur_bucket->hv, ctx->last_slot);
+	for (i = 0; i <= ctx->last_slot; i++) {
+	    new_bucket = &new_table->store_current->hist_buckets[bix];
+	    hv         = atomic_load(&new_bucket->hv);
 	    
 	    if (hatrack_bucket_unreserved(hv)) {
-		cur_record         = (woolhat_record_t *)mmm_alloc(record_len);
-		cur_record->item   = old_record.item;
-		cur_record->next   = hatrack_pflag_set(NULL, WOOLHAT_F_USED);
-		mmm_set_create_epoch(cur_record, old_record.epoch);
-		atomic_store(&target->hv, cur->hv);
-		atomic_store(&target->head, cur_record);
+		new_record
+		    = (woolhat_record_t *)mmm_alloc_committed(record_len);
+		new_record->item   = cur_record.item;
+		new_record->next   = hatrack_pflag_set(NULL, WOOLHAT_F_USED);
+		mmm_set_create_epoch(new_record, cur_record.epoch);
+		atomic_store(&new_bucket->hv, cur_bucket->hv);
+		atomic_store(&new_bucket->head, new_record);
 		break;
 	    }
-	    bix = (bix + 1) & rhobj->last_slot;
+	    bix = (bix + 1) & ctx->last_slot;
 	}
     }
-    new_table->store_current->used_count = rhobj->item_count;
-    implementation.htable                = new_table;
-    implementation.vtable                = &cst_vtable;
-    
-    atomic_store(&tophat->implementation, implementation);
-
-    while (rhobj->readers)
-	;
-    tophat_st_delete(rhobj);
-}
-
-static void
-tophat_migrate_to_witchhat(tophat_t *tophat, refhat_a_t *rhobj)
-{
-    witchhat_t        *new_table;
-    witchhat_bucket_t *new_bucket;
-    witchhat_record_t  new_record;
-    witchhat_record_t  expected_record;
-    hatrack_hash_t     expected_hv;
-    refhat_a_bucket_t *cur;
-    uint64_t           i, n, bix;
-    refhat_a_record_t  record;
-    tophat_algo_info_t implementation;    
-    
-    new_table                = (witchhat_t *)malloc(sizeof(witchhat_t));
-    new_table->store_current = witchhat_store_new(rhobj->last_slot + 1);
-    new_table->next_epoch    = 1;
-
-    for (n = 0; n <= rhobj->last_slot; n++) {
-	cur = &rhobj->buckets[n];
-	
-	if (hatrack_bucket_unreserved(cur->hv)) {
-	    continue;
-	}
-
-	record = atomic_read(&cur->record);
-
-	if (!record.epoch) {
-	    continue;
-	}
-
-	bix = hatrack_bucket_index(cur->hv, rhobj->last_slot);
-
-	for (i = 0; i <= rhobj->last_slot; i++) {
-	    new_bucket  = &new_table->store_current->buckets[bix];
-	    expected_hv = atomic_read(&new_bucket->hv);
-	    
-	    if (hatrack_bucket_unreserved(expected_hv)) {
-		if (CAS(&new_bucket->hv, &expected_hv, cur->hv)) {
-		    break;
-		}
-	    }
-	    if (!hatrack_hashes_eq(expected_hv, cur->hv)) {
-		bix = (bix + 1) & new_table->store_current->last_slot;
-		continue;
-	    }
-	    break;
-	}
-
-	new_record.info       = record.epoch;
-	new_record.item       = record.item;
-	expected_record.info  = 0;
-	expected_record.item  = NULL;
-
-	CAS(&new_bucket->record, &expected_record, new_record);
-	
+    new_table->store_current->used_count = ctx->item_count;
+    if (mmm_epoch < ctx->next_epoch) {
+	atomic_store(&mmm_epoch, ctx->next_epoch);
     }
-    implementation.htable = new_table;
-    implementation.vtable = &fast_vtable;
 
-    atomic_store(&new_table->help_needed, 0);
-    atomic_store(&tophat->implementation, implementation);
+    atomic_store(&self->mt_table, new_table);
 
-    while (rhobj->readers)
-	;
-    tophat_st_delete(rhobj);
+    // Now that mt_table is set, we can retire the st implementation.
+    mmm_retire(ctx->buckets);
+    mmm_retire(ctx);
+
+
+    return (void *)new_table;
 }
 
-#endif

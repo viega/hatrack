@@ -419,10 +419,10 @@ lohat_store_new(uint64_t size)
  * applications.
  */
 static void *
-lohat_store_get(lohat_store_t  *self,
-                lohat_t        *top,
-                hatrack_hash_t  hv1,
-                bool           *found)
+lohat_store_get(lohat_store_t *self,
+                lohat_t       *top,
+                hatrack_hash_t hv1,
+                bool          *found)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -472,11 +472,11 @@ found_history_bucket:
 }
 
 static void *
-lohat_store_put(lohat_store_t  *self,
-                lohat_t        *top,
-                hatrack_hash_t  hv1,
-                void           *item,
-                bool           *found)
+lohat_store_put(lohat_store_t *self,
+                lohat_t       *top,
+                hatrack_hash_t hv1,
+                void          *item,
+                bool          *found)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -610,11 +610,11 @@ not_overwriting:
 }
 
 static void *
-lohat_store_replace(lohat_store_t  *self,
-                    lohat_t        *top,
-                    hatrack_hash_t  hv1,
-                    void           *item,
-                    bool           *found)
+lohat_store_replace(lohat_store_t *self,
+                    lohat_t       *top,
+                    hatrack_hash_t hv1,
+                    void          *item,
+                    bool          *found)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -700,10 +700,10 @@ migrate_and_retry:
 }
 
 static bool
-lohat_store_add(lohat_store_t  *self,
-                lohat_t        *top,
-                hatrack_hash_t  hv1,
-                void           *item)
+lohat_store_add(lohat_store_t *self,
+                lohat_t       *top,
+                hatrack_hash_t hv1,
+                void          *item)
 {
     uint64_t         bix;
     uint64_t         i;
@@ -791,10 +791,10 @@ found_history_bucket:
 }
 
 static void *
-lohat_store_remove(lohat_store_t  *self,
-                   lohat_t        *top,
-                   hatrack_hash_t  hv1,
-                   bool           *found)
+lohat_store_remove(lohat_store_t *self,
+                   lohat_t       *top,
+                   hatrack_hash_t hv1,
+                   bool          *found)
 {
     uint64_t         bix;
     uint64_t         i;
