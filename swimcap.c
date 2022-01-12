@@ -51,7 +51,7 @@ static bool             swimcap_store_add    (swimcap_store_t *,
 static void            *swimcap_store_remove (swimcap_store_t *,
 					      swimcap_t *, hatrack_hash_t,
 					      bool *);
-static void             swimcap_migrate     (swimcap_t *);
+static void             swimcap_migrate      (swimcap_t *);
 // clang-format on
 
 /* swimcap_init()
@@ -70,10 +70,12 @@ static void             swimcap_migrate     (swimcap_t *);
 void
 swimcap_init(swimcap_t *self)
 {
-    swimcap_store_t *store = swimcap_store_new(HATRACK_MIN_SIZE);
-    self->item_count       = 0;
-    self->next_epoch       = 1; // 0 is reserved for empty buckets.
-    self->store_current    = store;
+    swimcap_store_t *store;
+
+    store               = swimcap_store_new(HATRACK_MIN_SIZE);
+    self->item_count    = 0;
+    self->next_epoch    = 1; // 0 is reserved for empty buckets.
+    self->store_current = store;
     pthread_mutex_init(&self->write_mutex, NULL);
 
     return;
@@ -307,7 +309,6 @@ void
 swimcap_delete(swimcap_t *self)
 {
     pthread_mutex_destroy(&self->write_mutex);
-    DEBUG_MMM(self->store_current, "xxx store retire (delete).");
     mmm_retire(self->store_current);
     free(self);
 
@@ -392,7 +393,9 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
     if (!count) {
         free(view);
 #ifdef SWIMCAP_CONSISTENT_VIEWS
-        pthread_mutex_unlock(&self->write_mutex);
+        if (pthread_mutex_unlock(&self->write_mutex)) {
+            abort();
+        }
 #else
         mmm_end_op();
 #endif
@@ -406,7 +409,9 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
     }
 
 #ifdef SWIMCAP_CONSISTENT_VIEWS
-    pthread_mutex_unlock(&self->write_views);
+    if (pthread_mutex_unlock(&self->write_views)) {
+        abort();
+    }
 #else
     mmm_end_op();
 #endif
@@ -427,8 +432,7 @@ swimcap_store_new(uint64_t size)
 
     alloc_len = sizeof(swimcap_store_t);
     alloc_len += size * sizeof(swimcap_bucket_t);
-    ret = (swimcap_store_t *)mmm_alloc_committed(alloc_len);
-    DEBUG_MMM(ret, "xxx in store_new.");
+    ret            = (swimcap_store_t *)mmm_alloc_committed(alloc_len);
     ret->last_slot = size - 1;
     ret->threshold = hatrack_compute_table_threshold(size);
 
@@ -755,7 +759,6 @@ swimcap_migrate(swimcap_t *self)
      * after the retirement epoch, which would constitute a
      * use-after-free bug.
      */
-    DEBUG_MMM(cur_store, "xxx store retire.");
     mmm_retire(cur_store);
 
     return;

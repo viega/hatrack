@@ -50,6 +50,8 @@ test_put(testhat_t *self, uint32_t key, uint32_t value)
     item.s.value = value;
 
     testhat_put(self, precomputed_hashes[key], (void *)item.i, NULL);
+
+    return;
 }
 
 /*static*/ inline void
@@ -61,6 +63,8 @@ test_replace(testhat_t *self, uint32_t key, uint32_t value)
     item.s.value = value;
 
     testhat_replace(self, precomputed_hashes[key], (void *)item.i, NULL);
+
+    return;
 }
 
 static inline bool
@@ -88,6 +92,8 @@ static inline void
 test_remove(testhat_t *self, uint32_t key)
 {
     testhat_remove(self, precomputed_hashes[key], NULL);
+
+    return;
 }
 
 static inline hatrack_view_t *
@@ -97,13 +103,15 @@ test_view(testhat_t *self, uint64_t *n, bool sort)
 }
 
 static void
-test_precompute_hashes()
+test_precompute_hashes(void)
 {
     uint64_t i;
 
     for (i = 0; i < HATRACK_TEST_MAX_KEYS; i++) {
         precomputed_hashes[i] = hash_int(i);
     }
+
+    return;
 }
 
 /*
@@ -149,16 +157,18 @@ __thread arc4_ctx rng_ctx;
 __thread bool     rand_inited = false;
 
 static void
-test_init_rand()
+test_init_rand(void)
 {
     int rand_fd = open("/dev/urandom", O_RDONLY);
 
     read(rand_fd, seed_buf, HATRACK_RAND_SEED_SIZE);
     close(rand_fd);
+
+    return;
 }
 
 static void
-test_thread_init_rand()
+test_thread_init_rand(void)
 {
     uint64_t tid = (uint64_t)pthread_self();
 
@@ -180,10 +190,12 @@ test_thread_init_rand()
         if (k == 32)
             k = 0;
     }
+
+    return;
 }
 
 static uint32_t
-test_rand()
+test_rand(void)
 {
     uint32_t out;
     uint8_t *p = (uint8_t *)&out;
@@ -216,11 +228,13 @@ test_rand()
 }
 
 static void
-test_init()
+test_init(void)
 {
     mmm_register_thread();
     test_precompute_hashes();
     test_init_rand();
+
+    return;
 }
 
 typedef struct {
@@ -296,6 +310,7 @@ time_test(test_func_t      func,
 
     atomic_store(&test_func, NULL);
     clock_gettime(CLOCK_MONOTONIC, espec);
+
     return clock() - start;
 }
 
@@ -374,6 +389,8 @@ run_one_time_test(char       *name,
             walltime,
             ticks,
             (double)(((double)ticks) / (double)iters));
+
+    return;
 }
 
 static void
@@ -396,6 +413,8 @@ run_one_func_test(char       *name,
     else {
         fprintf(stderr, "FAIL\n");
     }
+
+    return;
 }
 
 static void
@@ -468,6 +487,8 @@ run_time_test(char       *name,
             tcount_ix++;
         }
     } while (extra && extra[++extra_ix]);
+
+    return;
 }
 
 static void
@@ -538,6 +559,8 @@ run_func_test(char       *name,
             tcount_ix++;
         }
     } while (extra && extra[++extra_ix]);
+
+    return;
 }
 
 /* Actual tests below here.
@@ -683,6 +706,7 @@ test_shrinking(test_info_t *info)
     for (i = 0; i < 380; i++) {
         test_put(info->dict, i + 1, i + 1);
     }
+
     for (i = 0; i < 380; i++) {
         test_remove(info->dict, i + 1);
     }
@@ -690,6 +714,7 @@ test_shrinking(test_info_t *info)
     for (i = 381; i < 500; i++) {
         test_put(info->dict, i + 1, i + 1);
     }
+
     return true;
 }
 
@@ -1066,4 +1091,6 @@ main(int argc, char *argv[], char *envp[])
     
     printf("Press <enter> to exit.\n");
     getc(stdin);
+
+    return 0;
 }

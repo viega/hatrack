@@ -57,6 +57,8 @@ hihat_init(hihat_t *self)
     
     atomic_store(&self->store_current, store);
     atomic_store(&self->item_count, 0);
+
+    return;
 }
 
 /* hihat_get(), _put(), _replace(), _add(), _remove()
@@ -133,7 +135,7 @@ hihat_init(hihat_t *self)
 void *
 hihat_get(hihat_t *self, hatrack_hash_t hv, bool *found)
 {
-    void           *ret;
+    void          *ret;
     hihat_store_t *store;
 
     mmm_start_basic_op();
@@ -147,7 +149,7 @@ hihat_get(hihat_t *self, hatrack_hash_t hv, bool *found)
 void *
 hihat_put(hihat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
-    void           *ret;
+    void          *ret;
     hihat_store_t *store;
 
     mmm_start_basic_op();
@@ -161,7 +163,7 @@ hihat_put(hihat_t *self, hatrack_hash_t hv, void *item, bool *found)
 void *
 hihat_replace(hihat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
-    void           *ret;
+    void          *ret;
     hihat_store_t *store;
 
     mmm_start_basic_op();
@@ -175,7 +177,7 @@ hihat_replace(hihat_t *self, hatrack_hash_t hv, void *item, bool *found)
 bool
 hihat_add(hihat_t *self, hatrack_hash_t hv, void *item)
 {
-    bool            ret;
+    bool           ret;
     hihat_store_t *store;
 
     mmm_start_basic_op();
@@ -218,6 +220,8 @@ hihat_delete(hihat_t *self)
 {
     mmm_retire(atomic_load(&self->store_current));
     free(self);
+
+    return;
 }
 
 /* hihat_len()
@@ -285,14 +289,14 @@ hihat_len(hihat_t *self)
 hatrack_view_t *
 hihat_view(hihat_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t  *view;
-    hatrack_view_t  *p;
+    hatrack_view_t *view;
+    hatrack_view_t *p;
     hihat_bucket_t *cur;
     hihat_bucket_t *end;
     hihat_record_t  record;
-    uint64_t         num_items;
-    uint64_t         alloc_len;
-    uint64_t         record_epoch;
+    uint64_t        num_items;
+    uint64_t        alloc_len;
+    uint64_t        record_epoch;
     hihat_store_t  *store;
 
     /* Again, we need to do this before grabbing our pointer to the
@@ -360,7 +364,7 @@ static hihat_store_t *
 hihat_store_new(uint64_t size)
 {
     hihat_store_t *store;
-    uint64_t        alloc_len;
+    uint64_t       alloc_len;
 
     alloc_len = sizeof(hihat_store_t) + sizeof(hihat_bucket_t) * size;
     store     = (hihat_store_t *)mmm_alloc_committed(alloc_len);
@@ -415,9 +419,9 @@ hihat_store_get(hihat_store_t  *self,
                  hatrack_hash_t hv1,
                  bool          *found)
 {
-    uint64_t         bix;
-    uint64_t         i;
-    hatrack_hash_t   hv2;
+    uint64_t        bix;
+    uint64_t        i;
+    hatrack_hash_t  hv2;
     hihat_bucket_t *bucket;
     hihat_record_t  record;
 
@@ -492,17 +496,17 @@ not_found:
  * smaller and more easily digestable.
  */
 static void *
-hihat_store_put(hihat_store_t *self,
-                 hihat_t       *top,
+hihat_store_put(hihat_store_t   *self,
+                 hihat_t        *top,
                  hatrack_hash_t  hv1,
                  void           *item,
                  bool           *found)
 {
-    void            *old_item;
-    bool             new_item;
-    uint64_t         bix;
-    uint64_t         i;
-    hatrack_hash_t   hv2;
+    void           *old_item;
+    bool            new_item;
+    uint64_t        bix;
+    uint64_t        i;
+    hatrack_hash_t  hv2;
     hihat_bucket_t *bucket;
     hihat_record_t  record;
     hihat_record_t  candidate;
@@ -657,10 +661,10 @@ hihat_store_replace(hihat_store_t   *self,
 		     void           *item,
 		     bool           *found)
 {
-    void            *old_item;
-    uint64_t         bix;
-    uint64_t         i;
-    hatrack_hash_t   hv2;
+    void           *old_item;
+    uint64_t        bix;
+    uint64_t        i;
+    hatrack_hash_t  hv2;
     hihat_bucket_t *bucket;
     hihat_record_t  record;
     hihat_record_t  candidate;
@@ -756,9 +760,9 @@ hihat_store_add(hihat_store_t   *self,
 		 hatrack_hash_t  hv1,
 		 void           *item)
 {
-    uint64_t         bix;
-    uint64_t         i;
-    hatrack_hash_t   hv2;
+    uint64_t        bix;
+    uint64_t        i;
+    hatrack_hash_t  hv2;
     hihat_bucket_t *bucket;
     hihat_record_t  record;
     hihat_record_t  candidate;
@@ -829,10 +833,10 @@ hihat_store_remove(hihat_store_t   *self,
                     hatrack_hash_t  hv1,
                     bool           *found)
 {
-    void            *old_item;
-    uint64_t         bix;
-    uint64_t         i;
-    hatrack_hash_t   hv2;
+    void           *old_item;
+    uint64_t        bix;
+    uint64_t        i;
+    hatrack_hash_t  hv2;
     hihat_bucket_t *bucket;
     hihat_record_t  record;
     hihat_record_t  candidate;
@@ -991,18 +995,18 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
 {
     hihat_store_t  *new_store;
     hihat_store_t  *candidate_store;
-    uint64_t         new_size;
+    uint64_t        new_size;
     hihat_bucket_t *bucket;
     hihat_bucket_t *new_bucket;
     hihat_record_t  record;
     hihat_record_t  candidate_record;
     hihat_record_t  expected_record;
-    hatrack_hash_t   expected_hv;
-    hatrack_hash_t   hv;
-    uint64_t         i, j;
-    uint64_t         bix;
-    uint64_t         new_used;
-    uint64_t         expected_used;
+    hatrack_hash_t  expected_hv;
+    hatrack_hash_t  hv;
+    uint64_t        i, j;
+    uint64_t        bix;
+    uint64_t        new_used;
+    uint64_t        expected_used;
 
     
     /* If we're a late-enough writer, let's just double check to see if 

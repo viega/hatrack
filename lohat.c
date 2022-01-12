@@ -55,6 +55,8 @@ lohat_init(lohat_t *self)
 
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
+
+    return;
 }
 
 /* lohat_get, _put, _replace, _add, _remove
@@ -203,6 +205,8 @@ lohat_delete(lohat_t *self)
 
     mmm_retire(store);
     free(self);
+
+    return;
 }
 
 /* lohat_len()

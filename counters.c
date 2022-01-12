@@ -185,6 +185,8 @@ counters_output_delta(void)
                 total,
                 percent);
     }
+
+    return;
 }
 
 void
@@ -254,6 +256,8 @@ counters_output_alltime(void)
         }
         fprintf(stderr, "\n");
     }
+
+    return;
 }
 
 #endif

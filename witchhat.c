@@ -74,6 +74,8 @@ witchhat_init(witchhat_t *self)
     
     atomic_store(&self->store_current, store);
     atomic_store(&self->item_count, 0);
+
+    return;
 }
 
 void *
@@ -151,6 +153,8 @@ witchhat_delete(witchhat_t *self)
 {
     mmm_retire(atomic_load(&self->store_current));
     free(self);
+
+    return;
 }
 
 uint64_t
@@ -162,13 +166,13 @@ witchhat_len(witchhat_t *self)
 hatrack_view_t *
 witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t  *view;
-    hatrack_view_t  *p;
+    hatrack_view_t    *view;
+    hatrack_view_t    *p;
     witchhat_bucket_t *cur;
     witchhat_bucket_t *end;
     witchhat_record_t  record;
-    uint64_t         num_items;
-    uint64_t         alloc_len;
+    uint64_t           num_items;
+    uint64_t           alloc_len;
     witchhat_store_t  *store;
 
     mmm_start_basic_op();
@@ -211,6 +215,7 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
     }
 
     mmm_end_op();
+    
     return view;
 }
 
@@ -267,6 +272,7 @@ not_found:
     if (found) {
         *found = false;
     }
+ 
     return NULL;
 }
 
@@ -684,6 +690,7 @@ found_bucket:
     if (found) {
         *found = false;
     }
+    
     return NULL;
 }
 

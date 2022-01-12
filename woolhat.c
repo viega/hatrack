@@ -63,6 +63,8 @@ woolhat_init(woolhat_t *self)
     atomic_store(&self->help_needed, 0);
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
+
+    return;
 }
 
 void *
@@ -159,6 +161,8 @@ woolhat_delete(woolhat_t *self)
 
     mmm_retire(store);
     free(self);
+
+    return;
 }
 
 uint64_t
@@ -285,11 +289,7 @@ woolhat_store_get(woolhat_store_t *self,
 
         goto found_history_bucket;
     }
-not_found:
-    if (found) {
-        *found = false;
-    }
-    return NULL;
+    goto not_found;
 
 found_history_bucket:
     head = hatrack_pflag_clear(atomic_read(&bucket->head),
@@ -300,7 +300,12 @@ found_history_bucket:
         }
         return head->item;
     }
-    goto not_found;
+not_found:
+    if (found) {
+        *found = false;
+    }
+
+    return NULL;
 }
 
 static void *
@@ -758,6 +763,7 @@ migrate_and_retry:
     }
 
     atomic_fetch_sub(&top->item_count, 1);
+
     return head->item;
 }
 
@@ -936,6 +942,7 @@ woolhat_help_required(uint64_t count)
     if (count == HATRACK_RETRY_THRESHOLD) {
         return true;
     }
+
     return false;
 }
 

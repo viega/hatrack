@@ -155,10 +155,14 @@ static oldhat_store_t  *oldhat_store_migrate(oldhat_store_t *, oldhat_t *);
 void
 oldhat_init(oldhat_t *self)
 {
-    oldhat_store_t *store = oldhat_store_new(HATRACK_MIN_SIZE);
+    oldhat_store_t *store;
+
+    store = oldhat_store_new(HATRACK_MIN_SIZE);
 
     atomic_store(&self->store_current, store);
     atomic_store(&self->item_count, 0);
+
+    return;
 }
 
 /* oldhat_get()
@@ -280,6 +284,8 @@ oldhat_delete(oldhat_t *self)
 
     mmm_retire(store);
     free(self);
+
+    return;
 }
 
 /* oldhat_len()
@@ -449,6 +455,8 @@ oldhat_store_delete(oldhat_store_t *self)
             mmm_retire_unused(record);
         }
     }
+
+    return;
 }
 
 /*

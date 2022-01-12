@@ -75,6 +75,8 @@ debug_dump(uint64_t max_msgs)
                 (long)__hatrack_debug[i].thread,
                 __hatrack_debug[i].msg);
     }
+
+    return;
 }
 
 /* debug_thread()
@@ -86,6 +88,8 @@ void
 debug_thread(void)
 {
     debug_other_thread(mmm_mytid);
+
+    return;
 }
 
 /* debug_thread()
@@ -121,6 +125,8 @@ debug_other_thread(int64_t tid)
                     __hatrack_debug[i].msg);
         }
     }
+
+    return;
 }
 
 /* debug_grep()
@@ -159,6 +165,8 @@ debug_grep(char *s)
                     __hatrack_debug[i].msg);
         }
     }
+
+    return;
 }
 
 /* debug_pgrep()
@@ -180,6 +188,7 @@ debug_pgrep(uintptr_t n)
     }
 
     debug_grep(s);
+
     return;
 }
 

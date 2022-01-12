@@ -64,6 +64,18 @@
 // clang-format off
 typedef struct ballcap_record_st ballcap_record_t;
 
+/*
+ * Ballcap is our only locking table with a flag on records to
+ * indicate whether or not they're deleted. Everything else relies on
+ * an explicit epoch counter that lives in the data structure being
+ * set to 0.
+ *
+ * However, like the lohat family, records are allocated via mmm, and
+ * so the epoch field is somewhat transparent to us. We could use a
+ * macro to extract it quickly, since it's at a fixed offset, but
+ * space is cheap.
+ */
+
 struct ballcap_record_st {
     bool                 deleted;
     void                *item;

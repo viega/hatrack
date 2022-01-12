@@ -33,17 +33,21 @@
 
 // clang-format off
 static duncecap_store_t *duncecap_store_new    (uint64_t);
-static void            *duncecap_store_get    (duncecap_store_t *,
-					      hatrack_hash_t, bool *);
-static void            *duncecap_store_put    (duncecap_store_t *, duncecap_t *,
-					      hatrack_hash_t, void *, bool *);
-static void            *duncecap_store_replace(duncecap_store_t *, duncecap_t *,
-					      hatrack_hash_t, void *, bool *);
-static bool             duncecap_store_add    (duncecap_store_t *, duncecap_t *, 
-					      hatrack_hash_t, void *);
-static void            *duncecap_store_remove (duncecap_store_t *, duncecap_t *,
-					      hatrack_hash_t, bool *);
-static void             duncecap_migrate      (duncecap_t *);
+static void             *duncecap_store_get    (duncecap_store_t *,
+						hatrack_hash_t, bool *);
+static void             *duncecap_store_put    (duncecap_store_t *,
+						duncecap_t *, hatrack_hash_t,
+						void *, bool *);
+static void             *duncecap_store_replace(duncecap_store_t *,
+						duncecap_t *, hatrack_hash_t,
+						void *, bool *);
+static bool              duncecap_store_add    (duncecap_store_t *,
+						duncecap_t *, hatrack_hash_t,
+						void *);
+static void             *duncecap_store_remove (duncecap_store_t *,
+						duncecap_t *, hatrack_hash_t,
+						bool *);
+static void             duncecap_migrate       (duncecap_t *);
 // clang-format on
 
 /* These macros clean up duncecap_view() to make it more readable.  With
@@ -83,6 +87,8 @@ duncecap_viewer_exit(duncecap_t *self, duncecap_store_t *unused)
     if (pthread_mutex_unlock(&self->mutex)) {
         abort();
     }
+
+    return;
 }
 #endif
 
@@ -101,6 +107,7 @@ void
 duncecap_init(duncecap_t *self)
 {
     duncecap_store_t *store;
+
     store               = duncecap_store_new(HATRACK_MIN_SIZE);
     self->store_current = store;
     self->item_count    = 0;

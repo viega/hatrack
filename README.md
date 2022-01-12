@@ -274,10 +274,11 @@ Here is an overview of the tables in their 'logical' order:
 12) **tophat** A proof of concept illustrating how language
                 implementations can maximize performance until a
                 second thread starts, by waiting until that time to
-                migrate the table to a different implementation. Note,
-                however, that, for general purpose use, witchhat and
-                woolhat both perform admirably, even for
-                single-threaded applications (especially witchhat,
+                migrate the table to a different implementation (the
+                given implementation lets you select from four,
+                currently). Note, however, that, for general purpose
+                use, witchhat and woolhat both perform admirably, even
+                for single-threaded applications (especially witchhat,
                 when multi-threaded order preservation and consistency
                 are unimportant).
 

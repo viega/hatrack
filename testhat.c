@@ -81,7 +81,9 @@ testhat_t *
 testhat_new(char *name)
 {
     testhat_t *ret;
-    int64_t    i = testhat_id_by_name(name);
+    int64_t    i;
+
+    i = testhat_id_by_name(name);
 
     if (i == -1) {
         fprintf(stderr, "Error: table type named '%s' not registered.\n", name);
@@ -295,7 +297,7 @@ hatrack_vtable_t tophat_cwf_vtable = {
 // clang-format on
 
 static void
-testhat_init_default_algorithms()
+testhat_init_default_algorithms(void)
 {
     testhat_register_algorithm("refhat", &refhat_vtable, sizeof(refhat_t));
     testhat_register_algorithm("oldhat", &oldhat_vtable, sizeof(oldhat_t));
@@ -325,4 +327,6 @@ testhat_init_default_algorithms()
     testhat_register_algorithm("tophat-cwf",
                                &tophat_cwf_vtable,
                                sizeof(tophat_t));
+
+    return;
 }

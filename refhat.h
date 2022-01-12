@@ -48,13 +48,19 @@
  *            sort items in the dictionary, when we produce a "view"
  *            (views are intended for iteration or set operations).
  *            The epoch number is chosen relative to other insertions,
- *            and monotonically increases from 0.  If an item is
- *            already in the table, then the value is not updated.
+ *            and monotonically increases from 1 (see refhat_t below).
+ *            If an item is already in the table during a write
+ *            operation, where we end up replacing the stored item,
+ *            then the value of the epoch field is NOT updated, to
+ *            keep insertion order sorting consistent with how Python
+ *            does it.
+ *
+ *            If this value is zero, it indicates there's no item in
+ *            the bucket.
  */
 typedef struct {
     hatrack_hash_t    hv;
     void             *item;
-    bool              deleted;
     uint64_t          epoch;
 } refhat_bucket_t;
 

@@ -63,7 +63,9 @@ mmm_register_thread(void)
 	mmm_retire(head);
     }
     
-    mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;    
+    mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;
+
+    return;
 }
 
 static void
@@ -79,7 +81,8 @@ mmm_tid_giveback(void)
     do {
 	new_head->next = old_head;
     } while (!CAS(&mmm_free_tids, &old_head, new_head));
-    
+
+    return;
 }
 
 #else /* HATRACK_ALLOW_TID_GIVEBACKS */
@@ -94,6 +97,8 @@ mmm_register_thread(void)
     }
 
     mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;
+
+    return;
 }
 
 #endif /* HATRACK_ALLOW_TID_GIVEBACKS */
@@ -102,6 +107,8 @@ mmm_register_thread(void)
 void mmm_reset_tids(void)
 {
     atomic_store(&mmm_nexttid, 0);
+
+    return;
 }
 
 // For now, our cleanup function spins until it is able to retire
@@ -123,13 +130,16 @@ mmm_clean_up_before_exit(void)
 #ifdef HATRACK_ALLOW_TID_GIVEBACKS
     mmm_tid_giveback();
 #endif
-    
+
+    return;
 }
 
 void
 mmm_retire(void *ptr)
 {
-    mmm_header_t *cell = mmm_get_header(ptr);
+    mmm_header_t *cell;
+
+    cell = mmm_get_header(ptr);
 
 #ifdef HATRACK_MMM_DEBUG
 // Don't need this check when not debugging algorithms.
@@ -165,6 +175,8 @@ mmm_retire(void *ptr)
 	mmm_retire_ctr = 0;
 	mmm_empty();
     }
+
+    return;
 }
 
 /* The basic gist of this algorithm is that we're going to look at
@@ -258,4 +270,6 @@ mmm_empty(void)
 	}
 	free(tmp);
     }
+
+    return;
 }

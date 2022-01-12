@@ -107,6 +107,26 @@
  * user-accessable; the value is set based on which initialization
  * function is called, per below.
  *
+ * The thinking behind these four tables is as follows:
+ *
+ * First, you may want to select between faster tables without
+ * consistency, and consistent tables.
+ *
+ * This could happen in the same application, for instance if you're
+ * using both standard dictionaries as well as sets, where
+ * intersection and union operations are important.
+ *
+ * Second, while the wait free versions generally seem to perform
+ * better on architectures w/ a 128-bit compare and swap, you may not
+ * have such a thing, and you might prefer to stick with locks for
+ * performance.
+ *
+ * That second concern probably merits a compile-time option. And,
+ * indeed, my initial version of this used one, but I thought it was
+ * more valuable to keeping implementations in lock-step if I made it
+ * all run-time configurable, since there's no extra performance
+ * penalty to doing so.
+ *
  * Currently, TOPHAT_T_FAST_LOCKING         is newshat
  *            TOPHAT_T_FAST_WAIT_FREE       is witchhat
  *            TOPHAT_T_CONSISTENT_LOCKING   is ballcap

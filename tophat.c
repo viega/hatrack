@@ -91,6 +91,8 @@ tophat_init_fast_mx(tophat_t *self)
     self->mt_vtable.delete  = (hatrack_delete_func)newshat_delete;
     self->mt_vtable.len     = (hatrack_len_func)newshat_len;
     self->mt_vtable.view    = (hatrack_view_func)newshat_view;
+
+    return;
 }
 
 void
@@ -107,8 +109,9 @@ tophat_init_fast_wf(tophat_t *self)
     self->mt_vtable.delete  = (hatrack_delete_func)witchhat_delete;
     self->mt_vtable.len     = (hatrack_len_func)witchhat_len;
     self->mt_vtable.view    = (hatrack_view_func)witchhat_view;
-}
 
+    return;
+}
 
 void
 tophat_init_cst_mx(tophat_t *self)
@@ -125,6 +128,7 @@ tophat_init_cst_mx(tophat_t *self)
     self->mt_vtable.len     = (hatrack_len_func)ballcap_len;
     self->mt_vtable.view    = (hatrack_view_func)ballcap_view;
 
+    return;
 }
 
 void
@@ -141,6 +145,8 @@ tophat_init_cst_wf(tophat_t *self)
     self->mt_vtable.delete  = (hatrack_delete_func)woolhat_delete;
     self->mt_vtable.len     = (hatrack_len_func)woolhat_len;
     self->mt_vtable.view    = (hatrack_view_func)woolhat_view;
+
+    return;
 }
 
 void *
@@ -311,7 +317,9 @@ tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found) {
 		if (found) {
 		    *found = false;
 		}
-		pthread_mutex_unlock(&self->mutex);
+		if (pthread_mutex_unlock(&self->mutex)) {
+		    abort();
+		}
 		return NULL;
 	    }
 	    ret = record.item;
@@ -321,13 +329,17 @@ tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found) {
 	    if (found) {
 		*found = true;
 	    }
-	    pthread_mutex_unlock(&self->mutex);
+	    if (pthread_mutex_unlock(&self->mutex)) {
+		abort();
+	    }
 	    return ret;
 	}
 	if (hatrack_bucket_unreserved(cur->hv)) {
 	    if (ctx->used_count + 1 == ctx->threshold) {
 		tophat_st_migrate(ctx);
-		pthread_mutex_unlock(&self->mutex);
+		if (pthread_mutex_unlock(&self->mutex)) {
+		    abort();
+		}
 		return tophat_put(self, hv, item, found);
 	    }
 	    ctx->used_count++;
@@ -342,7 +354,9 @@ tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found) {
 	    if (found) {
 		*found = false;
 	    }
-	    pthread_mutex_unlock(&self->mutex);
+	    if (pthread_mutex_unlock(&self->mutex)) {
+		abort();
+	    }
 	    return NULL;
 	}
 	bix = (bix + 1) & ctx->last_slot;
@@ -396,7 +410,9 @@ tophat_replace(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
                 if (found) {
                     *found = false;
                 }
-		pthread_mutex_unlock(&self->mutex);
+		if (pthread_mutex_unlock(&self->mutex)) {
+		    abort();
+		}
                 return NULL;
             }
             ret         = record.item;
@@ -407,7 +423,9 @@ tophat_replace(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
             if (found) {
                 *found = true;
             }
-	    pthread_mutex_unlock(&self->mutex);
+	    if (pthread_mutex_unlock(&self->mutex)) {
+		abort();
+	    }
             return ret;
         }
         if (hatrack_bucket_unreserved(cur->hv)) {
@@ -465,16 +483,22 @@ tophat_add(tophat_t *self, hatrack_hash_t hv, void *item)
                 atomic_store(&cur->record, record);
 
                 ctx->item_count++;
-		pthread_mutex_unlock(&self->mutex);
+		if (pthread_mutex_unlock(&self->mutex)) {
+		    abort();
+		}
                 return true;
             }
-	    pthread_mutex_unlock(&self->mutex);	    
+	    if (pthread_mutex_unlock(&self->mutex)) {
+		abort();
+	    }
             return false;
         }
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (ctx->used_count + 1 == ctx->threshold) {
                 tophat_st_migrate(ctx);
-		pthread_mutex_unlock(&self->mutex);		
+		if (pthread_mutex_unlock(&self->mutex)) {
+		    abort();
+		}
                 return tophat_add(self, hv, item);
             }
             ctx->used_count++;
@@ -485,7 +509,9 @@ tophat_add(tophat_t *self, hatrack_hash_t hv, void *item)
             record.epoch = ctx->next_epoch++;
 
             atomic_store(&cur->record, record);
-	    pthread_mutex_unlock(&self->mutex);
+	    if (pthread_mutex_unlock(&self->mutex)) {
+		abort();
+	    }
             return true;
         }
         bix = (bix + 1) & ctx->last_slot;
@@ -595,6 +621,8 @@ tophat_delete(tophat_t *self)
     
     pthread_mutex_destroy(&self->mutex);
     free(self);
+
+    return;
 }
 
 uint64_t
@@ -780,6 +808,8 @@ tophat_st_migrate(tophat_st_ctx_t *ctx)
     ctx->buckets    = new_buckets;
     ctx->last_slot  = new_last_slot;
     ctx->threshold  = hatrack_compute_table_threshold(num_buckets);
+
+    return;
 }
 
 /* Remember that we already have a lock at this point. So the
@@ -1056,7 +1086,6 @@ tophat_migrate_to_woolhat(tophat_t *self)
     // Now that mt_table is set, we can retire the st implementation.
     mmm_retire(ctx->buckets);
     mmm_retire(ctx);
-
 
     return (void *)new_table;
 }

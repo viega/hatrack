@@ -416,14 +416,24 @@ hatrack_debug_mmm(void *addr, char *msg)
     *--p = *r++;
     *--p = *r++;
     hatrack_debug(p);
+
+    return;
 }
 #endif
 
+/* The call to pthread_once would be better served if it moved to
+ * thread initialization, but since we want to be as agnostic as
+ * possible to the threading environment, we'll go ahead and pay the
+ * (admittedly very small) cost of the implied test with each
+ * operation.
+ */
 static inline void
 mmm_start_basic_op(void)
 {
     pthread_once(&mmm_inited, mmm_register_thread);
     mmm_reservations[mmm_mytid] = atomic_load(&mmm_epoch);
+
+    return;
 }
 
 /* mmm_start_linearized_op() is used to help ensure we can safely recover
@@ -496,6 +506,8 @@ static inline void
 mmm_end_op(void)
 {
     mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;
+
+    return;
 }
 
 static inline void *
@@ -506,6 +518,7 @@ mmm_alloc(uint64_t size)
 
     HATRACK_MALLOC_CTR();
     DEBUG_MMM_INTERNAL(item->data, "mmm_alloc");
+
     return (void *)item->data;
 }
 
@@ -518,6 +531,7 @@ mmm_alloc_committed(uint64_t size)
     atomic_store(&item->write_epoch, atomic_fetch_add(&mmm_epoch, 1) + 1);
     HATRACK_MALLOC_CTR();
     DEBUG_MMM_INTERNAL(item->data, "mmm_alloc_committed");
+
     return (void *)item->data;
 }
 
@@ -527,6 +541,8 @@ mmm_add_cleanup_handler(void *ptr, void (*handler)(void *))
     mmm_header_t *header = mmm_get_header(ptr);
 
     header->cleanup = handler;
+
+    return;
 }
 
 static inline void
@@ -550,6 +566,8 @@ mmm_commit_write(void *ptr)
      */
     LCAS(&item->write_epoch, &expected_value, cur_epoch, HATRACK_CTR_COMMIT);
     DEBUG_MMM_INTERNAL(ptr, "committed");
+
+    return;
 }
 
 static inline void
@@ -573,6 +591,8 @@ mmm_help_commit(void *ptr)
              cur_epoch,
              HATRACK_CTR_COMMIT_HELPS);
     }
+
+    return;
 }
 
 // Call this when we know no other thread ever could have seen the
@@ -583,6 +603,8 @@ mmm_retire_unused(void *ptr)
     DEBUG_MMM_INTERNAL(ptr, "mmm_retire_unused");
     free(mmm_get_header(ptr));
     HATRACK_RETIRE_UNUSED_CTR();
+
+    return;
 }
 
 static inline uint64_t

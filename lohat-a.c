@@ -27,8 +27,7 @@
 #include "lohat-a.h"
 
 // clang-format off
-
-static lohat_a_store_t  *lohat_a_store_new         (uint64_t);
+static lohat_a_store_t *lohat_a_store_new          (uint64_t);
 static void             lohat_a_retire_store       (lohat_a_store_t *);
 static void             lohat_a_retire_unused_store(lohat_a_store_t *);
 static void            *lohat_a_store_get          (lohat_a_store_t *,
@@ -54,7 +53,6 @@ static lohat_a_store_t *lohat_a_store_migrate      (lohat_a_store_t *,
 #ifndef HATRACK_ALWAYS_USE_QSORT
 static void             lohat_a_insertion_sort     (hatrack_view_t *, uint64_t);
 #endif
-
 // clang-format on
 
 void
@@ -66,6 +64,8 @@ lohat_a_init(lohat_a_t *self)
 
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
+
+    return;
 }
 
 void *
@@ -165,6 +165,8 @@ lohat_a_delete(lohat_a_t *self)
 
     lohat_a_retire_store(store);
     free(self);
+
+    return;
 }
 
 uint64_t
@@ -310,6 +312,8 @@ lohat_a_retire_store(lohat_a_store_t *self)
 {
     mmm_retire(self->hist_buckets);
     mmm_retire(self);
+
+    return;
 }
 
 static void
@@ -317,6 +321,8 @@ lohat_a_retire_unused_store(lohat_a_store_t *self)
 {
     mmm_retire_unused(self->hist_buckets);
     mmm_retire_unused(self);
+
+    return;
 }
 
 static void *
@@ -815,10 +821,11 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
     lohat_a_history_t  *expected_ptr;
     uint64_t            i;
     uint64_t            bix;
-    uint64_t            new_used = 0;
+    uint64_t            new_used;
 
     cur       = self->hist_buckets;
     store_end = self->hist_end;
+    new_used  = 0;
 
     /* While there are N buckets in the actual hash table's top-level
      * buckets, the history array has .75N buckets, and we might want
@@ -997,5 +1004,7 @@ lohat_a_insertion_sort(hatrack_view_t *view, uint64_t num_items)
         }
         view[j] = swap;
     }
+
+    return;
 }
 #endif

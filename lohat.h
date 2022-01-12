@@ -511,9 +511,9 @@ typedef struct lohat_store_st lohat_store_t;
 
 struct lohat_store_st {
     alignas(8)
-    uint64_t                  last_slot;
-    uint64_t                  threshold;
-    _Atomic uint64_t          used_count;
+    uint64_t                 last_slot;
+    uint64_t                 threshold;
+    _Atomic uint64_t         used_count;
     _Atomic(lohat_store_t *) store_next;
     lohat_history_t          hist_buckets[];
 };
@@ -550,7 +550,7 @@ struct lohat_store_st {
 typedef struct lohat_st {
     alignas(8)
     _Atomic(lohat_store_t *) store_current;
-    _Atomic uint64_t          item_count;
+    _Atomic uint64_t         item_count;
 } lohat_t;
 
 

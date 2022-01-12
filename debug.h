@@ -127,6 +127,8 @@ hatrack_debug(char *msg)
     record_ptr->sequence = mysequence;
     record_ptr->thread   = mmm_mytid;
     strncpy(record_ptr->msg, msg, HATRACK_DEBUG_MSG_SIZE);
+
+    return;
 }
 
 /* This is one of those things not we don't intend people to
@@ -183,6 +185,8 @@ hatrack_debug_ptr(void *addr, char *msg)
     strncpy(record_ptr->msg + HATRACK_PTR_CHRS + HATRACK_PTR_FMT_CHRS,
             msg,
             HATRACK_DEBUG_MSG_SIZE - HATRACK_PTR_CHRS - HATRACK_PTR_FMT_CHRS);
+
+    return;
 }
 
 /* hatrack_debug_assert()
@@ -224,6 +228,8 @@ hatrack_debug_assert(bool        expression_result,
         fprintf(stderr, "Use the debugger to jump here to keep going.\n");
         return;
     }
+
+    return;
 }
 
 /* hatrack_debug_assert_w_params()
@@ -265,8 +271,9 @@ hatrack_debug_assert_w_params(bool        expression_result,
             }
         }
         fprintf(stderr, "Use the debugger to jump here to keep going.\n");
-        return;
     }
+
+    return;
 }
 
 #define DEBUG(x)        hatrack_debug(x)

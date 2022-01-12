@@ -35,6 +35,9 @@ static void refhat_migrate(refhat_t *);
  * config.h, since we require hash table buckets to always be sized to
  * a power of two. To set the size, you instead set the preprocessor
  * variable HATRACK_MIN_SIZE_LOG.
+ *
+ * Note that next_epoch starts out as 1, because a 0 value indicates
+ * deletion.
  */
 void
 refhat_init(refhat_t *self)
@@ -46,8 +49,10 @@ refhat_init(refhat_t *self)
     self->threshold  = hatrack_compute_table_threshold(size);
     self->used_count = 0;
     self->item_count = 0;
-    self->next_epoch = 0;
+    self->next_epoch = 1;
     self->buckets    = (refhat_bucket_t *)calloc(size, sizeof(refhat_bucket_t));
+
+    return;
 }
 
 /* refhat_get()
@@ -107,7 +112,7 @@ refhat_get(refhat_t *self, hatrack_hash_t hv, bool *found)
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, cur->hv)) {
-            if (cur->deleted) {
+            if (!cur->epoch) {
                 if (found) {
                     *found = false;
                 }
@@ -160,10 +165,9 @@ refhat_put(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, cur->hv)) {
-            if (cur->deleted) {
-                cur->item    = item;
-                cur->deleted = false;
-                cur->epoch   = self->next_epoch++;
+            if (!cur->epoch) {
+                cur->item  = item;
+                cur->epoch = self->next_epoch++;
                 self->item_count++;
 
                 if (found) {
@@ -226,7 +230,7 @@ refhat_replace(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, cur->hv)) {
-            if (cur->deleted) {
+            if (!cur->epoch) {
                 if (found) {
                     *found = false;
                 }
@@ -254,8 +258,11 @@ refhat_replace(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
  * This function adds an item to the hash table, but only if there
  * isn't currently an item stored with the associated hash value.
  *
- * If an item previously existed, but has since been deleted, the
- * add operation will still succeed.
+ * If an item was deleted since the last resize, we might find the
+ * hash value in the table, but not the item. When items are deleted,
+ * their epoch value is set to 0, which is not given out to actual
+ * inserts.  Anyway, in this scenario where the hash value is there,
+ * but the epoch is zero, the add operation should still succeed.
  *
  * Returns true if the insertion is succesful, and false otherwise.
  */
@@ -271,10 +278,9 @@ refhat_add(refhat_t *self, hatrack_hash_t hv, void *item)
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, cur->hv)) {
-            if (cur->deleted) {
-                cur->item    = item;
-                cur->deleted = false;
-                cur->epoch   = self->next_epoch++;
+            if (!cur->epoch) {
+                cur->item  = item;
+                cur->epoch = self->next_epoch++;
                 self->item_count++;
 
                 return true;
@@ -318,15 +324,16 @@ refhat_remove(refhat_t *self, hatrack_hash_t hv, bool *found)
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
         if (hatrack_hashes_eq(hv, cur->hv)) {
-            if (cur->deleted) {
+            if (!cur->epoch) {
                 if (found) {
                     *found = false;
                 }
                 return NULL;
             }
 
-            ret          = cur->item;
-            cur->deleted = true;
+            ret        = cur->item;
+            cur->epoch = 0;
+
             --self->item_count;
 
             if (found) {
@@ -357,6 +364,8 @@ refhat_delete(refhat_t *self)
 {
     free(self->buckets);
     free(self);
+
+    return;
 }
 
 /* refhat_len()
@@ -404,7 +413,7 @@ refhat_view(refhat_t *self, uint64_t *num, bool sort)
     end  = cur + (self->last_slot + 1);
 
     while (cur < end) {
-        if (cur->deleted || hatrack_bucket_unreserved(cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv) || !cur->epoch) {
             cur++;
             continue;
         }
@@ -459,15 +468,16 @@ refhat_migrate(refhat_t *self)
 
     for (n = 0; n <= self->last_slot; n++) {
         cur = &self->buckets[n];
-        if (cur->deleted || hatrack_bucket_unreserved(cur->hv)) {
+        if (hatrack_bucket_unreserved(cur->hv) || !cur->epoch) {
             continue;
         }
         bix = hatrack_bucket_index(cur->hv, new_last_slot);
         for (i = 0; i < num_buckets; i++) {
             target = &new_buckets[bix];
             if (hatrack_bucket_unreserved(target->hv)) {
-                target->hv   = cur->hv;
-                target->item = cur->item;
+                target->hv    = cur->hv;
+                target->item  = cur->item;
+                target->epoch = cur->epoch;
                 break;
             }
             bix = (bix + 1) & new_last_slot;
@@ -479,4 +489,6 @@ refhat_migrate(refhat_t *self)
     self->buckets    = new_buckets;
     self->last_slot  = new_last_slot;
     self->threshold  = hatrack_compute_table_threshold(num_buckets);
+
+    return;
 }

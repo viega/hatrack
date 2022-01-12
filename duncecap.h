@@ -159,7 +159,7 @@ typedef struct {
     uint64_t            last_slot;
     uint64_t            threshold;
     uint64_t            used_count;
-    duncecap_bucket_t    buckets[];
+    duncecap_bucket_t   buckets[];
 } duncecap_store_t;
 
 /* duncecap_t
@@ -201,7 +201,7 @@ typedef struct {
  *                  operation, for the purposes of sort ordering.
  */
 typedef struct {
-    duncecap_store_t    *store_current;
+    duncecap_store_t   *store_current;
     uint64_t            item_count;
     uint64_t            next_epoch;
     pthread_mutex_t     mutex;

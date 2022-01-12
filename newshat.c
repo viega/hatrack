@@ -350,6 +350,8 @@ newshat_store_delete(newshat_store_t *self)
     for (i = 0; i <= self->last_slot; i++) {
         pthread_mutex_destroy(&self->buckets[i].mutex);
     }
+
+    return;
 }
 
 /*

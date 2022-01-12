@@ -179,6 +179,8 @@ ballcap_store_delete(ballcap_store_t *self)
     for (i = 0; i <= self->last_slot; i++) {
         pthread_mutex_destroy(&self->buckets[i].mutex);
     }
+
+    return;
 }
 
 uint64_t
@@ -232,7 +234,9 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
         }
 
         if (!record || sort_epoch > target_epoch || record->deleted) {
-            pthread_mutex_unlock(&cur->mutex);
+            if (pthread_mutex_unlock(&cur->mutex)) {
+                abort();
+            }
             cur++;
             continue;
         }
@@ -240,7 +244,9 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
         p->item       = record->item;
         p->sort_epoch = mmm_get_create_epoch(record);
 
-        pthread_mutex_unlock(&cur->mutex);
+        if (pthread_mutex_unlock(&cur->mutex)) {
+            abort();
+        }
         count++;
         p++;
         cur++;
@@ -360,7 +366,9 @@ check_bucket_again:
                 abort();
             }
             if (cur->migrated) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 mmm_retire_unused(record);
                 return ballcap_store_put(top->store_current,
                                          top,
@@ -394,7 +402,9 @@ check_bucket_again:
             cur->record = record;
             mmm_commit_write(record);
             mmm_retire(old_record);
-            pthread_mutex_unlock(&cur->mutex);
+            if (pthread_mutex_unlock(&cur->mutex)) {
+                abort();
+            }
 
             return ret;
         }
@@ -404,7 +414,9 @@ check_bucket_again:
                 abort();
             }
             if (cur->migrated) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 mmm_retire_unused(record);
                 return ballcap_store_put(top->store_current,
                                          top,
@@ -413,11 +425,15 @@ check_bucket_again:
                                          found);
             }
             if (!hatrack_bucket_unreserved(cur->hv)) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 goto check_bucket_again;
             }
             if (self->used_count == self->threshold) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
 
                 mmm_retire_unused(record);
                 self = ballcap_store_migrate(self, top);
@@ -433,7 +449,9 @@ check_bucket_again:
 
             cur->record = record;
             mmm_commit_write(record);
-            pthread_mutex_unlock(&cur->mutex);
+            if (pthread_mutex_unlock(&cur->mutex)) {
+                abort();
+            }
             return ret;
         }
         bix = (bix + 1) & last_slot;
@@ -472,7 +490,9 @@ ballcap_store_replace(ballcap_store_t *self,
                 abort();
             }
             if (cur->migrated) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 return ballcap_store_replace(top->store_current,
                                              top,
                                              hv,
@@ -506,7 +526,9 @@ ballcap_store_replace(ballcap_store_t *self,
             cur->record  = record;
             mmm_commit_write(record);
             mmm_retire(record->next);
-            pthread_mutex_unlock(&cur->mutex);
+            if (pthread_mutex_unlock(&cur->mutex)) {
+                abort();
+            }
 
             return ret;
         }
@@ -539,11 +561,15 @@ check_bucket_again:
                 abort();
             }
             if (cur->migrated) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 return ballcap_store_add(top->store_current, top, hv, item);
             }
             if (!cur->record->deleted) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 return false;
             }
             goto fill_record;
@@ -553,15 +579,21 @@ check_bucket_again:
                 abort();
             }
             if (cur->migrated) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 return ballcap_store_add(top->store_current, top, hv, item);
             }
             if (!hatrack_bucket_unreserved(cur->hv)) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 goto check_bucket_again;
             }
             if (self->used_count == self->threshold) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 self = ballcap_store_migrate(self, top);
                 return ballcap_store_add(self, top, hv, item);
             }
@@ -579,7 +611,9 @@ fill_record:
             if (record->next) {
                 mmm_retire(record->next);
             }
-            pthread_mutex_unlock(&cur->mutex);
+            if (pthread_mutex_unlock(&cur->mutex)) {
+                abort();
+            }
 
             return true;
         }
@@ -617,14 +651,18 @@ ballcap_store_remove(ballcap_store_t *self,
                 abort();
             }
             if (cur->migrated) {
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 return ballcap_store_remove(top->store_current, top, hv, found);
             }
             if (cur->record->deleted) {
                 if (found) {
                     *found = false;
                 }
-                pthread_mutex_unlock(&cur->mutex);
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 return NULL;
             }
 
@@ -643,7 +681,9 @@ ballcap_store_remove(ballcap_store_t *self,
             if (found) {
                 *found = true;
             }
-            pthread_mutex_unlock(&cur->mutex);
+            if (pthread_mutex_unlock(&cur->mutex)) {
+                abort();
+            }
             return ret;
         }
         bix = (bix + 1) & last_slot;
@@ -661,7 +701,7 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
     uint64_t          cur_last_slot;
     uint64_t          new_last_slot;
     uint64_t          i, n, bix;
-    uint64_t          items_to_migrate = 0;
+    uint64_t          items_to_migrate;
 
     if (pthread_mutex_lock(&top->migrate_mutex)) {
         abort();
@@ -670,10 +710,14 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
         // Someone else migrated it, and now we can go finish our
         // write.
         new_store = top->store_current;
-        pthread_mutex_unlock(&top->migrate_mutex);
+        if (pthread_mutex_unlock(&top->migrate_mutex)) {
+            abort();
+        }
         return new_store;
     }
-    cur_last_slot = store->last_slot;
+
+    cur_last_slot    = store->last_slot;
+    items_to_migrate = 0;
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];
@@ -717,11 +761,15 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];
-        pthread_mutex_unlock(&cur->mutex);
+        if (pthread_mutex_unlock(&cur->mutex)) {
+            abort();
+        }
     }
 
     mmm_retire(store);
-    pthread_mutex_unlock(&top->migrate_mutex);
+    if (pthread_mutex_unlock(&top->migrate_mutex)) {
+        abort();
+    }
 
     return new_store;
 }
