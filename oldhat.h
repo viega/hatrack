@@ -147,10 +147,10 @@ typedef struct oldhat_store_st oldhat_store_t;
 // clang-format off
 struct oldhat_store_st {
     alignas(8)
-    uint64_t                  last_slot;
-    uint64_t                  threshold;
-    _Atomic uint64_t          used_count;
-    _Atomic(oldhat_store_t *) store_next;
+    uint64_t                   last_slot;
+    uint64_t                   threshold;
+    _Atomic uint64_t           used_count;
+    _Atomic(oldhat_store_t *)  store_next;
     _Atomic(oldhat_record_t *) buckets[];
 };
 
