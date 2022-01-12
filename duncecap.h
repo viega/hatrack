@@ -66,24 +66,22 @@
  * atomic load operation, C will transparently use locking to simulate
  * the instruction.
  *
- * item -- The item passed to the hash table, usually a key : value
- *         pair of some sort.
+ * item --  The item passed to the hash table, usually a key : value
+ *          pair of some sort.
  *
- * info -- The topmost two bits are a bitfield; see the two flags
- *         above.  The rest of the field represents the "epoch"-- an
- *         indication of the creation time of the item, relative to
- *         other items. Note that, since this table does not provide
- *         fully consistent views, the epoch is not quite as accurate
- *         as with other table implementations in the hatrack. In
- *         particular, bumps to the duncecap_t data structure's
- *         next_epoch value (see below), are racy, so multiple data
- *         items can definitely get the same epoch value, meaning we
- *         have no linearization point on which to construct a
- *         consistent sort order.
+ * epoch -- The "epoch" is an indication of the creation time of the
+ *          item, relative to other items. Note that, since this table
+ *          does not provide fully consistent views, the epoch is not
+ *          quite as accurate as with other table implementations in
+ *          the hatrack. In particular, bumps to the duncecap_t data
+ *          structure's next_epoch value (see below), are racy, so
+ *          multiple data items can definitely get the same epoch
+ *          value, meaning we have no linearization point on which to
+ *          construct a consistent sort order.
  */
 typedef struct {
     void    *item;
-    uint64_t info;
+    uint64_t epoch;
 } duncecap_record_t;
 
 /* duncecap_bucket_t

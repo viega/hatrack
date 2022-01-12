@@ -858,7 +858,7 @@ tophat_migrate_to_newshat(tophat_t *self)
 	    if (hatrack_bucket_unreserved(new_bucket->hv)) {
 		new_bucket->hv       = cur_bucket->hv;
 		new_record.item      = cur_record.item;
-		new_record.info      = cur_record.epoch;
+		new_record.epoch     = cur_record.epoch;
 		new_bucket->record   = new_record;
 		new_bucket->migrated = false;
 		break;

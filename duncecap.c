@@ -377,12 +377,12 @@ duncecap_view(duncecap_t *self, uint64_t *num, bool sort)
     while (cur < end) {
         record = atomic_read(&cur->record);
 
-        if (!record.info) {
+        if (!record.epoch) {
             cur++;
             continue;
         }
         p->item       = record.item;
-        p->sort_epoch = record.info;
+        p->sort_epoch = record.epoch;
         count++;
         p++;
         cur++;
@@ -443,7 +443,7 @@ duncecap_store_get(duncecap_store_t *self, hatrack_hash_t hv, bool *found)
              */
             record = atomic_read(&cur->record);
 
-            if (record.info) {
+            if (record.epoch) {
                 if (found) {
                     *found = true;
                 }
@@ -489,12 +489,12 @@ duncecap_store_put(duncecap_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_load(&cur->record);
 
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
-                record.info = top->next_epoch++;
-                ret           = NULL;
+                record.epoch = top->next_epoch++;
+                ret          = NULL;
                 top->item_count++;
                 // The bucket has already been used, so we do NOT bump
                 // used_count in this case.
@@ -522,9 +522,9 @@ duncecap_store_put(duncecap_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv     = hv;
-            record.item = item;
-            record.info = top->next_epoch++;
+            cur->hv      = hv;
+            record.item  = item;
+            record.epoch = top->next_epoch++;
             atomic_store(&cur->record, record);
 
             if (found) {
@@ -559,7 +559,7 @@ duncecap_store_replace(duncecap_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
@@ -606,11 +606,11 @@ duncecap_store_add(duncecap_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
-            if (record.info) {
+            if (record.epoch) {
                 return false;
             }
-            record.item = item;
-            record.info = top->next_epoch++;
+            record.item  = item;
+            record.epoch = top->next_epoch++;
             top->item_count++;
             atomic_store(&cur->record, record);
             return true;
@@ -625,9 +625,9 @@ duncecap_store_add(duncecap_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv     = hv;
-            record.item = item;
-            record.info = top->next_epoch++;
+            cur->hv      = hv;
+            record.item  = item;
+            record.epoch = top->next_epoch++;
             atomic_store(&cur->record, record);
 
             return true;
@@ -658,15 +658,15 @@ duncecap_store_remove(duncecap_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
                 return NULL;
             }
 
-            ret         = record.item;
-            record.info = 0;
+            ret          = record.item;
+            record.epoch = 0;
             atomic_store(&cur->record, record);
             --top->item_count;
 
@@ -718,7 +718,7 @@ duncecap_migrate(duncecap_t *self)
         cur    = &cur_store->buckets[n];
         record = atomic_read(&cur->record);
 
-        if (!record.info) {
+        if (!record.epoch) {
             continue;
         }
         bix = hatrack_bucket_index(cur->hv, new_last_slot);

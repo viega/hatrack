@@ -378,12 +378,12 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 
     while (cur < end) {
         record = atomic_read(&cur->record);
-        if (!record.info) {
+        if (!record.epoch) {
             cur++;
             continue;
         }
         p->item       = record.item;
-        p->sort_epoch = record.info;
+        p->sort_epoch = record.epoch;
         count++;
         p++;
         cur++;
@@ -460,7 +460,7 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t hv, bool *found)
              * make sure there's something to return.
              */
             record = atomic_read(&cur->record);
-            if (record.info) {
+            if (record.epoch) {
                 if (found) {
                     *found = true;
                 }
@@ -508,12 +508,12 @@ swimcap_store_put(swimcap_store_t *self,
             /* If no epoch is set, it's either deleted or has never
              * been stored.  Either way, no worries.
              */
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
-                record.info = top->next_epoch++;
-                ret         = NULL;
+                record.epoch = top->next_epoch++;
+                ret          = NULL;
                 top->item_count++;
                 // The bucket has already been used, so we do NOT bump
                 // used_count in this case.
@@ -541,9 +541,9 @@ swimcap_store_put(swimcap_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv     = hv;
-            record.item = item;
-            record.info = top->next_epoch++;
+            cur->hv      = hv;
+            record.item  = item;
+            record.epoch = top->next_epoch++;
             atomic_store(&cur->record, record);
 
             if (found) {
@@ -578,7 +578,7 @@ swimcap_store_replace(swimcap_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
@@ -625,11 +625,11 @@ swimcap_store_add(swimcap_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
-            if (record.info) {
+            if (record.epoch) {
                 return false;
             }
-            record.item = item;
-            record.info = top->next_epoch++;
+            record.item  = item;
+            record.epoch = top->next_epoch++;
             top->item_count++;
             atomic_store(&cur->record, record);
             return true;
@@ -644,9 +644,9 @@ swimcap_store_add(swimcap_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv     = hv;
-            record.item = item;
-            record.info = top->next_epoch++;
+            cur->hv      = hv;
+            record.item  = item;
+            record.epoch = top->next_epoch++;
             atomic_store(&cur->record, record);
 
             return true;
@@ -677,15 +677,15 @@ swimcap_store_remove(swimcap_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
                 return NULL;
             }
 
-            ret         = record.item;
-            record.info = 0;
+            ret          = record.item;
+            record.epoch = 0;
             atomic_store(&cur->record, record);
             --top->item_count;
 
@@ -727,13 +727,13 @@ swimcap_migrate(swimcap_t *self)
     for (n = 0; n <= cur_last_slot; n++) {
         cur    = &cur_store->buckets[n];
         record = atomic_read(&cur->record);
-	
-        if (!record.info) {
+
+        if (!record.epoch) {
             continue;
         }
-	
+
         bix = hatrack_bucket_index(cur->hv, new_last_slot);
-	
+
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
             if (hatrack_bucket_unreserved(target->hv)) {

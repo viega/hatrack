@@ -67,23 +67,23 @@
  * atomic load operation, C will transparently use locking to simulate
  * the instruction.
  *
- * item -- The item passed to the hash table, usually a key : value
- *         pair of some sort.
+ * item --  The item passed to the hash table, usually a key : value
+ *          pair of some sort.
  *
- * info -- If the field is 0, then it indicates a deleted item.
- *         Otherwise, it represents the "epoch"-- an indication of the
- *         creation time of the item, relative to other items. Note
- *         that, since this table does not provide fully consistent
- *         views, the epoch is not quite as accurate as with other
- *         table implementations in the hatrack. In particular, bumps
- *         to the swimcap_t data structure's next_epoch value (see
- *         below), are racy, so multiple data items can definitely get
- *         the same epoch value, meaning we have no linearization
- *         point on which to construct a consistent sort order.
+ * epoch -- If the field is 0, then it indicates a deleted item.
+ *          Otherwise, it represents the "epoch"-- an indication of the
+ *          creation time of the item, relative to other items. Note
+ *          that, since this table does not provide fully consistent
+ *          views, the epoch is not quite as accurate as with other
+ *          table implementations in the hatrack. In particular, bumps
+ *          to the swimcap_t data structure's next_epoch value (see
+ *          below), are racy, so multiple data items can definitely get
+ *          the same epoch value, meaning we have no linearization
+ *          point on which to construct a consistent sort order.
  */
 typedef struct {
     void    *item;
-    uint64_t info;
+    uint64_t epoch;
 } swimcap_record_t;
 
 /* swimcap_bucket_t

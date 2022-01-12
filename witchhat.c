@@ -854,7 +854,10 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
          new_used,
          WITCHHAT_CTR_LEN_INSTALL);
 
-    if (LCAS(&top->store_current, &self, new_store, WITCHHAT_CTR_STORE_INSTALL)) {
+    if (LCAS(&top->store_current,
+	     &self,
+	     new_store,
+	     WITCHHAT_CTR_STORE_INSTALL)) {
         mmm_retire(self);
     }
 

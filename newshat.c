@@ -272,12 +272,12 @@ newshat_view(newshat_t *self, uint64_t *num, bool sort)
          */
         record = atomic_read(&cur->record);
 
-        if (!record.info) {
+        if (!record.epoch) {
             cur++;
             continue;
         }
         p->item       = record.item;
-        p->sort_epoch = record.info;
+        p->sort_epoch = record.epoch;
         count++;
         p++;
         cur++;
@@ -379,7 +379,7 @@ newshat_store_get(newshat_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
@@ -448,9 +448,9 @@ newshat_store_put(newshat_store_t *self,
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
-            if (!record.info) {
-                record.item = item;
-                record.info = top->next_epoch++; // For sort ordering.
+            if (!record.epoch) {
+                record.item  = item;
+                record.epoch = top->next_epoch++; // For sort ordering.
                 atomic_store(&cur->record, record);
                 top->item_count++;
                 if (found) {
@@ -484,9 +484,9 @@ newshat_store_put(newshat_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv     = hv;
-            record.item = item;
-            record.info = top->next_epoch++;
+            cur->hv      = hv;
+            record.item  = item;
+            record.epoch = top->next_epoch++;
             atomic_store(&cur->record, record);
             if (found) {
                 *found = false;
@@ -542,7 +542,7 @@ newshat_store_replace(newshat_store_t *self,
                                          found);
             }
             record = atomic_read(&cur->record);
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
@@ -606,9 +606,9 @@ newshat_store_add(newshat_store_t *self,
         }
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
-            if (!record.info) {
-                record.item = item;
-                record.info = top->next_epoch++;
+            if (!record.epoch) {
+                record.item  = item;
+                record.epoch = top->next_epoch++;
                 atomic_store(&cur->record, record);
                 top->item_count++;
                 if (pthread_mutex_unlock(&cur->mutex)) {
@@ -631,9 +631,9 @@ newshat_store_add(newshat_store_t *self,
             }
             self->used_count++;
             top->item_count++;
-            cur->hv     = hv;
-            record.item = item;
-            record.info = top->next_epoch++;
+            cur->hv      = hv;
+            record.item  = item;
+            record.epoch = top->next_epoch++;
             atomic_store(&cur->record, record);
             if (pthread_mutex_unlock(&cur->mutex)) {
                 abort();
@@ -683,7 +683,7 @@ newshat_store_remove(newshat_store_t *self,
                 return newshat_store_remove(top->store_current, top, hv, found);
             }
             record = atomic_read(&cur->record);
-            if (!record.info) {
+            if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
@@ -693,8 +693,8 @@ newshat_store_remove(newshat_store_t *self,
                 return NULL;
             }
 
-            ret         = record.item;
-            record.info = 0; // No epoch, empty bucket.
+            ret          = record.item;
+            record.epoch = 0; // No epoch, empty bucket.
 
             atomic_store(&cur->record, record);
             --top->item_count;
@@ -764,7 +764,7 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
         if (pthread_mutex_lock(&cur->mutex)) {
             abort();
         }
-        if (record.info) {
+        if (record.epoch) {
             items_to_migrate++;
         }
     }
@@ -776,8 +776,8 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
     for (n = 0; n <= cur_last_slot; n++) {
         cur    = &store->buckets[n];
         record = atomic_read(&cur->record);
-	
-        if (!record.info) {
+
+        if (!record.epoch) {
             continue;
         }
         bix = hatrack_bucket_index(cur->hv, new_last_slot);
