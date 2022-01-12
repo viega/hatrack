@@ -101,19 +101,19 @@ typedef struct {
  * readers will experience a 'miss', which is the correct outcome, as
  * if the hash had not been written at all yet.
  *
- * contents -- The contents, per above.
+ * record -- The contents, per above.
  *
- * hv       -- the hash value associated with the contents / bucket, 
- *             if any.  Note that the all-zero value maps to "bucket 
- *             is empty". But, as long as the hash function is 
- *             sufficiently random, the hash function doesn't have to 
- *             worry about whether or not it produces an all-zero value;
- *             with 128-bit hashes, the odds should be way too low to 
- *             ever worry about in practice.
+ * hv     -- The hash value associated with the contents / bucket, if
+ *           any.  Note that the all-zero value maps to "bucket is
+ *           empty". But, as long as the hash function is sufficiently
+ *           random, the hash function doesn't have to worry about
+ *           whether or not it produces an all-zero value; with
+ *           128-bit hashes, the odds should be way too low to ever
+ *           worry about in practice.
  */
 typedef struct {
     alignas(16)
-    _Atomic duncecap_record_t contents;
+    _Atomic duncecap_record_t record;
     hatrack_hash_t            hv;
 } duncecap_bucket_t;
 

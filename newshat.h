@@ -63,9 +63,9 @@ typedef struct {
 /* newshat_bucket_t
  *
  * The representation of a bucket.  Each bucket gets its own write
- * mutex, to support multiple writers. The content field is atomically
- * updated, to support reads that can operate in parallel with any
- * write operation.
+ * mutex, to support multiple writers. The 'record' field is
+ * atomically updated, to support reads that can operate in parallel
+ * with any write operation.
  *
  * We force alignment to 128-bits, for the sake of performance of
  * atomic operations, just in case some C compiler somewhere gets it
@@ -76,7 +76,7 @@ typedef struct {
  * readers will experience a 'miss', which is the correct outcome, as
  * if the hash had not been written at all yet.
  *
- * contents -- The contents, per newshat_record_t above.
+ * record   -- The contents, per newshat_record_t above.
  *
  * hv       -- The hash value associated with the contents / bucket, 
  *             if any.  Note that the all-zero value maps to "bucket 
@@ -108,7 +108,7 @@ typedef struct {
 // clang-format off
 typedef struct {
     alignas(16)
-    _Atomic newshat_record_t contents;
+    _Atomic newshat_record_t record;
     hatrack_hash_t           hv;
     bool                     migrated;
     pthread_mutex_t          mutex;

@@ -44,7 +44,7 @@
 
 /* swimcap_record_t
  *
- * This is unchanged from duncecap_contents_t.
+ * This is unchanged from duncecap_record_t.
  *
  * In this implementation, readers only use a mutex long enough to
  * register as a reader (to make sure no writer deletes the store
@@ -61,7 +61,7 @@
  * item (if there is one), and meta-data about that item atomically.
  *
  * We could use the lock to do that, but instead we use an atomic read
- * operation.  The data type swimcap_contents_t represents the 128-bit
+ * operation.  The data type swimcap_record_t represents the 128-bit
  * value we read atomically (actually, could be 64 bits on platforms
  * w/ 32-bit pointers). Note that, on architectures without a 128-bit
  * atomic load operation, C will transparently use locking to simulate
@@ -91,7 +91,7 @@ typedef struct {
  * This is also unchanged from duncecap_bucket_t.
  *
  * Writers will have a write-lock on the hash table before writing to
- * the items in a bucket, but will still need to update the contents
+ * the items in a bucket, but will still need to update the 'record'
  * field atomically, due to the possiblity of readers operating in
  * parallel to the write. 
  * 
@@ -104,19 +104,19 @@ typedef struct {
  * readers will experience a 'miss', which is the correct outcome, as
  * if the hash had not been written at all yet.
  *
- * contents -- The contents, per swimcap_record_t above.
+ * record -- The contents, per swimcap_record_t above.
  *
- * hv       -- The hash value associated with the contents / bucket, 
- *             if any.  Note that the all-zero value maps to "bucket 
- *             is empty". But, as long as the hash function is 
- *             sufficiently random, the hash function doesn't have to 
- *             worry about whether or not it produces an all-zero value;
- *             with 128-bit hashes, the odds should be way too low to 
- *             ever worry about in practice.
+ * hv     -- The hash value associated with the contents / bucket, if
+ *           any.  Note that the all-zero value maps to "bucket is
+ *           empty". But, as long as the hash function is sufficiently
+ *           random, the hash function doesn't have to worry about
+ *           whether or not it produces an all-zero value; with
+ *           128-bit hashes, the odds should be way too low to ever
+ *           worry about in practice.
  */
 typedef struct {
     alignas(16)
-    _Atomic swimcap_record_t contents;
+    _Atomic swimcap_record_t record;
     hatrack_hash_t           hv;
 } swimcap_bucket_t;
 
