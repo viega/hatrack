@@ -206,7 +206,7 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
             if (sort_epoch <= epoch) {
                 break;
             }
-            rec = hatrack_pflag_clear(rec->next, WOOLHAT_F_USED);
+            rec = rec->next;
         }
 
         /* If the sort_epoch is larger than the epoch, then no records
@@ -214,8 +214,7 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
          * Similarly, if the top record is a delete record, then the
          * bucket was empty at the linearization point.
          */
-        if (!rec || sort_epoch > epoch
-            || !hatrack_pflag_test(rec->next, WOOLHAT_F_USED)) {
+        if (sort_epoch > epoch || !rec || rec->deleted) {
             cur++;
             continue;
         }
@@ -292,9 +291,10 @@ woolhat_store_get(woolhat_store_t *self,
     goto not_found;
 
 found_history_bucket:
-    head = hatrack_pflag_clear(atomic_read(&bucket->head),
-                               WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
-    if (head && hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
+    head = atomic_read(&bucket->head);
+    head = hatrack_pflag_clear(head, WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
+
+    if (head && !head->deleted) {
         if (found) {
             *found = true;
         }
@@ -397,12 +397,12 @@ found_history_bucket:
         goto migrate_and_retry;
     }
     candidate       = mmm_alloc(sizeof(woolhat_record_t));
-    candidate->next = hatrack_pflag_set(head, WOOLHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
 
     if (head) {
         mmm_help_commit(head);
-        if (hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
+        if (!head->deleted) {
             mmm_copy_create_epoch(candidate, head);
         }
     }
@@ -432,7 +432,7 @@ not_overwriting:
 
     mmm_retire(head);
 
-    if (!(hatrack_pflag_test(head->next, WOOLHAT_F_USED))) {
+    if (head->deleted) {
         goto not_overwriting;
     }
     if (found) {
@@ -512,12 +512,12 @@ migrate_and_retry:
         return woolhat_store_replace(self, top, hv1, item, found, count);
     }
 
-    if (!hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
+    if (head->deleted) {
         goto not_found;
     }
 
     candidate       = mmm_alloc(sizeof(woolhat_record_t));
-    candidate->next = hatrack_pflag_set(head, WOOLHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
 
     mmm_help_commit(head);
@@ -627,14 +627,12 @@ found_history_bucket:
         goto migrate_and_retry;
     }
 
-    if (head) {
-        if (hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
-            return false;
-        }
+    if (head && !head->deleted) {
+        return false;
     }
 
     candidate       = mmm_alloc(sizeof(woolhat_record_t));
-    candidate->next = hatrack_pflag_set(head, WOOLHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
     if (!LCAS(&bucket->head, &head, candidate, WOOLHAT_CTR_REC_INSTALL)) {
         mmm_retire_unused(candidate);
@@ -719,13 +717,14 @@ migrate_and_retry:
         return woolhat_store_remove(self, top, hv1, found, count);
     }
 
-    if (!head || !(hatrack_pflag_test(head->next, WOOLHAT_F_USED))) {
+    if (!head || head->deleted) {
         goto empty_bucket;
     }
 
-    candidate       = mmm_alloc(sizeof(woolhat_record_t));
-    candidate->next = NULL;
-    candidate->item = NULL;
+    candidate          = mmm_alloc(sizeof(woolhat_record_t));
+    candidate->next    = head;
+    candidate->item    = NULL;
+    candidate->deleted = true;
     if (!LCAS(&bucket->head, &head, candidate, WOOLHAT_CTR_DEL)) {
         mmm_retire_unused(candidate);
 
@@ -733,7 +732,7 @@ migrate_and_retry:
         if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
             goto migrate_and_retry;
         }
-        if (!(hatrack_pflag_test(head->next, WOOLHAT_F_USED))) {
+        if (head->deleted) {
             // We got beat to the delete;
             goto empty_bucket;
         }
@@ -821,7 +820,7 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
             if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
                 goto didnt_win;
             }
-            if (head && hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
+            if (head && !head->deleted) {
                 candidate = hatrack_pflag_set(head, WOOLHAT_F_MOVING);
             }
             else {
@@ -838,7 +837,7 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
 
 didnt_win:
         head = hatrack_pflag_clear(head, WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
-        if (head && hatrack_pflag_test(head->next, WOOLHAT_F_USED)) {
+        if (head && !head->deleted) {
             new_used++;
         }
     }

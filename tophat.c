@@ -1067,7 +1067,7 @@ tophat_migrate_to_woolhat(tophat_t *self)
 		new_record
 		    = (woolhat_record_t *)mmm_alloc_committed(record_len);
 		new_record->item   = cur_record.item;
-		new_record->next   = hatrack_pflag_set(NULL, WOOLHAT_F_USED);
+		new_record->next   = NULL;
 		mmm_set_create_epoch(new_record, cur_record.epoch);
 		atomic_store(&new_bucket->hv, cur_bucket->hv);
 		atomic_store(&new_bucket->head, new_record);

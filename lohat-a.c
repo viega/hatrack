@@ -210,11 +210,10 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
             if (sort_epoch <= epoch) {
                 break;
             }
-            rec = hatrack_pflag_clear(rec->next, LOHAT_F_USED);
+            rec = rec->next;
         }
 
-        if (!rec || sort_epoch > epoch
-            || !hatrack_pflag_test(rec->next, LOHAT_F_USED)) {
+        if (!rec || sort_epoch > epoch || rec->deleted) {
             cur++;
             continue;
         }
@@ -376,7 +375,7 @@ not_found:
 found_history_bucket:
     head = hatrack_pflag_clear(atomic_read(&bucket->head),
                                LOHAT_F_MOVING | LOHAT_F_MOVED);
-    if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+    if (head && !head->deleted) {
         if (found) {
             *found = true;
         }
@@ -477,12 +476,12 @@ found_history_bucket:
     }
 
     candidate       = mmm_alloc(sizeof(lohat_record_t));
-    candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
 
     if (head) {
         mmm_help_commit(head);
-        if (hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+        if (!head->deleted) {
             mmm_copy_create_epoch(candidate, head);
         }
     }
@@ -513,7 +512,7 @@ not_overwriting:
 
     mmm_retire(head);
 
-    if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+    if (head->deleted) {
         goto not_overwriting;
     }
 
@@ -584,11 +583,11 @@ migrate_and_retry:
         return lohat_a_store_replace(self, top, hv1, item, found);
     }
     candidate       = mmm_alloc(sizeof(lohat_record_t));
-    candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
 
     do {
-        if (!hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+        if (head->deleted) {
             mmm_retire_unused(candidate);
             goto not_found;
         }
@@ -678,12 +677,12 @@ found_history_bucket:
         goto migrate_and_retry;
     }
 
-    if (head && head->next && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+    if (head && !head->deleted) {
         return false;
     }
 
     candidate       = mmm_alloc(sizeof(lohat_record_t));
-    candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
     if (!LCAS(&bucket->head, &head, candidate, LOHATa_CTR_REC_INSTALL)) {
         mmm_retire_unused(candidate);
@@ -767,20 +766,21 @@ migrate_and_retry:
         return lohat_a_store_remove(self, top, hv1, found);
     }
 
-    if (!head || !(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+    if (!head || head->deleted) {
         goto empty_bucket;
     }
 
-    candidate       = mmm_alloc(sizeof(lohat_record_t));
-    candidate->next = NULL;
-    candidate->item = NULL;
+    candidate          = mmm_alloc(sizeof(lohat_record_t));
+    candidate->next    = head;
+    candidate->item    = NULL;
+    candidate->deleted = true;
     if (!LCAS(&bucket->head, &head, candidate, LOHATa_CTR_DEL)) {
         mmm_retire_unused(candidate);
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
             goto migrate_and_retry;
         }
-        if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+        if (head->deleted) {
             goto empty_bucket;
         }
         if (found) {
@@ -840,7 +840,7 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
             if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
                 goto didnt_win;
             }
-            if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+            if (head && !head->deleted) {
                 candidate = hatrack_pflag_set(head, LOHAT_F_MOVING);
             }
             else {
@@ -858,7 +858,7 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
 
 didnt_win:
         head = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
-        if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+        if (head && !head->deleted) {
             new_used++;
         }
 
@@ -900,8 +900,7 @@ didnt_win:
          * LOHAT_F_MIGRATE set.
          */
         if (hatrack_pflag_test(head, LOHAT_F_MOVED)) {
-            if (candidate
-                && hatrack_pflag_test(candidate->next, LOHAT_F_USED)) {
+            if (candidate && !candidate->deleted) {
                 target++;
             }
             cur++;

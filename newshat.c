@@ -464,7 +464,7 @@ newshat_store_put(newshat_store_t *self,
             ret           = contents.item;
             contents.item = item;
             // Note that, since we're overwriting something that was already
-            // here, we don't need to update the epoch or the USED flag.
+            // here, we don't need to update the epoch.
             atomic_store(&cur->contents, contents);
             if (found) {
                 *found = true;
@@ -554,7 +554,7 @@ newshat_store_replace(newshat_store_t *self,
             ret           = contents.item;
             contents.item = item;
             // Note that, since we're overwriting something that was already
-            // here, we don't need to update the epoch or the USED flag.
+            // here, we don't need to update the epoch.
             atomic_store(&cur->contents, contents);
             if (found) {
                 *found = true;

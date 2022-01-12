@@ -32,11 +32,7 @@ typedef struct woolhat_record_st woolhat_record_t;
 struct woolhat_record_st {
     woolhat_record_t *next;
     void             *item;
-};
-
-enum : uint64_t
-{
-    WOOLHAT_F_USED = 0x0000000000000001
+    bool              deleted;
 };
 
 enum : uint64_t

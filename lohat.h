@@ -252,6 +252,10 @@
  *                     chain of overwrites (the original insertion or
  *                     re-insertion epoch).
  *
+ *                  See lohat_common.h for some more documentation on
+ *                  the approach, along with he core data structures
+ *                  that are common to the various lohats.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */

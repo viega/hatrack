@@ -70,10 +70,16 @@ typedef struct ballcap_record_st ballcap_record_t;
  * an explicit epoch counter that lives in the data structure being
  * set to 0.
  *
- * However, like the lohat family, records are allocated via mmm, and
- * so the epoch field is somewhat transparent to us. We could use a
- * macro to extract it quickly, since it's at a fixed offset, but
- * space is cheap.
+ * However, like the lohat family (including woolhat), records are
+ * allocated via mmm, and so the epoch field is somewhat transparent
+ * to us. We could use a macro to extract it quickly, since it's at a
+ * fixed offset, but space is cheap. All of those implementations
+ * support a delete field.
+ *
+ * For the lock-free variants that do not use mmm (and do not provide
+ * consistency), we go back to using a 0 epoch to indicate deletion.
+ *
+ *
  */
 
 struct ballcap_record_st {

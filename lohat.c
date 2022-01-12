@@ -298,17 +298,13 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
          * go back in time until we find the right record for the
          * linearization epoch we're using, which we then store in the
          * variable 'rec'.
-         *
-         * Note that when we walk records' next pointer, we need to
-         * clear the USED bit (if set), in order to be able to walk
-         * it.
          */
         while (rec) {
             sort_epoch = mmm_get_write_epoch(rec);
             if (sort_epoch <= epoch) {
                 break;
             }
-            rec = hatrack_pflag_clear(rec->next, LOHAT_F_USED);
+            rec = rec->next;
         }
 
         /* If the sort_epoch is larger than the epoch, then no records
@@ -316,8 +312,7 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
          * Similarly, if the top record is a delete record, then the
          * bucket was empty at the linearization point.
          */
-        if (!rec || sort_epoch > epoch
-            || !hatrack_pflag_test(rec->next, LOHAT_F_USED)) {
+        if (!rec || sort_epoch > epoch || rec->deleted) {
             cur++;
             continue;
         }
@@ -395,17 +390,13 @@ lohat_store_new(uint64_t size)
  * When a viewer is looking through record history, they need to know
  * whether the item in the record is a live record, or if the record
  * is deleted (a null item could be a null pointer, but it could also
- * be the stored value 0).
+ * be the stored value 0). That's why remove explicitly adds deletion
+ * records.
  *
- * The flag LOHAT_F_USED gets set on the 'next' pointer in a record,
- * to make that indication. Of course, as you can see above, to
- * traverse down the linked list, we first need to clear the
- * pointer. That's the only bit we still from the record itself.
- *
- * We do steal two bits out of the 'head' field though... Again, the
- * head field holds a pointer to the first record, or a NULL value if
- * there isn't one. But the two bottom bits are used to record
- * migration status of the bucket (LOWHAT_F_MOVING and LOWHAT_F_MOVED).
+ * We do steal two bits out of the 'head' field ... Again, the head
+ * field holds a pointer to the first record, or a NULL value if there
+ * isn't one. But the two bottom bits are used to record migration
+ * status of the bucket (LOWHAT_F_MOVING and LOWHAT_F_MOVED).
  *
  * Naturally, these pointers need to be cleared every time we want to
  * access the top record in a bucket.
@@ -466,7 +457,7 @@ found_history_bucket:
      * in use; instead we look at the pointer to the next record,
      * which stores that information.
      */
-    if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+    if (head && !head->deleted) {
         if (found) {
             *found = true;
         }
@@ -522,7 +513,7 @@ found_history_bucket:
         goto migrate_and_retry;
     }
     candidate       = mmm_alloc(sizeof(lohat_record_t));
-    candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
 
     /* Even if we're the winner, we need still to make sure that the
@@ -535,7 +526,7 @@ found_history_bucket:
      */
     if (head) {
         mmm_help_commit(head);
-        if (hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+        if (!head->deleted) {
             mmm_copy_create_epoch(candidate, head);
         }
     }
@@ -602,7 +593,7 @@ not_overwriting:
 
     mmm_retire(head);
 
-    if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+    if (head->deleted) {
         goto not_overwriting;
     }
 
@@ -662,7 +653,7 @@ migrate_and_retry:
         return lohat_store_replace(self, top, hv1, item, found);
     }
     candidate       = mmm_alloc(sizeof(lohat_record_t));
-    candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
 
     /* This CAS-loop makes our replace operation lock free, not
@@ -681,7 +672,7 @@ migrate_and_retry:
      * not keep going if there's contention.
      */
     do {
-        if (!hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+        if (head->deleted) {
             mmm_retire_unused(candidate);
             goto not_found;
         }
@@ -753,7 +744,7 @@ found_history_bucket:
     if (head) {
         // There's already something in this bucket, and the request was
         // to put only if the bucket is empty.
-        if (hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+        if (!head->deleted) {
             return false;
         }
     }
@@ -765,7 +756,7 @@ found_history_bucket:
      * a migration in progress, we go off and do that instead.
      */
     candidate       = mmm_alloc(sizeof(lohat_record_t));
-    candidate->next = hatrack_pflag_set(head, LOHAT_F_USED);
+    candidate->next = head;
     candidate->item = item;
     if (!LCAS(&bucket->head, &head, candidate, LOHAT_CTR_REC_INSTALL)) {
         mmm_retire_unused(candidate);
@@ -844,7 +835,7 @@ migrate_and_retry:
 
     // If !head, then some write hasn't finished, and we consider
     // the bucket empty.
-    if (!head || !(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+    if (!head || head->deleted) {
         goto empty_bucket;
     }
 
@@ -857,9 +848,10 @@ migrate_and_retry:
      * return NULL and set *found to false (if requested), to indicate
      * that there's no memory management work to do.
      */
-    candidate       = mmm_alloc(sizeof(lohat_record_t));
-    candidate->next = NULL;
-    candidate->item = NULL;
+    candidate          = mmm_alloc(sizeof(lohat_record_t));
+    candidate->next    = head;
+    candidate->item    = NULL;
+    candidate->deleted = true;
     if (!LCAS(&bucket->head, &head, candidate, LOHAT_CTR_DEL)) {
         mmm_retire_unused(candidate);
 
@@ -867,7 +859,7 @@ migrate_and_retry:
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
             goto migrate_and_retry;
         }
-        if (!(hatrack_pflag_test(head->next, LOHAT_F_USED))) {
+        if (head->deleted) {
             // We got beat to the delete;
             goto empty_bucket;
         }
@@ -948,10 +940,10 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
              * the CAS, because if we do, we're responsible for the
              * memory management. That's why the exit from this loop
              * above is is a GOTO... we need to be able to do the
-             * memory management and just move on to the next item if
+             * memory management and just move on to the nex item if
              * we've got a successful CAS on a delete record.
              */
-            if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+            if (head && !head->deleted) {
                 candidate = hatrack_pflag_set(head, LOHAT_F_MOVING);
             }
             else {
@@ -968,7 +960,7 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
 
 didnt_win:
         head = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
-        if (head && hatrack_pflag_test(head->next, LOHAT_F_USED)) {
+        if (head && !head->deleted) {
             new_used++;
         }
     }

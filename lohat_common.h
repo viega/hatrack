@@ -17,6 +17,12 @@
  *  Description:    Data structures and constants shared across the
  *                  lohat family.
  *
+ *                  This is a bit vestigial; most algorithms ended up
+ *                  mostly independent file-wise. But since the
+ *                  algorithms share a name, I think it's reasonable
+ *                  for the shared data structures and constants to
+ *                  stay here.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -91,11 +97,9 @@
  *    table much earlier (and more often) than we would have if we
  *    weren't requiring new bucket reservations for re-inserts.
  *
- * We implement all these options, and do some benchmarking of the
- * tradeoffs. The programmer just needs to specify at allocation time:
- *
- * 1) Whether to use bucket reservations.
- * 2) If so, whether to require re-inserts to get new reservations.
+ * We implement most of these options (though I skip #2, and have
+ * temporarily taken out lohat-b which implemented approach #5), and
+ * do some benchmarking of the tradeoffs.
  */
 
 typedef struct lohat_record_st lohat_record_t;
@@ -123,28 +127,28 @@ typedef struct lohat_record_st lohat_record_t;
  * migration. This is discussed in a bit more detail below.
  */
 struct lohat_record_st {
-    lohat_record_t *next;
+    bool            deleted;
     void           *item;
+    lohat_record_t *next;
 };
 
-/* This flag indicates whether the CURRENT record is currently
- * considered present or not. Not present can be because it's been
- * deleted, or because it hasn't been written yet.  It's implemented
- * by stealing a bit from the record's "next" pointer.
+/* These two flags are used in table migration. They are implemented
+ * by stealing two bits from the 'head' field of the record linked
+ * list (i.e., the value that holds a pointer to the first
+ * lohat_record_t). This data structure changes slightly with each
+ * lohat version, but they each use the same flag values.
  *
- * Note that we could do without this flag, the way we do in some of
- * our other tables that use dynamically allocated records, like
- * oldhat. However, stealing the pointer means that we often will NOT
- * need to dereference the pointer unnecessarily.
- */
-enum : uint64_t
-{
-    LOHAT_F_USED = 0x0000000000000001
-};
-
-/* These two flags are used in table migration, and are also implemented
- * by stealing bits from pointers. In this case, we steal two bits
- * from the head pointer to the first record.
+ * We *could* instead implement these flags by having the 'head' field
+ * be 128 bits, a pointer to the top record and then flags. However, I
+ * explicitly chose NOT to do this, because I want to keep CAS
+ * operations to 64 bits wherever possible, for the sake of platforms
+ * without a native 128-bit CAS. That way, on those deficient
+ * architectures, their only expensive operation is for CASing of the
+ * 128-bit hash values (specifically, C will generate per-bucket locks
+ * on the 128-bit hash field, and with each hash write, lock it,
+ * update the two halves, then unlock it. The penalty comes because
+ * these locks get used on reads as well, to make sure no readers get
+ * an inconsistent state).
  *
  * When the table is large enough that a resize is warranted, we pause
  * all writes as quickly as possible, by setting the LOHAT_F_MOVING
