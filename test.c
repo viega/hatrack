@@ -14,7 +14,8 @@
  * limitations under the License.
  *
  *  Name:           test.c
- *  Description:    Lohat test cases, and code to support tests.
+ *  Description:    Test cases, and code to support tests.
+ *
  *                  This is currently messy; I would love to
  *                  find the time to put some real work into this.
  *

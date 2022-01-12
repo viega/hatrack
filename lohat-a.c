@@ -447,9 +447,6 @@ found_ptr_bucket:
                      LOHATa_CTR_PTR_INSTALL)) {
                 bucket = new_bucket;
             }
-            else {
-                atomic_fetch_add(&self->del_count, 1);
-            }
         }
 
         hv2 = atomic_read(&bucket->hv);
@@ -655,9 +652,6 @@ found_ptr_bucket:
                      LOHATa_CTR_PTR_INSTALL)) {
                 bucket = new_bucket;
             }
-            else {
-                atomic_fetch_add(&self->del_count, 1);
-            }
         }
 
         hv2 = atomic_read(&bucket->hv);
@@ -697,7 +691,6 @@ found_history_bucket:
     atomic_fetch_add(&top->item_count, 1);
 
     if (head) {
-        atomic_fetch_sub(&self->del_count, 1);
         mmm_help_commit(head);
         mmm_commit_write(candidate);
         mmm_retire(head);

@@ -213,7 +213,6 @@ typedef struct lohat_a_store_st lohat_a_store_t;
 struct lohat_a_store_st {
     alignas(8)
     uint64_t                     last_slot;
-    _Atomic uint64_t             del_count;
     lohat_a_history_t           *hist_end;
     _Atomic(lohat_a_history_t *) hist_next;
     _Atomic(lohat_a_store_t *)   store_next;
