@@ -217,6 +217,7 @@ test_rand()
 static void
 test_init()
 {
+    mmm_register_thread();
     test_precompute_hashes();
     test_init_rand();
 }
@@ -240,6 +241,8 @@ start_one_thread(void *info)
 {
     test_func_t func;
     bool        ret;
+
+    mmm_register_thread();
 
     while (!(func = atomic_load(&test_func)))
         ;
@@ -330,6 +333,7 @@ functionality_test(test_func_t func,
 #ifdef HATRACK_DEBUG
             abort();
 #endif
+            testhat_delete(dict);
             return false;
         }
     }

@@ -594,6 +594,7 @@ tophat_delete(tophat_t *self)
     }
     
     pthread_mutex_destroy(&self->mutex);
+    free(self);
 }
 
 uint64_t

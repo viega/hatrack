@@ -50,6 +50,8 @@
  *
  */
 
+#include "config.h"
+
 #ifndef __COUNTERS_H__
 #define __COUNTERS_H__
 
