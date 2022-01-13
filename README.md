@@ -81,7 +81,7 @@ fail if some other thread was sucessful at the same operation, but
 it's possible to have enough activity that individual threads get
 starved.  Wait freedom removes that restriction; all threads are
 guaranteed to make progress independent of the others.  Of our
-algorithms, *witchhat8 and *woolhat* are fully wait free.  Actually,
+algorithms, *witchhat* and *woolhat* are fully wait free.  Actually,
 all our hash tables except for duncecap have fully wait free read (get)
 operations.  And our lock free variants are mostly wait-free, except
 under exceptional conditions-- the work to convert them to full
