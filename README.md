@@ -242,7 +242,6 @@ Here is an overview of the tables in their 'logical' order:
 		
 5) **hihat**    A mostly-wait free hash table, except when resizing, at
                 which point most operations become lock-free instead.
-
                 There's also hihat-a, which is identical to hihat,
                 except that it uses a slightly different strategy for
                 migrating stores.
