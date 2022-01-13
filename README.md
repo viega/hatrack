@@ -299,27 +299,16 @@ and are looking to maximize efficiency).
 Right now, I'm making this available for early comment, but I still
 have a lot of work remaining:
 
-1) I'm still working on TopHat; I can definitely make it so that the
-   non-threaded readers don't need to hold a lock. But it requires me
-   to either change refhat or at least add a refhat-a. I'll make the
-   mods in refhat-a soon, and if performance doesn't degrade, I'll
-   replace refhat w/ refhat-a.
-
-2) There's some minor work that's just undone. For instance, I need to
+1) There's some minor work that's just undone. For instance, I need to
    add proper handling for signals, thread deaths, and thread
-   exits. And I have a small memory leak in swimcap that I still need
-   to squash...
+   exits.
 
-3) I've been doing my primary development and testing on an OS X
+2) I've been doing my primary development and testing on an OS X
    laptop. I have kept things compatable with Linux, but need to go
    back, ensure that all still works in both environments, and set up
    automated testing as I make future commits.
 
-4) I need to keep going through the code base, doing clean-up and
-   commenting. I'm also going to organize the directory structure,
-   etc.
-
-5) I'm going to write a long document describing the algorithms, that
+3) I'm going to write a long document describing the algorithms, that
    will be available in the doc/ directory.
 
    I have half a mind to turn that into a full-fledged doctoral
@@ -327,7 +316,7 @@ have a lot of work remaining:
    (though I'm not sure I want to spend my next year plus tweaking and
    testing hash tables).
    
-6) I'm going to provide two high-level interfaces Dict and Set, that
+5) I'm going to provide two high-level interfaces Dict and Set, that
    are suitable for direct inclusion into projects, and allow you to
    dynamically select the properties you need in a hash table.
 
@@ -336,7 +325,7 @@ have a lot of work remaining:
    bikeshed... basically which is a library of C programming nicities.
    Witchhat and Woolhat will probably get copied into that project.
 
-7) While I currently have a basic testbed and performance testing rig,
+6) While I currently have a basic testbed and performance testing rig,
    I intend to do a lot to improve this (including a lot of
    functionality testing that hasn't happened yet). Though, I want to
    use the niceties I've been building myself in 'bikeshed', so these
