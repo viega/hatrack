@@ -1,5 +1,5 @@
 # Hatrack
-## Hash tables for parallel programming.
+## Hash tables for parallel programming
 
 This project consisists of several different hash tables suitable for
 parallel programming, and one reference hash table that is only
@@ -113,7 +113,7 @@ generally wait on a lock, while one thread performs the resizing.
 writers, at all times, including the *hihats*, the *lohats*, *oldhat*,
 *witchhat* and *woolhat*.
 
-### Order Insertion Preservation and consistent views.
+### Order Insertion Preservation and consistent views
 
 In every other hash table I've ever seen that allows multiple
 concurrent writers, it's impossible to ensure a consistent view of the
