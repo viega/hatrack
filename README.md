@@ -226,7 +226,7 @@ Here is an overview of the tables in their 'logical' order:
 
 1) **refhat**   A simple, fast, single-threaded reference hash table.
 
-2) *duncecap**  A multiple-reader, single writer hash table, using locks,
+2) **duncecap** A multiple-reader, single writer hash table, using locks,
                 but with optimized locking for readers.
 		
 3) **swimcap**  Like duncecap, but readers do not use locking, and are
