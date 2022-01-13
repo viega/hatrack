@@ -71,7 +71,7 @@ Java by Cliff Click. Our lock-free tables are far simpler, work with C
 management, as he can simply depend on Java's garbage collection), and
 is more efficient.
 
-3). **Wait Freedom**. With lock freedom, individual threads can have
+3. **Wait Freedom**. With lock freedom, individual threads can have
 operations that fail to make progress by "spinning" in the same
 place. For example, their attempt to update a record might stall
 indefinitely, if every time the thread tries an operation, it fails
