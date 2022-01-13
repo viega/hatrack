@@ -269,28 +269,12 @@
  * a pthread id, or the ID that a debugger selects.
  *
  * If you're spinning up and down lots of threads, then make sure to
- * not run out of these.  See the option HATRACK_ALLOW_TID_GIVEBACKS
- * below.
+ * not run out of these.  Though, there's an API for "tid givebacks";
+ * see mmm.h.
  */
 #ifndef HATRACK_THREADS_MAX
 #define HATRACK_THREADS_MAX 8192
 #endif
-
-/* HATRACK_ALLOW_TID_GIVEBACKS
- *
- * Per the note above, we want to avoid overrunning the reservations
- * array that our memory management system uses.
- *
- * In all cases, the first HATRACK_THREADS_MAX threads to register
- * with us get a steadily increasing id. But if you turn this on,
- * threads will yield their TID altogether when they call the mmm
- * thread cleanup routine-- mmm_clean_up_before_exit().
- *
- * The unused ID then goes on a linked list, and doesn't get touched
- * until we run out of TIDs to give out.
- *
- */
-// #define HATRACK_ALLOW_TID_GIVEBACKS
 
 /* HATRACK_RETIRE_FREQ_LOG
  *

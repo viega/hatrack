@@ -289,7 +289,10 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
          * commit will end up greater than our linearization epoch,
          * naturally.
          */
-        mmm_help_commit(rec);
+
+        if (rec) {
+            mmm_help_commit(rec);
+        }
 
         /* First, we find the top-most record we can find that's older
          * than (or equal to) the linearization epoch, based on the
@@ -873,7 +876,9 @@ migrate_and_retry:
     // Help finish the commit of anything we're overwriting, before we
     // fully commit our write, and then add its retirement epoch.
 
-    mmm_help_commit(head);
+    if (head) {
+        mmm_help_commit(head);
+    }
     mmm_commit_write(candidate);
     mmm_retire(head);
 

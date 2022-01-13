@@ -203,7 +203,9 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
     while (cur < end) {
         rec = hatrack_pflag_clear(atomic_read(&cur->head),
                                   LOHAT_F_MOVING | LOHAT_F_MOVED);
-        mmm_help_commit(rec);
+        if (rec) {
+            mmm_help_commit(rec);
+        }
 
         while (rec) {
             sort_epoch = mmm_get_write_epoch(rec);
@@ -790,7 +792,9 @@ migrate_and_retry:
         return NULL;
     }
 
-    mmm_help_commit(head);
+    if (head) {
+        mmm_help_commit(head);
+    }
     mmm_commit_write(candidate);
     mmm_retire(head);
 

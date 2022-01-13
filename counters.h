@@ -51,7 +51,6 @@
  */
 
 #include "config.h"
-
 #ifndef __COUNTERS_H__
 #define __COUNTERS_H__
 
@@ -189,20 +188,25 @@ void counters_output_alltime(void);
 #define HATRACK_CTR_OFF(id)
 #define HATRACK_YN_ON(x, id)  ((x) ? hatrack_yn_ctr_t(id) : hatrack_yn_ctr_f(id))
 #define HATRACK_YN_OFF(x, id) (x)
+#define HATRACK_YN_ON_NORET(x, id)                                             \
+    ((x) ? hatrack_yn_ctr_t(id) : hatrack_yn_ctr_f(id))
+#define HATRACK_YN_OFF_NORET(x, id)
 
 #else
 
 #define HATRACK_CTR_ON(id)
 #define HATRACK_CTR_OFF(id)
-#define HATRACK_YN_ON(x, id)  (x)
+#define HATRACK_YN_ON(x, id) (x)
+#define HATRACK_YN_ON_NORET(x, id)
 #define HATRACK_YN_OFF(x, id) (x)
-
+#define HATRACK_YN_OFF_NORET(x, id)
 #define counters_output_delta()
 #define counters_output_alltime()
 
 #endif /* defined(HATRACK_COUNTERS) */
 
-#define HATRACK_CTR(id)       HATRACK_CTR_ON(id)
-#define HATRACK_YN_CTR(x, id) HATRACK_YN_ON(x, id)
+#define HATRACK_CTR(id)             HATRACK_CTR_ON(id)
+#define HATRACK_YN_CTR(x, id)       HATRACK_YN_ON(x, id)
+#define HATRACK_YN_CTR_NORET(x, id) HATRACK_YN_ON_NORET(x, id)
 
 #endif /* __COUNTERS_H__ */

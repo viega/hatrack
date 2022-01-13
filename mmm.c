@@ -40,9 +40,32 @@ __thread uint64_t       mmm_retire_ctr   = 0;
 static void    mmm_empty(void);
 
 
-#ifdef HATRACK_ALLOW_TID_GIVEBACKS
-_Atomic (mmm_free_tids_t *) mmm_free_tids;
+/*
+ * We want to avoid overrunning the reservations array that our memory
+ * management system uses.
+ *
+ * In all cases, the first HATRACK_THREADS_MAX threads to register
+ * with us get a steadily increasing id. Also, threads will yield
+ * their TID altogether if and when they call the mmm thread cleanup
+ * routine-- mmm_clean_up_before_exit().
+ *
+ * The unused ID then goes on a linked list (mmm_free_tids), and
+ * doesn't get touched until we run out of TIDs to give out.
+ *
+ */
 
+static _Atomic (mmm_free_tids_t *) mmm_free_tids;
+
+/* This grabs an mmm-specific threadid and stashes it in the
+ * thread-local variable mmm_mytid.
+ * 
+ * We have a fixed number of TIDS to give out though (controlled by
+ * the preprocessor variable, HATRACK_THREADS_MAX).  We give them out
+ * sequentially till they're done, and then we give out ones that have
+ * been "given back", which are stored on a stack (mmm_free_tids).
+ *
+ * If we finally run out, we abort.
+ */
 void
 mmm_register_thread(void)
 {
@@ -68,6 +91,7 @@ mmm_register_thread(void)
     return;
 }
 
+// Call when a thread exits to add to the free TID stack.
 static void
 mmm_tid_giveback(void)
 {
@@ -85,25 +109,8 @@ mmm_tid_giveback(void)
     return;
 }
 
-#else /* HATRACK_ALLOW_TID_GIVEBACKS */
-
-
-void
-mmm_register_thread(void)
-{
-    mmm_mytid = atomic_fetch_add(&mmm_nexttid, 1);
-    if (mmm_mytid >= HATRACK_THREADS_MAX) {
-	abort();
-    }
-
-    mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;
-
-    return;
-}
-
-#endif /* HATRACK_ALLOW_TID_GIVEBACKS */
-
-
+// This is here for convenience of testing; generally this
+// is not the way to handle tid recyling!
 void mmm_reset_tids(void)
 {
     atomic_store(&mmm_nexttid, 0);
@@ -111,9 +118,11 @@ void mmm_reset_tids(void)
     return;
 }
 
-// For now, our cleanup function spins until it is able to retire
-// everything on its list. Soon, when we start worrying about thread
-// kills, we will change this to add its contents to an "ophan" list.
+/* For now, our cleanup function spins until it is able to retire
+ * everything on its list. Soon, when we finally get around to
+ * worrying about thread kills, we will change this to add its
+ * contents to an "ophan" list.
+ */
 void
 mmm_clean_up_before_exit(void)
 {
@@ -127,13 +136,19 @@ mmm_clean_up_before_exit(void)
 	mmm_empty();
     }
     
-#ifdef HATRACK_ALLOW_TID_GIVEBACKS
     mmm_tid_giveback();
-#endif
-
+    
     return;
 }
 
+/* Sets the retirement epoch on the pointer, and adds it to the
+ * thread-local retirement list.
+ *
+ * We also keep a thread-local counter of how many times we've called
+ * this function, and every HATRACK_RETIRE_FREQ calls, we run
+ * mmm_empty(), which walks our thread-local retirement list, looking
+ * for items to free.
+ */
 void
 mmm_retire(void *ptr)
 {
@@ -265,6 +280,8 @@ mmm_empty(void)
 	cell = cell->next;
 	HATRACK_FREE_CTR();
 	DEBUG_MMM_INTERNAL(tmp->data, "mmm_empty::free");
+
+	// Call the cleanup handler, if one exists.
 	if (tmp->cleanup) {
 	    (*tmp->cleanup)(&tmp->data);
 	}

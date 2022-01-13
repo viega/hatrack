@@ -195,7 +195,9 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
         rec = hatrack_pflag_clear(atomic_read(&cur->head),
                                   WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
 
-        mmm_help_commit(rec);
+        if (rec) {
+            mmm_help_commit(rec);
+        }
 
         /* This loop is bounded by the number of writes to this bucket
          * since the call to mmm_start_linearized_op(), which could
@@ -743,7 +745,9 @@ migrate_and_retry:
         return NULL;
     }
 
-    mmm_help_commit(head);
+    if (head) {
+        mmm_help_commit(head);
+    }
     mmm_commit_write(candidate);
     mmm_retire(head);
 
