@@ -90,8 +90,10 @@ lohat_get(lohat_t *self, hatrack_hash_t hv, bool *found)
     lohat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);
     ret   = lohat_store_get(store, self, hv, found);
+    
     mmm_end_op();
 
     return ret;
@@ -104,8 +106,10 @@ lohat_put(lohat_t *self, hatrack_hash_t hv, void *item, bool *found)
     lohat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);
     ret   = lohat_store_put(store, self, hv, item, found);
+    
     mmm_end_op();
 
     return ret;
@@ -118,8 +122,10 @@ lohat_replace(lohat_t *self, hatrack_hash_t hv, void *item, bool *found)
     lohat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);
     ret   = lohat_store_replace(store, self, hv, item, found);
+    
     mmm_end_op();
 
     return ret;
@@ -132,8 +138,10 @@ lohat_add(lohat_t *self, hatrack_hash_t hv, void *item)
     lohat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);
     ret   = lohat_store_add(store, self, hv, item);
+    
     mmm_end_op();
 
     return ret;
@@ -146,8 +154,10 @@ lohat_remove(lohat_t *self, hatrack_hash_t hv, bool *found)
     lohat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);
     ret   = lohat_store_remove(store, self, hv, found);
+    
     mmm_end_op();
 
     return ret;
@@ -197,6 +207,7 @@ lohat_delete(lohat_t *self)
 
     while (p < end) {
         rec = atomic_load(&p->head);
+	
         if (rec) {
             mmm_retire_unused(rec);
         }
@@ -304,9 +315,11 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
          */
         while (rec) {
             sort_epoch = mmm_get_write_epoch(rec);
+	    
             if (sort_epoch <= epoch) {
                 break;
             }
+	    
             rec = rec->next;
         }
 
@@ -338,6 +351,7 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
     if (!num_items) {
         free(view);
         mmm_end_op();
+	
         return NULL;
     }
 
@@ -433,9 +447,11 @@ lohat_store_get(lohat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
+	
         if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
+	
         if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
@@ -456,6 +472,7 @@ found_history_bucket:
      */
     head = hatrack_pflag_clear(atomic_read(&bucket->head),
                                LOHAT_F_MOVING | LOHAT_F_MOVED);
+    
     /* We can't look at the item field to tell if the record is
      * in use; instead we look at the pointer to the next record,
      * which stores that information.
@@ -464,6 +481,7 @@ found_history_bucket:
         if (found) {
             *found = true;
         }
+	
         return head->item;
     }
     goto not_found;
@@ -489,12 +507,15 @@ lohat_store_put(lohat_store_t *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
+	
         if (hatrack_bucket_unreserved(hv2)) {
             if (LCAS(&bucket->hv, &hv2, hv1, LOHAT_CTR_BUCKET_ACQUIRE)) {
                 used_count = atomic_fetch_add(&self->used_count, 1);
+		
                 if (used_count >= self->threshold) {
                     goto migrate_and_retry;
                 }
+		
                 goto found_history_bucket;
             }
         }
@@ -502,11 +523,13 @@ lohat_store_put(lohat_store_t *self,
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         goto found_history_bucket;
     }
 
 migrate_and_retry:
     self = lohat_store_migrate(self, top);
+    
     return lohat_store_put(self, top, hv1, item, found);
 
 found_history_bucket:
@@ -515,6 +538,7 @@ found_history_bucket:
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
         goto migrate_and_retry;
     }
+    
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = head;
     candidate->item = item;
@@ -529,6 +553,7 @@ found_history_bucket:
      */
     if (head) {
         mmm_help_commit(head);
+	
         if (!head->deleted) {
             mmm_copy_create_epoch(candidate, head);
         }
@@ -548,9 +573,11 @@ found_history_bucket:
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
             goto migrate_and_retry;
         }
+	
         if (found) {
             *found = true;
         }
+	
         return item;
     }
 
@@ -579,6 +606,7 @@ not_overwriting:
         if (found) {
             *found = false;
         }
+	
         return NULL;
     }
 
@@ -626,13 +654,16 @@ lohat_store_replace(lohat_store_t *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
+	
         if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
+	
         if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         goto found_history_bucket;
     }
 
@@ -653,8 +684,10 @@ found_history_bucket:
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
 migrate_and_retry:
         self = lohat_store_migrate(self, top);
+	
         return lohat_store_replace(self, top, hv1, item, found);
     }
+    
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = head;
     candidate->item = item;
@@ -679,10 +712,12 @@ migrate_and_retry:
             mmm_retire_unused(candidate);
             goto not_found;
         }
+	
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
             mmm_retire_unused(candidate);
             goto migrate_and_retry;
         }
+	
         mmm_help_commit(head);
         mmm_copy_create_epoch(candidate, head);
     } while (!LCAS(&bucket->head, &head, candidate, LOHAT_CTR_REC_INSTALL));
@@ -720,21 +755,26 @@ lohat_store_add(lohat_store_t *self,
         if (hatrack_bucket_unreserved(hv2)) {
             if (LCAS(&bucket->hv, &hv2, hv1, LOHAT_CTR_BUCKET_ACQUIRE)) {
                 used_count = atomic_fetch_add(&self->used_count, 1);
+		
                 if (used_count >= self->threshold) {
                     goto migrate_and_retry;
                 }
+		
                 goto found_history_bucket;
             }
         }
+	
         if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         goto found_history_bucket;
     }
 
 migrate_and_retry:
     self = lohat_store_migrate(self, top);
+    
     return lohat_store_add(self, top, hv1, item);
 
 found_history_bucket:
@@ -761,12 +801,14 @@ found_history_bucket:
     candidate       = mmm_alloc(sizeof(lohat_record_t));
     candidate->next = head;
     candidate->item = item;
+    
     if (!LCAS(&bucket->head, &head, candidate, LOHAT_CTR_REC_INSTALL)) {
         mmm_retire_unused(candidate);
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
             goto migrate_and_retry;
         }
+	
         return false;
     }
 
@@ -806,6 +848,7 @@ lohat_store_remove(lohat_store_t *self,
     for (i = 0; i < self->last_slot; i++) {
         bucket = &self->hist_buckets[bix];
         hv2    = atomic_read(&bucket->hv);
+	
         if (hatrack_bucket_unreserved(hv2)) {
             break;
         }
@@ -814,10 +857,12 @@ lohat_store_remove(lohat_store_t *self,
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         if (!bucket->head) {
             // Bucket is empty.
             break;
         }
+	
         goto found_history_bucket;
     }
     // If run off the loop, or break out of it, the item was not present.
@@ -825,6 +870,7 @@ empty_bucket:
     if (found) {
         *found = false;
     }
+    
     return NULL;
 
 found_history_bucket:
@@ -833,6 +879,7 @@ found_history_bucket:
     if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
 migrate_and_retry:
         self = lohat_store_migrate(self, top);
+	
         return lohat_store_remove(self, top, hv1, found);
     }
 
@@ -855,6 +902,7 @@ migrate_and_retry:
     candidate->next    = head;
     candidate->item    = NULL;
     candidate->deleted = true;
+    
     if (!LCAS(&bucket->head, &head, candidate, LOHAT_CTR_DEL)) {
         mmm_retire_unused(candidate);
 
@@ -862,10 +910,12 @@ migrate_and_retry:
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
             goto migrate_and_retry;
         }
+	
         if (head->deleted) {
             // We got beat to the delete;
             goto empty_bucket;
         }
+	
         if (found) {
             *found = true;
         }
@@ -879,6 +929,7 @@ migrate_and_retry:
     if (head) {
         mmm_help_commit(head);
     }
+    
     mmm_commit_write(candidate);
     mmm_retire(head);
 
@@ -1044,6 +1095,7 @@ didnt_win:
             bucket         = &new_store->hist_buckets[bix];
             expected_hv.w1 = 0;
             expected_hv.w2 = 0;
+	    
             if (!LCAS(&bucket->hv, &expected_hv, hv, LOHAT_CTR_MIGRATE_HV)) {
                 if (!hatrack_hashes_eq(expected_hv, hv)) {
                     bix = (bix + 1) & new_store->last_slot;

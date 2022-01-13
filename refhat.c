@@ -111,22 +111,28 @@ refhat_get(refhat_t *self, hatrack_hash_t hv, bool *found)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (!cur->epoch) {
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
+	    
             if (found) {
                 *found = true;
             }
+	    
             return cur->item;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
         bix = (bix + 1) & self->last_slot;
@@ -164,6 +170,7 @@ refhat_put(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (!cur->epoch) {
                 cur->item  = item;
@@ -173,22 +180,29 @@ refhat_put(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
+	    
             ret       = cur->item;
             cur->item = item;
+	    
             if (found) {
                 *found = true;
             }
+	    
             return ret;
         }
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 refhat_migrate(self);
+		
                 return refhat_put(self, hv, item, found);
             }
+	    
             self->used_count++;
             self->item_count++;
+	    
             cur->hv    = hv;
             cur->item  = item;
             cur->epoch = self->next_epoch++;
@@ -196,8 +210,10 @@ refhat_put(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         bix = (bix + 1) & self->last_slot;
     }
     __builtin_unreachable();
@@ -229,25 +245,32 @@ refhat_replace(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (!cur->epoch) {
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
+	    
             ret       = cur->item;
             cur->item = item;
+	    
             if (found) {
                 *found = true;
             }
+	    
             return ret;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
         }
+	
         bix = (bix + 1) & self->last_slot;
     }
     __builtin_unreachable();
@@ -277,6 +300,7 @@ refhat_add(refhat_t *self, hatrack_hash_t hv, void *item)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (!cur->epoch) {
                 cur->item  = item;
@@ -285,21 +309,27 @@ refhat_add(refhat_t *self, hatrack_hash_t hv, void *item)
 
                 return true;
             }
+	    
             return false;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 refhat_migrate(self);
+		
                 return refhat_add(self, hv, item);
             }
+	    
             self->used_count++;
             self->item_count++;
+	    
             cur->hv    = hv;
             cur->item  = item;
             cur->epoch = self->next_epoch++;
 
             return true;
         }
+	
         bix = (bix + 1) & self->last_slot;
     }
     __builtin_unreachable();
@@ -323,11 +353,13 @@ refhat_remove(refhat_t *self, hatrack_hash_t hv, bool *found)
 
     for (i = 0; i <= self->last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (!cur->epoch) {
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
 
@@ -339,14 +371,18 @@ refhat_remove(refhat_t *self, hatrack_hash_t hv, bool *found)
             if (found) {
                 *found = true;
             }
+	    
             return ret;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         bix = (bix + 1) & self->last_slot;
     }
     __builtin_unreachable();
@@ -417,6 +453,7 @@ refhat_view(refhat_t *self, uint64_t *num, bool sort)
             cur++;
             continue;
         }
+	
         p->item       = cur->item;
         p->sort_epoch = cur->epoch;
 
@@ -468,21 +505,27 @@ refhat_migrate(refhat_t *self)
 
     for (n = 0; n <= self->last_slot; n++) {
         cur = &self->buckets[n];
+	
         if (hatrack_bucket_unreserved(cur->hv) || !cur->epoch) {
             continue;
         }
+	
         bix = hatrack_bucket_index(cur->hv, new_last_slot);
+	
         for (i = 0; i < num_buckets; i++) {
             target = &new_buckets[bix];
+	    
             if (hatrack_bucket_unreserved(target->hv)) {
                 target->hv    = cur->hv;
                 target->item  = cur->item;
                 target->epoch = cur->epoch;
                 break;
             }
+	    
             bix = (bix + 1) & new_last_slot;
         }
     }
+    
     free(self->buckets);
 
     self->used_count = self->item_count;

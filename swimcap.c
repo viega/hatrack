@@ -76,6 +76,7 @@ swimcap_init(swimcap_t *self)
     self->item_count    = 0;
     self->next_epoch    = 1; // 0 is reserved for empty buckets.
     self->store_current = store;
+    
     pthread_mutex_init(&self->write_mutex, NULL);
 
     return;
@@ -127,7 +128,9 @@ swimcap_get(swimcap_t *self, hatrack_hash_t hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = swimcap_store_get(self->store_current, hv, found);
+    
     mmm_end_op();
 
     return ret;
@@ -378,20 +381,25 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 
     while (cur < end) {
         record = atomic_read(&cur->record);
+	
         if (!record.epoch) {
             cur++;
             continue;
         }
+	
         p->item       = record.item;
         p->sort_epoch = record.epoch;
+	
         count++;
         p++;
         cur++;
     }
 
     *num = count;
+    
     if (!count) {
         free(view);
+	
 #ifdef SWIMCAP_CONSISTENT_VIEWS
         if (pthread_mutex_unlock(&self->write_mutex)) {
             abort();
@@ -399,6 +407,7 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 #else
         mmm_end_op();
 #endif
+	
         return NULL;
     }
 
@@ -415,6 +424,7 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
 #else
     mmm_end_op();
 #endif
+    
     return view;
 }
 
@@ -424,14 +434,16 @@ swimcap_view(swimcap_t *self, uint64_t *num, bool sort)
  * strictly necessary for our use of MMM here; we really only care
  * about the epoch in which we were retired.
  */
+//clang-format off
+
 static swimcap_store_t *
 swimcap_store_new(uint64_t size)
 {
     swimcap_store_t *ret;
     uint64_t         alloc_len;
 
-    alloc_len = sizeof(swimcap_store_t);
-    alloc_len += size * sizeof(swimcap_bucket_t);
+    alloc_len      = sizeof(swimcap_store_t);
+    alloc_len     += size * sizeof(swimcap_bucket_t);
     ret            = (swimcap_store_t *)mmm_alloc_committed(alloc_len);
     ret->last_slot = size - 1;
     ret->threshold = hatrack_compute_table_threshold(size);
@@ -453,6 +465,7 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t hv, bool *found)
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             /* Since readers can run concurrently to writers, it is
              * possible the hash has been written, but no item has
@@ -460,25 +473,31 @@ swimcap_store_get(swimcap_store_t *self, hatrack_hash_t hv, bool *found)
              * make sure there's something to return.
              */
             record = atomic_read(&cur->record);
+	    
             if (record.epoch) {
                 if (found) {
                     *found = true;
                 }
+		
                 return record.item;
             }
             else {
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
@@ -503,6 +522,7 @@ swimcap_store_put(swimcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_load(&cur->record);
             /* If no epoch is set, it's either deleted or has never
@@ -512,8 +532,10 @@ swimcap_store_put(swimcap_store_t *self,
                 if (found) {
                     *found = false;
                 }
+		
                 record.epoch = top->next_epoch++;
                 ret          = NULL;
+		
                 top->item_count++;
                 // The bucket has already been used, so we do NOT bump
                 // used_count in this case.
@@ -522,6 +544,7 @@ swimcap_store_put(swimcap_store_t *self,
                 if (found) {
                     *found = true;
                 }
+		
                 ret = record.item;
             }
 
@@ -530,27 +553,34 @@ swimcap_store_put(swimcap_store_t *self,
 
             return ret;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
+		
                 return swimcap_store_put(top->store_current,
                                          top,
                                          hv,
                                          item,
                                          found);
             }
+	    
             self->used_count++;
             top->item_count++;
+	    
             cur->hv      = hv;
             record.item  = item;
             record.epoch = top->next_epoch++;
+	    
             atomic_store(&cur->record, record);
 
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
@@ -575,6 +605,7 @@ swimcap_store_replace(swimcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
@@ -582,8 +613,10 @@ swimcap_store_replace(swimcap_store_t *self,
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
+	    
             ret         = record.item;
             record.item = item;
 
@@ -592,14 +625,18 @@ swimcap_store_replace(swimcap_store_t *self,
             if (found) {
                 *found = true;
             }
+	    
             return ret;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
@@ -622,16 +659,21 @@ swimcap_store_add(swimcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
             if (record.epoch) {
                 return false;
             }
+	    
             record.item  = item;
             record.epoch = top->next_epoch++;
+	    
             top->item_count++;
+	    
             atomic_store(&cur->record, record);
+	    
             return true;
         }
 
@@ -640,13 +682,17 @@ swimcap_store_add(swimcap_store_t *self,
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (self->used_count + 1 == self->threshold) {
                 swimcap_migrate(top);
+		
                 return swimcap_store_add(top->store_current, top, hv, item);
             }
+	    
             self->used_count++;
             top->item_count++;
+	    
             cur->hv      = hv;
             record.item  = item;
             record.epoch = top->next_epoch++;
+	    
             atomic_store(&cur->record, record);
 
             return true;
@@ -674,6 +720,7 @@ swimcap_store_remove(swimcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
 
@@ -681,25 +728,31 @@ swimcap_store_remove(swimcap_store_t *self,
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
 
             ret          = record.item;
             record.epoch = 0;
+	    
             atomic_store(&cur->record, record);
             --top->item_count;
 
             if (found) {
                 *found = true;
             }
+	    
             return ret;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
@@ -736,11 +789,14 @@ swimcap_migrate(swimcap_t *self)
 
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
+	    
             if (hatrack_bucket_unreserved(target->hv)) {
                 target->hv = cur->hv;
+		
                 atomic_store(&target->record, record);
                 break;
             }
+	    
             bix = (bix + 1) & new_last_slot;
         }
     }

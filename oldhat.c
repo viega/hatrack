@@ -176,7 +176,9 @@ oldhat_get(oldhat_t *self, hatrack_hash_t hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = oldhat_store_get(self->store_current, self, hv, found);
+    
     mmm_end_op();
 
     return ret;
@@ -198,7 +200,9 @@ oldhat_put(oldhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = oldhat_store_put(self->store_current, self, hv, item, found);
+    
     mmm_end_op();
 
     return ret;
@@ -219,7 +223,9 @@ oldhat_replace(oldhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = oldhat_store_replace(self->store_current, self, hv, item, found);
+    
     mmm_end_op();
 
     return ret;
@@ -237,7 +243,9 @@ oldhat_add(oldhat_t *self, hatrack_hash_t hv, void *item)
     bool ret;
 
     mmm_start_basic_op();
+    
     ret = oldhat_store_add(self->store_current, self, hv, item);
+    
     mmm_end_op();
 
     return ret;
@@ -257,7 +265,9 @@ oldhat_remove(oldhat_t *self, hatrack_hash_t hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = oldhat_store_remove(self->store_current, self, hv, found);
+    
     mmm_end_op();
 
     return ret;
@@ -379,9 +389,11 @@ oldhat_view(oldhat_t *self, uint64_t *num, bool sort)
 
     for (i = 0; i <= store->last_slot; i++) {
         record = atomic_read(&store->buckets[i]);
+	
         if (!record || !record->used) {
             continue;
         }
+	
         p->item       = record->item;
         p->sort_epoch = mmm_get_create_epoch(record);
         p++;
@@ -393,6 +405,7 @@ oldhat_view(oldhat_t *self, uint64_t *num, bool sort)
     if (!num_items) {
         free(view);
         mmm_end_op();
+	
         return NULL;
     }
 
@@ -414,14 +427,16 @@ oldhat_view(oldhat_t *self, uint64_t *num, bool sort)
  * The cleanup handler is called by the memory management system, for
  * us to do any cleanup tasks before the store is finally free()'d.
  */
+// clang-format off
+
 static oldhat_store_t *
 oldhat_store_new(uint64_t size)
 {
     uint64_t        alloc_len;
     oldhat_store_t *store;
 
-    alloc_len = sizeof(oldhat_store_t);
-    alloc_len += sizeof(oldhat_record_t *) * size;
+    alloc_len        = sizeof(oldhat_store_t);
+    alloc_len       += sizeof(oldhat_record_t *) * size;
     store            = (oldhat_store_t *)mmm_alloc_committed(alloc_len);
     store->last_slot = size - 1;
     store->threshold = hatrack_compute_table_threshold(size);
@@ -483,25 +498,32 @@ oldhat_store_get(oldhat_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
+	
         if (!record) {
             break;
         }
+	
         if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         if (!record->used) {
             break;
         }
+	
         if (found) {
             *found = true;
         }
+	
         return record->item;
     }
+    
     // not found.
     if (found) {
         *found = false;
     }
+    
     return NULL;
 }
 
@@ -575,6 +597,7 @@ oldhat_store_put(oldhat_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
+	
         if (!record) {
             /* This bucket was unused at the time we loaded the record,
              * so we will try to "acquire" the bucket for our hash value
@@ -594,6 +617,7 @@ oldhat_store_put(oldhat_store_t *self,
                 if (found) {
                     *found = false;
                 }
+		
                 /* Being a new entry, we need to bump both the item
                  * count (which estimates how many items are in the
                  * table), and we need to bump the used_count, which
@@ -602,10 +626,13 @@ oldhat_store_put(oldhat_store_t *self,
                  * If we hit the threshold, we go migrate the table
                  * before returning.
                  */
+		
                 atomic_fetch_add(&top->item_count, 1);
+		
                 if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
                     oldhat_store_migrate(self, top);
                 }
+		
                 return NULL;
             }
         }
@@ -618,6 +645,7 @@ oldhat_store_put(oldhat_store_t *self,
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         goto found_bucket;
     }
 
@@ -639,6 +667,7 @@ migrate_and_retry:
      * it wants to do it for us.
      */
     self = oldhat_store_migrate(self, top);
+    
     return oldhat_store_put(self, top, hv, item, found);
 
 found_bucket:
@@ -697,13 +726,16 @@ found_bucket:
             if (found) {
                 *found = false;
             }
+	    
             atomic_fetch_add(&top->item_count, 1);
+	    
             return NULL;
         }
         else {
             if (found) {
                 *found = true;
             }
+	    
             return record->item;
         }
     }
@@ -714,7 +746,9 @@ found_bucket:
     if (record->moving) {
         goto migrate_and_retry;
     }
+    
     mmm_retire_unused(candidate);
+    
     return item;
 }
 
@@ -749,13 +783,16 @@ oldhat_store_replace(oldhat_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
+	
         if (!record) {
             goto not_found;
         }
+	
         if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         goto found_bucket;
     }
 
@@ -763,35 +800,44 @@ not_found:
     if (found) {
         *found = false;
     }
+    
     mmm_retire_unused(candidate);
+    
     return NULL;
 
 migrate_and_retry:
     mmm_retire_unused(candidate);
+    
     self = oldhat_store_migrate(self, top);
+    
     return oldhat_store_replace(self, top, hv, item, found);
 
 found_bucket:
     if (record->moving) {
         goto migrate_and_retry;
     }
+    
     if (!record->used) {
         goto not_found;
     }
-
     mmm_copy_create_epoch(candidate, record);
 
     if (CAS(&self->buckets[bix], &record, candidate)) {
         mmm_retire(record);
+	
         if (found) {
             *found = true;
         }
+	
         return record->item;
     }
+    
     if (record->moving) {
         goto migrate_and_retry;
     }
+    
     mmm_retire_unused(candidate);
+    
     return item;
 }
 
@@ -827,46 +873,58 @@ oldhat_store_add(oldhat_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
+	
         if (!record) {
             if (CAS(&self->buckets[bix], &record, candidate)) {
                 if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
                     oldhat_store_migrate(self, top);
                 }
+		
                 return true;
             }
         }
+	
         if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         goto found_bucket;
     }
 
 migrate_and_retry:
     mmm_retire_unused(candidate);
     self = oldhat_store_migrate(self, top);
+    
     return oldhat_store_add(self, top, hv, item);
 
 found_bucket:
     if (record->moving) {
         goto migrate_and_retry;
     }
+    
     if (record->used) {
         mmm_retire_unused(candidate);
+	
         return false;
     }
+    
     if (CAS(&self->buckets[bix], &record, candidate)) {
         mmm_retire(record);
         atomic_fetch_add(&top->item_count, 1);
+	
         return true;
     }
+    
     /* If we get here, the CAS failed. Either it's time to migrate, or
      * someone beat us to the punch, in which case we return false.
      */
     if (record->moving) {
         goto migrate_and_retry;
     }
+    
     mmm_retire_unused(candidate);
+    
     return false;
 }
 
@@ -896,41 +954,52 @@ oldhat_store_remove(oldhat_store_t *self,
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_load(&self->buckets[bix]);
+	
         if (!record) {
             goto not_found;
         }
+	
         if (!hatrack_hashes_eq(hv, record->hv)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
+	
         goto found_bucket;
     }
 
 not_found:
     mmm_retire_unused(candidate);
+    
     if (found) {
         *found = false;
     }
+    
     return NULL;
 
 migrate_and_retry:
     mmm_retire_unused(candidate);
     self = oldhat_store_migrate(self, top);
+    
     return oldhat_store_remove(self, top, hv, found);
 
 found_bucket:
     if (record->moving) {
         goto migrate_and_retry;
     }
+    
     if (!record->used) {
         goto not_found;
     }
+    
     if (CAS(&self->buckets[bix], &record, candidate)) {
         mmm_retire(record);
+	
         if (found) {
             *found = true;
         }
+	
         atomic_fetch_sub(&top->item_count, 1);
+	
         return record->item;
     }
     /* If we get here, the CAS failed. Either it's time to migrate, or
@@ -1106,6 +1175,7 @@ oldhat_store_migrate(oldhat_store_t *self, oldhat_t *top)
      */
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_read(&self->buckets[i]);
+	
         do {
             if (!record) {
                 candidate_record->hv.w1  = 0;
@@ -1119,11 +1189,13 @@ oldhat_store_migrate(oldhat_store_t *self, oldhat_t *top)
                 if (record->moving) {
                     goto add_to_length;
                 }
+		
                 candidate_record->hv     = record->hv;
                 candidate_record->item   = record->item;
                 candidate_record->used   = record->used;
                 candidate_record->moving = true;
                 candidate_record->moved  = false;
+		
                 if (candidate_record->used) {
                     mmm_copy_create_epoch(candidate_record, record);
                 }
@@ -1136,6 +1208,7 @@ oldhat_store_migrate(oldhat_store_t *self, oldhat_t *top)
         if (record) {
             mmm_retire(record);
         }
+	
         candidate_record = (oldhat_record_t *)mmm_alloc_committed(record_sz);
 
         /* Here, whether we installed our record or not, we look at
@@ -1212,26 +1285,32 @@ add_to_length:
         // in place; for items w/o a record in place, 'moved' gets
         // set.
         bix = hatrack_bucket_index(record->hv, new_store->last_slot);
+	
         candidate_record->hv     = record->hv;
         candidate_record->item   = record->item;
         candidate_record->used   = true;
         candidate_record->moving = false;
         candidate_record->moved  = false;
+	
         mmm_copy_create_epoch(candidate_record, record);
 
         for (j = 0; j <= new_store->last_slot; j++) {
             record = atomic_read(&new_store->buckets[bix]);
+	    
             if (!record) {
                 if (CAS(&new_store->buckets[bix], &record, candidate_record)) {
                     candidate_record
                         = (oldhat_record_t *)mmm_alloc_committed(record_sz);
+		    
                     goto next_migration;
                 }
             }
+	    
             if (!hatrack_hashes_eq(record->hv, candidate_record->hv)) {
                 bix = (bix + 1) & new_store->last_slot;
                 continue;
             }
+	    
             break; // Someone else got the job done.
         }
 next_migration:
@@ -1248,15 +1327,18 @@ next_migration:
 
     for (i = 0; i <= self->last_slot; i++) {
         record = atomic_read(&self->buckets[i]);
+	
         do {
             if (record->moved) {
                 goto next_mark_finished;
             }
+	    
             candidate_record->hv     = record->hv;
             candidate_record->item   = record->item;
             candidate_record->used   = record->used;
             candidate_record->moving = true;
             candidate_record->moved  = true;
+	    
             if (candidate_record->used) {
                 mmm_copy_create_epoch(candidate_record, record);
             }
@@ -1267,6 +1349,7 @@ next_migration:
          * time.
          */
         mmm_retire(record);
+	
         candidate_record = (oldhat_record_t *)mmm_alloc_committed(record_sz);
 
 next_mark_finished:

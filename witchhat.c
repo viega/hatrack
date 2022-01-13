@@ -85,8 +85,10 @@ witchhat_get(witchhat_t *self, hatrack_hash_t hv, bool *found)
     witchhat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);
     ret   = witchhat_store_get(store, self, hv, found);
+    
     mmm_end_op();
 
     return ret;
@@ -99,8 +101,10 @@ witchhat_put(witchhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     witchhat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);
     ret   = witchhat_store_put(store, self, hv, item, found, 0);
+    
     mmm_end_op();
 
     return ret;
@@ -113,8 +117,10 @@ witchhat_replace(witchhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     witchhat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);
     ret   = witchhat_store_replace(store, self, hv, item, found, 0);
+    
     mmm_end_op();
 
     return ret;
@@ -127,8 +133,10 @@ witchhat_add(witchhat_t *self, hatrack_hash_t hv, void *item)
     witchhat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);    
     ret   = witchhat_store_add(store, self, hv, item, 0);
+    
     mmm_end_op();
 
     return ret;
@@ -141,8 +149,10 @@ witchhat_remove(witchhat_t *self, hatrack_hash_t hv, bool *found)
     witchhat_store_t *store;
 
     mmm_start_basic_op();
+    
     store = atomic_read(&self->store_current);    
     ret   = witchhat_store_remove(store, self, hv, found, 0);
+    
     mmm_end_op();
 
     return ret;
@@ -205,6 +215,7 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
     if (!num_items) {
         free(view);
         mmm_end_op();
+	
         return NULL;
     }
 
@@ -251,19 +262,23 @@ witchhat_store_get(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_read(&bucket->hv);
+	
         if (hatrack_bucket_unreserved(hv2)) {
             goto not_found;
         }
+	
         if (!hatrack_hashes_eq(hv1, hv2)) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
 
         record = atomic_read(&bucket->record);
+	
         if (record.info & WITCHHAT_EPOCH_MASK) {
             if (found) {
                 *found = true;
             }
+	    
             return record.item;
         }
         break;
@@ -298,17 +313,21 @@ witchhat_store_put(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
 	hv2    = atomic_read(&bucket->hv);
+	
 	if (hatrack_bucket_unreserved(hv2)) {
 	    if (LCAS(&bucket->hv, &hv2, hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
 		    goto migrate_and_retry;
 		}
+		
 		goto found_bucket;
 	    }
 	}
+	
 	if (hatrack_hashes_eq(hv1, hv2)) {
 	    goto found_bucket;
 	}
+	
 	bix = (bix + 1) & self->last_slot;
 	continue;
     }
@@ -348,10 +367,14 @@ witchhat_store_put(witchhat_store_t *self,
     count = count + 1;
     if (witchhat_help_required(count)) {
 	HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
+	
 	atomic_fetch_add(&top->help_needed, 1);
+	
 	self     = witchhat_store_migrate(self, top);
 	old_item = witchhat_store_put(self, top, hv1, item, found, count);
+	
 	atomic_fetch_sub(&top->help_needed, 1);
+	
 	return old_item;
     }
     
@@ -360,6 +383,7 @@ witchhat_store_put(witchhat_store_t *self,
 
  found_bucket:
     record = atomic_read(&bucket->record);
+    
     if (record.info & WITCHHAT_F_MOVING) {
 	goto migrate_and_retry;
     }
@@ -368,6 +392,7 @@ witchhat_store_put(witchhat_store_t *self,
 	if (found) {
 	    *found = true;
 	}
+	
 	old_item       = record.item;
 	new_item       = false;
 	candidate.info = record.info;
@@ -376,6 +401,7 @@ witchhat_store_put(witchhat_store_t *self,
 	if (found) {
 	    *found = false;
 	}
+	
 	old_item       = NULL;
 	new_item       = true;
 	candidate.info = top->next_epoch++;
@@ -387,6 +413,7 @@ witchhat_store_put(witchhat_store_t *self,
         if (new_item) {
             atomic_fetch_add(&top->item_count, 1);
         }
+	
         return old_item;
     }
 
@@ -430,12 +457,15 @@ witchhat_store_replace(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
 	hv2    = atomic_read(&bucket->hv);
+	
 	if (hatrack_bucket_unreserved(hv2)) {
 	    goto not_found;
 	}
+	
 	if (hatrack_hashes_eq(hv1, hv2)) {
 	    goto found_bucket;
 	}
+	
 	bix = (bix + 1) & self->last_slot;
 	continue;
     }
@@ -448,20 +478,25 @@ witchhat_store_replace(witchhat_store_t *self,
 
  found_bucket:
     record = atomic_read(&bucket->record);
+    
     if (record.info & WITCHHAT_F_MOVING) {
     migrate_and_retry:
 	// This uses the same helping mechanism as in
 	// witchhat_store_put().  Look there for an overview.
 	count = count + 1;
+	
 	if (witchhat_help_required(count)) {
 	    HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
+	    
 	    atomic_fetch_add(&top->help_needed, 1);
 	    self = witchhat_store_migrate(self, top);
 	    ret  = witchhat_store_replace(self, top, hv1, item, found, count);
 	    
 	    atomic_fetch_sub(&top->help_needed, 1);
+	    
 	    return ret;
 	}
+	
 	self = witchhat_store_migrate(self, top);
 	return witchhat_store_replace(self, top, hv1, item, found, count);
     }
@@ -500,6 +535,7 @@ witchhat_store_replace(witchhat_store_t *self,
 	if (record.info & WITCHHAT_F_MOVING) {
 	    goto migrate_and_retry;
 	}
+	
 	goto not_found;
     }
     
@@ -539,6 +575,7 @@ witchhat_store_add(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
 	hv2    = atomic_read(&bucket->hv);
+	
 	if (hatrack_bucket_unreserved(hv2)) {
 	    if (LCAS(&bucket->hv, &hv2, hv1, WITCHHAT_CTR_BUCKET_ACQUIRE)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
@@ -547,6 +584,7 @@ witchhat_store_add(witchhat_store_t *self,
 		goto found_bucket;
 	    }
 	}
+	
 	if (!hatrack_hashes_eq(hv1, hv2)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
@@ -562,14 +600,18 @@ witchhat_store_add(witchhat_store_t *self,
     if (witchhat_help_required(count)) {
 	bool ret;
 
-	HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);	
+	HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
+	
 	atomic_fetch_add(&top->help_needed, 1);
+	
 	self = witchhat_store_migrate(self, top);
 	ret  = witchhat_store_add(self, top, hv1, item, count);
+	
 	atomic_fetch_sub(&top->help_needed, 1);
 
 	return ret;
     }
+    
     self = witchhat_store_migrate(self, top);
     return witchhat_store_add(self, top, hv1, item, count);
 
@@ -578,6 +620,7 @@ found_bucket:
     if (record.info & WITCHHAT_F_MOVING) {
 	goto migrate_and_retry;
     }
+    
     if (record.info) {
         return false;
     }
@@ -588,7 +631,8 @@ found_bucket:
     if (LCAS(&bucket->record, &record, candidate, WITCHHAT_CTR_REC_INSTALL)) {
 	atomic_fetch_add(&top->item_count, 1);
         return true;
-    } 
+    }
+    
     if (record.info & WITCHHAT_F_MOVING) {
 	goto migrate_and_retry;
     }
@@ -616,12 +660,15 @@ witchhat_store_remove(witchhat_store_t *self,
     for (i = 0; i <= self->last_slot; i++) {
         bucket = &self->buckets[bix];
         hv2    = atomic_read(&bucket->hv);
+	
         if (hatrack_bucket_unreserved(hv2)) {
             break;
         }
+	
         if (hatrack_hashes_eq(hv1, hv2)) {
 	    goto found_bucket;
         }
+	
 	bix = (bix + 1) & self->last_slot;
 	continue;
     }
@@ -639,6 +686,7 @@ found_bucket:
 	// This uses the same helping mechanism as in
 	// witchhat_store_put().  Look there for an overview.
 	count = count + 1;
+	
 	if (witchhat_help_required(count)) {
 	    HATRACK_CTR(HATRACK_CTR_WH_HELP_REQUESTS);
 	    atomic_fetch_add(&top->help_needed, 1);
@@ -647,9 +695,11 @@ found_bucket:
 	    atomic_fetch_sub(&top->help_needed, 1);
 	    return old_item;
 	}
+	
 	self = witchhat_store_migrate(self, top);
 	return witchhat_store_remove(self, top, hv1, found, count);
     }
+    
     if (!record.info) {
         if (found) {
             *found = false;
@@ -748,9 +798,11 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
             if (record.info & WITCHHAT_F_MOVING) {
                 break;
             }
+	    
 	    if (record.info) {
 		candidate_record.info = record.info | WITCHHAT_F_MOVING;
-	    } else {
+	    }
+	    else {
 		candidate_record.info = WITCHHAT_F_MOVING | WITCHHAT_F_MOVED;
 	    }
         } while (!LCAS(&bucket->record,
@@ -788,10 +840,13 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
 	 */
 	if (witchhat_need_to_help(top)) {
 	    new_size = (self->last_slot + 1) << 1;
-	} else {
+	}
+	else {
 	    new_size        = hatrack_new_size(self->last_slot, new_used);
 	}
+	
         candidate_store = witchhat_store_new(new_size);
+	
         if (!LCAS(&self->store_next,
                   &new_store,
                   candidate_store,
@@ -826,10 +881,12 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
 		    break;
 		}
 	    }
+	    
 	    if (!hatrack_hashes_eq(expected_hv, hv)) {
 		bix = (bix + 1) & new_store->last_slot;
 		continue;
             }
+	    
             break;
         }
 
@@ -870,6 +927,7 @@ witchhat_help_required(uint64_t count)
     if (count == HATRACK_RETRY_THRESHOLD) {
 	return true;
     }
+    
     return false;
 }
 

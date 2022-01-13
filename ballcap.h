@@ -51,7 +51,6 @@
  *                  algorithm.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __BALLCAP_H__

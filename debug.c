@@ -46,14 +46,16 @@ debug_dump(uint64_t max_msgs)
     if (!max_msgs || max_msgs > HATRACK_DEBUG_RING_SIZE) {
         max_msgs = HATRACK_DEBUG_RING_SIZE;
     }
+    
     cur_sequence    = atomic_load(&__hatrack_debug_sequence);
     oldest_sequence = cur_sequence - max_msgs;
 
     if (oldest_sequence < 0) {
         oldest_sequence = 0;
     }
+    
     oldest_sequence &= HATRACK_DEBUG_RING_LAST_SLOT;
-    cur_sequence &= HATRACK_DEBUG_RING_LAST_SLOT;
+    cur_sequence    &= HATRACK_DEBUG_RING_LAST_SLOT;
 
     if (oldest_sequence >= cur_sequence) {
         for (i = oldest_sequence; i < HATRACK_DEBUG_RING_SIZE; i++) {
@@ -63,11 +65,13 @@ debug_dump(uint64_t max_msgs)
                     (long)__hatrack_debug[i].thread,
                     __hatrack_debug[i].msg);
         }
+	
         i = 0;
     }
     else {
         i = oldest_sequence;
     }
+    
     for (; i < cur_sequence; i++) {
         fprintf(stderr,
                 "%06llu: (tid %ld) %s\n",
@@ -116,6 +120,7 @@ debug_other_thread(int64_t tid)
                     __hatrack_debug[i].msg);
         }
     }
+    
     for (i = 0; i < start; i++) {
         if (tid == __hatrack_debug[i].thread) {
             fprintf(stderr,
@@ -156,6 +161,7 @@ debug_grep(char *s)
                     __hatrack_debug[i].msg);
         }
     }
+    
     for (i = 0; i < start; i++) {
         if (strstr(__hatrack_debug[i].msg, s)) {
             fprintf(stderr,

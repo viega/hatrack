@@ -81,7 +81,8 @@ void
 tophat_init_fast_mx(tophat_t *self)
 {
     tophat_init_base(self);
-    self->dst_type  = TOPHAT_T_FAST_LOCKING;
+    
+    self->dst_type          = TOPHAT_T_FAST_LOCKING;
     self->mt_vtable.init    = (hatrack_init_func)newshat_init;
     self->mt_vtable.get     = (hatrack_get_func)newshat_get;
     self->mt_vtable.put     = (hatrack_put_func)newshat_put;
@@ -99,7 +100,8 @@ void
 tophat_init_fast_wf(tophat_t *self)
 {
     tophat_init_base(self);
-    self->dst_type  = TOPHAT_T_FAST_WAIT_FREE;
+    
+    self->dst_type          = TOPHAT_T_FAST_WAIT_FREE;
     self->mt_vtable.init    = (hatrack_init_func)witchhat_init;
     self->mt_vtable.get     = (hatrack_get_func)witchhat_get;
     self->mt_vtable.put     = (hatrack_put_func)witchhat_put;
@@ -116,8 +118,9 @@ tophat_init_fast_wf(tophat_t *self)
 void
 tophat_init_cst_mx(tophat_t *self)
 {
-    tophat_init_base(self);    
-    self->dst_type  = TOPHAT_T_CONSISTENT_LOCKING;
+    tophat_init_base(self);
+    
+    self->dst_type          = TOPHAT_T_CONSISTENT_LOCKING;
     self->mt_vtable.init    = (hatrack_init_func)ballcap_init;
     self->mt_vtable.get     = (hatrack_get_func)ballcap_get;
     self->mt_vtable.put     = (hatrack_put_func)ballcap_put;
@@ -135,7 +138,8 @@ void
 tophat_init_cst_wf(tophat_t *self)
 {
     tophat_init_base(self);
-    self->dst_type  = TOPHAT_T_CONSISTENT_WAIT_FREE;
+    
+    self->dst_type          = TOPHAT_T_CONSISTENT_WAIT_FREE;
     self->mt_vtable.init    = (hatrack_init_func)woolhat_init;
     self->mt_vtable.get     = (hatrack_get_func)woolhat_get;
     self->mt_vtable.put     = (hatrack_put_func)woolhat_put;
@@ -183,9 +187,12 @@ tophat_get(tophat_t *self, hatrack_hash_t hv, bool *found) {
      */
 
     mmm_start_basic_op();
+
     mt_table = atomic_read(&self->mt_table);
+    
     if (mt_table) {
 	mmm_end_op();
+	
 	return (*self->mt_vtable.get)(mt_table, hv, found);
     }
 
@@ -209,28 +216,39 @@ tophat_get(tophat_t *self, hatrack_hash_t hv, bool *found) {
 
     for (i = 0; i <= ctx->last_slot; i++) {
 	cur = &ctx->buckets[bix];
+	
 	if (hatrack_hashes_eq(hv, cur->hv)) {
 	    record = atomic_read(&cur->record);
+	    
 	    if (!record.epoch) {
 		if (found) {
 		    *found = false;
 		}
+		
 		mmm_end_op();
+		
 		return NULL;
 	    }
+	    
 	    if (found) {
 		*found = true;
 	    }
+	    
 	    mmm_end_op();
+	    
 	    return record.item;
 	}
+	
 	if (hatrack_bucket_unreserved(cur->hv)) {
 	    if (found) {
 		*found = false;
 	    }
+	    
 	    mmm_end_op();
+	    
 	    return NULL;	    
 	}
+	
 	bix = (bix + 1) & ctx->last_slot;
     }
     __builtin_unreachable();
@@ -280,14 +298,19 @@ tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found) {
 	if (pthread_mutex_lock(&self->mutex)) {
 	    abort();
 	}
+	
 	mt_table = atomic_read(&self->mt_table);
+	
 	if (!mt_table) {
 	    mt_table = tophat_migrate(self);
 	}
+	
 	if (pthread_mutex_unlock(&self->mutex)) {
 	    abort();
 	}
+	
 	mt_table = atomic_load(&self->mt_table);
+	
 	return (*self->mt_vtable.put)(mt_table, hv, item, found);
     } 
     /* Here we successfully acquired the lock, so we didn't detect
@@ -305,8 +328,10 @@ tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found) {
 
     for (i = 0; i <= ctx->last_slot; i++) {
 	cur = &ctx->buckets[bix];
+	
 	if (hatrack_hashes_eq(hv, cur->hv)) {
 	    record = atomic_read(&cur->record);
+	    
 	    if (!record.epoch) {
 		record.item  = item;
 		record.epoch = ctx->next_epoch++;
@@ -317,31 +342,39 @@ tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found) {
 		if (found) {
 		    *found = false;
 		}
+		
 		if (pthread_mutex_unlock(&self->mutex)) {
 		    abort();
 		}
+		
 		return NULL;
 	    }
-	    ret = record.item;
+	    ret         = record.item;
 	    record.item = item;
+	    
 	    atomic_store(&cur->record, record);
 
 	    if (found) {
 		*found = true;
 	    }
+	    
 	    if (pthread_mutex_unlock(&self->mutex)) {
 		abort();
 	    }
+	    
 	    return ret;
 	}
 	if (hatrack_bucket_unreserved(cur->hv)) {
 	    if (ctx->used_count + 1 == ctx->threshold) {
 		tophat_st_migrate(ctx);
+		
 		if (pthread_mutex_unlock(&self->mutex)) {
 		    abort();
 		}
+		
 		return tophat_put(self, hv, item, found);
 	    }
+	    
 	    ctx->used_count++;
 	    ctx->item_count++;
 
@@ -354,9 +387,11 @@ tophat_put(tophat_t *self, hatrack_hash_t hv, void *item, bool *found) {
 	    if (found) {
 		*found = false;
 	    }
+	    
 	    if (pthread_mutex_unlock(&self->mutex)) {
 		abort();
 	    }
+	    
 	    return NULL;
 	}
 	bix = (bix + 1) & ctx->last_slot;
@@ -387,14 +422,19 @@ tophat_replace(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
 	if (pthread_mutex_lock(&self->mutex)) {
 	    abort();
 	}
+	
 	mt_table = atomic_read(&self->mt_table);
+	
 	if (!mt_table) {
 	    mt_table = tophat_migrate(self);
 	}
+	
 	if (pthread_mutex_unlock(&self->mutex)) {
 	    abort();
 	}
+	
 	mt_table = atomic_load(&self->mt_table);
+	
 	return (*self->mt_vtable.replace)(mt_table, hv, item, found);
     }
 
@@ -403,18 +443,23 @@ tophat_replace(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
 
     for (i = 0; i <= ctx->last_slot; i++) {
         cur = &ctx->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
+	    
             if (!record.epoch) {
 	    empty:
                 if (found) {
                     *found = false;
                 }
+		
 		if (pthread_mutex_unlock(&self->mutex)) {
 		    abort();
 		}
+		
                 return NULL;
             }
+	    
             ret         = record.item;
             record.item = item;
 
@@ -423,14 +468,18 @@ tophat_replace(tophat_t *self, hatrack_hash_t hv, void *item, bool *found)
             if (found) {
                 *found = true;
             }
+	    
 	    if (pthread_mutex_unlock(&self->mutex)) {
 		abort();
 	    }
+	    
             return ret;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
 	    goto empty;
         }
+	
         bix = (bix + 1) & ctx->last_slot;
     }
     __builtin_unreachable();
@@ -458,14 +507,19 @@ tophat_add(tophat_t *self, hatrack_hash_t hv, void *item)
 	if (pthread_mutex_lock(&self->mutex)) {
 	    abort();
 	}
+	
 	mt_table = atomic_read(&self->mt_table);
+	
 	if (!mt_table) {
 	    mt_table = tophat_migrate(self);
 	}
+	
 	if (pthread_mutex_unlock(&self->mutex)) {
 	    abort();
 	}
+	
 	mt_table = atomic_load(&self->mt_table);
+	
 	return (*self->mt_vtable.add)(mt_table, hv, item);
     }
 
@@ -474,8 +528,10 @@ tophat_add(tophat_t *self, hatrack_hash_t hv, void *item)
 
     for (i = 0; i <= ctx->last_slot; i++) {
         cur = &ctx->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
+	    
             if (!record.epoch) {
                 record.item  = item;
                 record.epoch = ctx->next_epoch++;
@@ -483,37 +539,47 @@ tophat_add(tophat_t *self, hatrack_hash_t hv, void *item)
                 atomic_store(&cur->record, record);
 
                 ctx->item_count++;
+		
 		if (pthread_mutex_unlock(&self->mutex)) {
 		    abort();
 		}
+		
                 return true;
             }
 	    if (pthread_mutex_unlock(&self->mutex)) {
 		abort();
 	    }
+	    
             return false;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (ctx->used_count + 1 == ctx->threshold) {
                 tophat_st_migrate(ctx);
+		
 		if (pthread_mutex_unlock(&self->mutex)) {
 		    abort();
 		}
+		
                 return tophat_add(self, hv, item);
             }
+	    
             ctx->used_count++;
             ctx->item_count++;
-            cur->hv = hv;
-
+	    
+            cur->hv      = hv;
             record.item  = item;
             record.epoch = ctx->next_epoch++;
 
             atomic_store(&cur->record, record);
+	    
 	    if (pthread_mutex_unlock(&self->mutex)) {
 		abort();
 	    }
+	    
             return true;
         }
+	
         bix = (bix + 1) & ctx->last_slot;
     }
     __builtin_unreachable();
@@ -542,31 +608,40 @@ tophat_remove(tophat_t *self, hatrack_hash_t hv, bool *found)
 	if (pthread_mutex_lock(&self->mutex)) {
 	    abort();
 	}
+	
 	mt_table = atomic_read(&self->mt_table);
+	
 	if (!mt_table) {
 	    mt_table = tophat_migrate(self);
 	}
+	
 	if (pthread_mutex_unlock(&self->mutex)) {
 	    abort();
 	}
+	
 	mt_table = atomic_load(&self->mt_table);
+	
 	return (*self->mt_vtable.remove)(mt_table, hv, found);
-    } else 
+    }
 
     ctx = self->st_table;
     bix = hatrack_bucket_index(hv, ctx->last_slot);
 
     for (i = 0; i <= ctx->last_slot; i++) {
         cur = &ctx->buckets[bix];
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             record = atomic_read(&cur->record);
+	    
             if (!record.epoch) {
                 if (found) {
                     *found = false;
                 }
+		
 		if (pthread_mutex_unlock(&self->mutex)) {
 		    abort();
 		}
+		
                 return NULL;
             }
 
@@ -582,20 +657,25 @@ tophat_remove(tophat_t *self, hatrack_hash_t hv, bool *found)
             if (found) {
                 *found = true;
             }
+	    
 	    if (pthread_mutex_unlock(&self->mutex)) {
 		abort();
 	    }
+	    
             return ret;
         }
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
 	    if (pthread_mutex_unlock(&self->mutex)) {
 		abort();
 	    }
+	    
 	    return NULL;
         }
+	
         bix = (bix + 1) & ctx->last_slot;
     }
     __builtin_unreachable();
@@ -639,10 +719,13 @@ tophat_len(tophat_t *self)
      * reservation in before checking mt_table, we're guaranteed that,
      * if mt_table is NULL, we will be able to read st_tbale.
      */
-    mmm_start_basic_op();    
+    mmm_start_basic_op();
+    
     mt_table = atomic_load(&self->mt_table);
+    
     if (mt_table) {
 	mmm_end_op();
+	
 	return (*self->mt_vtable.len)(mt_table);	    
     }
     
@@ -676,11 +759,15 @@ tophat_view(tophat_t *self, uint64_t *num, bool sort)
      * we atomically load the epoch and item together).
      */
     mmm_start_basic_op();
+    
     mt_table = atomic_load(&self->mt_table);
+    
     if (mt_table) {
 	mmm_end_op();
+	
 	return (*self->mt_vtable.view)(mt_table, num, sort);
     }
+    
     ctx = self->st_table;
 
     /* Allow for concurrent writes by resizing down.  Upper
@@ -792,16 +879,20 @@ tophat_st_migrate(tophat_st_ctx_t *ctx)
         }
 
         bix = hatrack_bucket_index(cur_bucket->hv, new_last_slot);
+	
         for (i = 0; i < num_buckets; i++) {
             new_bucket = &new_buckets[bix];
+	    
             if (hatrack_bucket_unreserved(new_bucket->hv)) {
                 new_bucket->hv     = cur_bucket->hv;
                 new_bucket->record = record;
                 break;
             }
+	    
             bix = (bix + 1) & new_last_slot;
         }
     }
+    
     mmm_retire(ctx->buckets);
 
     ctx->used_count = ctx->item_count;
@@ -834,14 +925,19 @@ tophat_migrate_to_newshat(tophat_t *self)
 
     for (n = 0; n <= ctx->last_slot; n++) {
 	cur_bucket = &ctx->buckets[n];
+	
 	if (hatrack_bucket_unreserved(cur_bucket->hv)) {
 	    continue;
 	}
+	
 	cur_record = atomic_read(&cur_bucket->record);
+	
 	if (!cur_record.epoch) {
 	    continue;
 	}
+	
 	bix    = hatrack_bucket_index(cur_bucket->hv, ctx->last_slot);
+	
 	for (i = 0; i <= ctx->last_slot; i++) {
 	    new_bucket = &new_table->store_current->buckets[bix];
 
@@ -863,6 +959,7 @@ tophat_migrate_to_newshat(tophat_t *self)
 		new_bucket->migrated = false;
 		break;
 	    }
+	    
 	    bix = (bix + 1) & ctx->last_slot;
 	}
     }
@@ -910,7 +1007,9 @@ tophat_migrate_to_witchhat(tophat_t *self)
 	if (hatrack_bucket_unreserved(cur_bucket->hv)) {
 	    continue;
 	}
+	
 	cur_record = atomic_read(&cur_bucket->record);
+	
 	if (!cur_record.epoch) {
 	    continue;
 	}
@@ -925,9 +1024,11 @@ tophat_migrate_to_witchhat(tophat_t *self)
 		atomic_store(&new_bucket->hv, cur_bucket->hv);
 		break;
 	    }
+	    
 	    if (hatrack_hashes_eq(hv, cur_bucket->hv)) {
 		break;
 	    }
+	    
 	    bix = (bix + 1) & new_table->store_current->last_slot;
 	    continue;
 	}
@@ -980,11 +1081,13 @@ tophat_migrate_to_ballcap(tophat_t *self)
 
     for (n = 0; n <= ctx->last_slot; n++) {
 	cur_bucket = &ctx->buckets[n];
+	
 	if (hatrack_bucket_unreserved(cur_bucket->hv)) {
 	    continue;
 	}
 
 	cur_record = atomic_read(&cur_bucket->record);
+	
 	if (!cur_record.epoch) {
 	    continue;
 	}
@@ -1003,6 +1106,7 @@ tophat_migrate_to_ballcap(tophat_t *self)
 		    mmm_set_create_epoch(new_record, cur_record.epoch);
 		    break;
 	    }
+	    
 	    bix = (bix + 1) & ctx->last_slot;
 	}
     }
@@ -1039,10 +1143,11 @@ tophat_migrate_to_woolhat(tophat_t *self)
     woolhat_record_t   *new_record;
     uint64_t            n, i, bix, record_len;
 
-    ctx = self->st_table;
+    ctx                      = self->st_table;
     new_table                = (woolhat_t *)malloc(sizeof(woolhat_t));
     new_table->store_current = woolhat_store_new(ctx->last_slot + 1);
     record_len               = sizeof(woolhat_record_t);
+    
     atomic_store(&new_table->help_needed, 0);
 
     for (n = 0; n <= ctx->last_slot; n++) {
@@ -1059,6 +1164,7 @@ tophat_migrate_to_woolhat(tophat_t *self)
 	}
 
 	bix = hatrack_bucket_index(cur_bucket->hv, ctx->last_slot);
+	
 	for (i = 0; i <= ctx->last_slot; i++) {
 	    new_bucket = &new_table->store_current->hist_buckets[bix];
 	    hv         = atomic_load(&new_bucket->hv);
@@ -1068,15 +1174,20 @@ tophat_migrate_to_woolhat(tophat_t *self)
 		    = (woolhat_record_t *)mmm_alloc_committed(record_len);
 		new_record->item   = cur_record.item;
 		new_record->next   = NULL;
+		
 		mmm_set_create_epoch(new_record, cur_record.epoch);
 		atomic_store(&new_bucket->hv, cur_bucket->hv);
 		atomic_store(&new_bucket->head, new_record);
+		
 		break;
 	    }
+	    
 	    bix = (bix + 1) & ctx->last_slot;
 	}
     }
+    
     new_table->store_current->used_count = ctx->item_count;
+    
     if (mmm_epoch < ctx->next_epoch) {
 	atomic_store(&mmm_epoch, ctx->next_epoch);
     }

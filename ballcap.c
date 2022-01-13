@@ -44,7 +44,6 @@
  *                  meaningful variations.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #include "ballcap.h"
@@ -87,7 +86,9 @@ ballcap_get(ballcap_t *self, hatrack_hash_t hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = ballcap_store_get(self->store_current, self, hv, found);
+    
     mmm_end_op();
 
     return ret;
@@ -99,7 +100,9 @@ ballcap_put(ballcap_t *self, hatrack_hash_t hv, void *item, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = ballcap_store_put(self->store_current, self, hv, item, found);
+    
     mmm_end_op();
 
     return ret;
@@ -111,7 +114,9 @@ ballcap_replace(ballcap_t *self, hatrack_hash_t hv, void *item, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = ballcap_store_replace(self->store_current, self, hv, item, found);
+    
     mmm_end_op();
 
     return ret;
@@ -123,7 +128,9 @@ ballcap_add(ballcap_t *self, hatrack_hash_t hv, void *item)
     bool ret;
 
     mmm_start_basic_op();
+    
     ret = ballcap_store_add(self->store_current, self, hv, item);
+    
     mmm_end_op();
 
     return ret;
@@ -135,7 +142,9 @@ ballcap_remove(ballcap_t *self, hatrack_hash_t hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
+    
     ret = ballcap_store_remove(self->store_current, self, hv, found);
+    
     mmm_end_op();
 
     return ret;
@@ -220,16 +229,20 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
             cur++;
             continue;
         }
+	
         if (pthread_mutex_lock(&cur->mutex)) {
             abort();
         }
+	
         record = cur->record;
 
         while (record) {
             sort_epoch = mmm_get_write_epoch(record);
+	    
             if (sort_epoch <= target_epoch) {
                 break;
             }
+	    
             record = record->next;
         }
 
@@ -237,6 +250,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
             if (pthread_mutex_unlock(&cur->mutex)) {
                 abort();
             }
+	    
             cur++;
             continue;
         }
@@ -247,6 +261,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
         if (pthread_mutex_unlock(&cur->mutex)) {
             abort();
         }
+	
         count++;
         p++;
         cur++;
@@ -257,6 +272,7 @@ ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
     if (!count) {
         free(view);
         mmm_end_op();
+	
         return NULL;
     }
 
@@ -318,19 +334,25 @@ ballcap_store_get(ballcap_store_t *self,
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
+	    
             if (found) {
                 *found = true;
             }
+	    
             return record->item;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
@@ -351,24 +373,25 @@ ballcap_store_put(ballcap_store_t *self,
     ballcap_record_t *old_record;
     void             *ret;
 
-    last_slot = self->last_slot;
-
-    bix = hatrack_bucket_index(hv, last_slot);
-
+    last_slot    = self->last_slot;
+    bix          = hatrack_bucket_index(hv, last_slot);
     record       = mmm_alloc(sizeof(ballcap_record_t));
     record->item = item;
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+	
 check_bucket_again:
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
+	    
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 mmm_retire_unused(record);
                 return ballcap_store_put(top->store_current,
                                          top,
@@ -376,6 +399,7 @@ check_bucket_again:
                                          item,
                                          found);
             }
+	    
             old_record = cur->record;
             /* Because we're using locks, there should always be a
              * record here. We may have to revisit this in the future
@@ -384,24 +408,31 @@ check_bucket_again:
              */
             if (old_record->deleted) {
                 ret = NULL;
+		
                 if (found) {
                     *found = false;
                 }
+		
                 top->item_count++;
             }
             else {
                 ret = old_record->item;
+		
                 if (found) {
                     *found = true;
                 }
+		
                 record->next = cur->record;
                 // Since we're overwriting a pre-existing record, we should
                 // inherit its creation time, in terms of our sort order.
                 mmm_copy_create_epoch(record, cur->record);
             }
+	    
             cur->record = record;
+	    
             mmm_commit_write(record);
             mmm_retire(old_record);
+	    
             if (pthread_mutex_unlock(&cur->mutex)) {
                 abort();
             }
@@ -413,10 +444,12 @@ check_bucket_again:
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
+	    
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 mmm_retire_unused(record);
                 return ballcap_store_put(top->store_current,
                                          top,
@@ -424,36 +457,46 @@ check_bucket_again:
                                          item,
                                          found);
             }
+	    
             if (!hatrack_bucket_unreserved(cur->hv)) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 goto check_bucket_again;
             }
+	    
             if (self->used_count == self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
 
                 mmm_retire_unused(record);
+		
                 self = ballcap_store_migrate(self, top);
                 return ballcap_store_put(self, top, hv, item, found);
             }
+	    
             self->used_count++;
             top->item_count++;
+	    
             cur->hv = hv;
             ret     = NULL;
+	    
             if (found) {
                 *found = false;
             }
 
             cur->record = record;
             mmm_commit_write(record);
+	    
             if (pthread_mutex_unlock(&cur->mutex)) {
                 abort();
             }
+	    
             return ret;
         }
+	
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
@@ -479,20 +522,25 @@ ballcap_store_replace(ballcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
+	    
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 return ballcap_store_replace(top->store_current,
                                              top,
                                              hv,
@@ -508,6 +556,7 @@ ballcap_store_replace(ballcap_store_t *self,
                 if (found) {
                     *found = false;
                 }
+		
                 return NULL;
             }
 
@@ -516,16 +565,21 @@ ballcap_store_replace(ballcap_store_t *self,
             record->deleted = false;
 
             ret = cur->record->item;
+	    
             if (found) {
                 *found = true;
             }
+	    
             // Since we're overwriting a pre-existing record, we should
             // inherit its creation time, in terms of our sort order.
             mmm_copy_create_epoch(record, cur->record);
+	    
             record->next = cur->record;
             cur->record  = record;
+	    
             mmm_commit_write(record);
             mmm_retire(record->next);
+	    
             if (pthread_mutex_unlock(&cur->mutex)) {
                 abort();
             }
@@ -554,51 +608,67 @@ ballcap_store_add(ballcap_store_t *self,
     bix       = hatrack_bucket_index(hv, last_slot);
 
     for (i = 0; i <= last_slot; i++) {
+	
         cur = &self->buckets[bix];
+	
 check_bucket_again:
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
+	    
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 return ballcap_store_add(top->store_current, top, hv, item);
             }
+	    
             if (!cur->record->deleted) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 return false;
             }
+	    
             goto fill_record;
         }
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
+	    
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 return ballcap_store_add(top->store_current, top, hv, item);
             }
+	    
             if (!hatrack_bucket_unreserved(cur->hv)) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 goto check_bucket_again;
             }
+	    
             if (self->used_count == self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 self = ballcap_store_migrate(self, top);
                 return ballcap_store_add(self, top, hv, item);
             }
+	    
             self->used_count++;
             top->item_count++;
+	    
             cur->hv = hv;
 
 fill_record:
@@ -607,16 +677,20 @@ fill_record:
             record->next    = cur->record;
             record->deleted = false;
             cur->record     = record;
+	    
             mmm_commit_write(record);
+	    
             if (record->next) {
                 mmm_retire(record->next);
             }
+	    
             if (pthread_mutex_unlock(&cur->mutex)) {
                 abort();
             }
 
             return true;
         }
+	
         bix = (bix + 1) & last_slot;
     }
     __builtin_unreachable();
@@ -640,29 +714,37 @@ ballcap_store_remove(ballcap_store_t *self,
 
     for (i = 0; i <= last_slot; i++) {
         cur = &self->buckets[bix];
+	
         if (hatrack_bucket_unreserved(cur->hv)) {
             if (found) {
                 *found = false;
             }
+	    
             return NULL;
         }
+	
         if (hatrack_hashes_eq(hv, cur->hv)) {
             if (pthread_mutex_lock(&cur->mutex)) {
                 abort();
             }
+	    
             if (cur->migrated) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 return ballcap_store_remove(top->store_current, top, hv, found);
             }
+	    
             if (cur->record->deleted) {
                 if (found) {
                     *found = false;
                 }
+		
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
+		
                 return NULL;
             }
 
@@ -681,9 +763,11 @@ ballcap_store_remove(ballcap_store_t *self,
             if (found) {
                 *found = true;
             }
+	    
             if (pthread_mutex_unlock(&cur->mutex)) {
                 abort();
             }
+	    
             return ret;
         }
         bix = (bix + 1) & last_slot;
@@ -706,13 +790,16 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
     if (pthread_mutex_lock(&top->migrate_mutex)) {
         abort();
     }
+    
     if (store != top->store_current) {
         // Someone else migrated it, and now we can go finish our
         // write.
         new_store = top->store_current;
+	
         if (pthread_mutex_unlock(&top->migrate_mutex)) {
             abort();
         }
+	
         return new_store;
     }
 
@@ -721,9 +808,11 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];
+	
         if (pthread_mutex_lock(&cur->mutex)) {
             abort();
         }
+	
         if (cur->hv.w1 && cur->hv.w2 && !cur->record->deleted) {
             items_to_migrate++;
         }
@@ -740,18 +829,23 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
         if (hatrack_bucket_unreserved(cur->hv)) {
             continue;
         }
+	
         if (cur->record->deleted) {
             mmm_retire(cur->record);
             continue;
         }
+	
         bix = hatrack_bucket_index(cur->hv, new_last_slot);
+	
         for (i = 0; i < new_size; i++) {
             target = &new_store->buckets[bix];
+	    
             if (hatrack_bucket_unreserved(target->hv)) {
                 target->hv     = cur->hv;
                 target->record = cur->record;
                 break;
             }
+	    
             bix = (bix + 1) & new_last_slot;
         }
     }
@@ -761,12 +855,14 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];
+	
         if (pthread_mutex_unlock(&cur->mutex)) {
             abort();
         }
     }
 
     mmm_retire(store);
+    
     if (pthread_mutex_unlock(&top->migrate_mutex)) {
         abort();
     }

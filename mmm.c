@@ -75,13 +75,16 @@ mmm_register_thread(void)
 	return;
     }
     mmm_mytid = atomic_fetch_add(&mmm_nexttid, 1);
+    
     if (mmm_mytid >= HATRACK_THREADS_MAX) {
 	head = atomic_load(&mmm_free_tids);
+	
 	do {
 	    if (!head) {
 		abort();
 	    }
 	} while (!CAS(&mmm_free_tids, &head, head->next));
+	
 	mmm_mytid = head->tid;
 	mmm_retire(head);
     }
@@ -169,13 +172,16 @@ mmm_retire(void *ptr)
 	abort();
     }
 
-    // Detect multiple threads adding this to their retire list.
-    // Generally, you should be able to avoid this, but with
-    // HATRACK_MMM_DEBUG on we explicitly check for it.
+    /* Detect multiple threads adding this to their retire list.
+     * Generally, you should be able to avoid this, but with
+     * HATRACK_MMM_DEBUG on we explicitly check for it.
+     */
     if (cell->retire_epoch) {
 	DEBUG_MMM_INTERNAL(ptr, "Double free");
 	DEBUG_PTR((void *)atomic_load(&mmm_epoch), "epoch of double free");
+	
 	abort();
+	
 	return;
     }
 #endif	
@@ -234,6 +240,7 @@ mmm_empty(void)
 
     for (i = 0; i < lasttid; i++) {
 	reservation = mmm_reservations[i];
+	
 	if (reservation < lowest) {
 	    lowest = reservation;
 	}
@@ -264,12 +271,14 @@ mmm_empty(void)
 	    if (!cell->next) {
 		return;
 	    }
+	    
 	    if (cell->next->retire_epoch < lowest) {
 		tmp       = cell;
 		cell      = cell->next;
 		tmp->next = NULL;
 		break;
 	    }
+	    
 	    cell = cell->next;
 	}
     }
@@ -285,6 +294,7 @@ mmm_empty(void)
 	if (tmp->cleanup) {
 	    (*tmp->cleanup)(&tmp->data);
 	}
+	
 	free(tmp);
     }
 
