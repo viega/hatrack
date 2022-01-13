@@ -289,7 +289,7 @@ time_test(test_func_t      func,
     atomic_store(&mmm_nexttid, 0); // Reset thread ids.
 
     dict = testhat_new(type);
-    
+
     for (i = 0; i < num_threads; i++) {
         info[i].tid   = i;
         info[i].range = range;
@@ -297,15 +297,15 @@ time_test(test_func_t      func,
         info[i].type  = type;
         info[i].iters = iters / num_threads;
         info[i].extra = extra;
-	
+
         pthread_create(&threads[i], NULL, start_one_thread, &info[i]);
     }
 
     start = clock();
-    
+
     clock_gettime(CLOCK_MONOTONIC, sspec);
     atomic_store(&test_func, func); // Start the threads.
-    
+
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], NULL);
     }
@@ -336,7 +336,7 @@ functionality_test(test_func_t func,
     atomic_store(&mmm_nexttid, 0); // Reset thread ids.
 
     dict = testhat_new(type);
-    
+
     for (i = 0; i < num_threads; i++) {
         info[i].tid   = i;
         info[i].range = range;
@@ -344,25 +344,25 @@ functionality_test(test_func_t func,
         info[i].dict  = dict;
         info[i].iters = iters / num_threads;
         info[i].extra = extra;
-	
+
         pthread_create(&threads[i], NULL, start_one_thread, &info[i]);
     }
 
     atomic_store(&test_func, func);
-    
+
     for (i = 0; i < num_threads; i++) {
         pthread_join(threads[i], (void *)&res);
-	
+
         if (!res) {
 #ifdef HATRACK_DEBUG
             abort();
 #endif
             testhat_delete(dict);
-	    
+
             return false;
         }
     }
-    
+
     testhat_delete(dict);
 
     return true;
@@ -384,7 +384,7 @@ run_one_time_test(char       *name,
 
     fprintf(stderr, "%10s:\t", type);
     fflush(stderr);
-    
+
     ticks    = time_test(func,
                       iters,
                       type,
@@ -395,7 +395,7 @@ run_one_time_test(char       *name,
                       &espec);
     walltime = (espec.tv_sec - sspec.tv_sec)
              + ((espec.tv_nsec - sspec.tv_nsec) / 1000000000.0);
-    
+
     fprintf(stderr,
             "%.4f sec, %d clocks, \t%0.4f c/i\n",
             walltime,
@@ -418,9 +418,9 @@ run_one_func_test(char       *name,
 
     fprintf(stderr, "%10s:\t", type);
     fflush(stderr);
-    
+
     ret = functionality_test(func, iters, thread_count, range, type, extra);
-    
+
     if (ret) {
         fprintf(stderr, "pass\n");
     }
@@ -448,12 +448,12 @@ run_time_test(char       *name,
     fprintf(stderr, "[[ Test: %s ]]\n", name);
 
     extra_ix = 0;
-    
+
     do {
         tcount_ix = 0;
         while (tcounts[tcount_ix]) {
             range_ix = 0;
-	    
+
             while (ranges[range_ix]) {
                 if (extra) {
                     fprintf(stderr,
@@ -465,7 +465,7 @@ run_time_test(char       *name,
                             ranges[range_ix],
                             extra[extra_ix]);
                     dict_ix = 0;
-		    
+
                     while (types[dict_ix]) {
                         run_one_time_test(name,
                                           func,
@@ -524,7 +524,7 @@ run_func_test(char       *name,
 
     fprintf(stderr, "[[ Test: %s ]]\n", name);
     extra_ix = 0;
-    
+
     do {
         tcount_ix = 0;
         while (tcounts[tcount_ix]) {
@@ -598,25 +598,25 @@ test_basic(test_info_t *info)
     for (i = 0; i < info->range; i++) {
         test_put(info->dict, i + 1, i + 1);
     }
-    
+
     for (i = 0; i < (info->range / 2); i++) {
         test_remove(info->dict, i + 1);
     }
-    
+
     for (i = 0; i < (info->range / 2); i++) {
         if (test_get(info->dict, i + 1)) {
             fprintf(stderr, "didn't delete.\n");
             return false;
         }
     }
-    
+
     for (; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
             fprintf(stderr, "%u != %llu\n", test_get(info->dict, i + 1), i + 1);
             return false;
         }
     }
-    
+
     return true;
 }
 
@@ -638,7 +638,7 @@ test_ordering(test_info_t *info)
     for (i = 0; i < info->range; i++) {
         test_put(info->dict, i + 1, i + 1);
     }
-    
+
     for (i = 0; i < (info->range / 2); i++) {
         test_remove(info->dict, i + 1);
     }
@@ -653,7 +653,7 @@ test_ordering(test_info_t *info)
         free(view);
         return false;
     }
-    
+
     for (i = 0; i < n; i++) {
         k = (uint32_t)(((uint64_t)view[i].item) >> 32);
         v = (uint32_t)(((uint64_t)view[i].item) & 0xffffffff);
@@ -661,15 +661,15 @@ test_ordering(test_info_t *info)
             free(view);
             return false;
         }
-	
+
         if (((k + (info->range / 2)) % info->range) != i) {
             free(view);
             return false;
         }
     }
-    
+
     free(view);
-    
+
     return true;
 }
 
@@ -687,7 +687,7 @@ test_condput(test_info_t *info)
     for (i = 0; i < info->range; i++) {
         test_add(info->dict, i + 1, i + 1);
     }
-    
+
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
             fprintf(stderr,
@@ -697,7 +697,7 @@ test_condput(test_info_t *info)
             return false;
         }
     }
-    
+
     for (i = 0; i < info->range; i++) {
         if (test_add(info->dict, i + 1, i + 2)) {
             fprintf(stderr, "Didn't return false when it should have.\n");
@@ -712,7 +712,7 @@ test_condput(test_info_t *info)
             return false;
         }
     }
-    
+
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 2) {
             fprintf(stderr,
@@ -765,11 +765,11 @@ test_parallel(test_info_t *info)
 
     for (i = 0; i < info->range; i++) {
         n = test_get(info->dict, i);
-	
+
         if (n != i) {
             printf("%llu != %llu\n", n, i);
             printf("Is HATRACK_TEST_MAX_KEYS high enough?\n");
-	    
+
             return false;
         }
     }
@@ -836,10 +836,10 @@ test_rw_speed(test_info_t *info)
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
         action = test_rand() % 100;
-	
+
         if (action <= nonread_odds) {
             action = test_rand() % 100;
-	    
+
             if (action <= delete_odds) {
                 test_remove(info->dict, key);
             }
@@ -870,10 +870,10 @@ test_sort_speed(test_info_t *info)
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
         action = test_rand() % 100;
-	
+
         if (action <= nonread_odds) {
             action = test_rand() % 100;
-	    
+
             if (action <= delete_odds) {
                 test_remove(info->dict, key);
             }
@@ -885,7 +885,7 @@ test_sort_speed(test_info_t *info)
             key = test_get(info->dict, key);
         }
     }
-    
+
     for (i = 0; i < info->iters / 100; i++) {
         v = testhat_view(info->dict, &n, true);
         free(v);
@@ -909,10 +909,10 @@ test_sort_contention(test_info_t *info)
     for (i = 0; i < info->iters; i++) {
         key    = test_rand() % info->range;
         action = test_rand() % 100;
-	
+
         if (action <= nonread_odds) {
             action = test_rand() % 100;
-	    
+
             if (action <= delete_odds) {
                 test_remove(info->dict, key);
             }

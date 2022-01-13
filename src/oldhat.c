@@ -176,9 +176,9 @@ oldhat_get(oldhat_t *self, hatrack_hash_t hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    
+
     ret = oldhat_store_get(self->store_current, self, hv, found);
-    
+
     mmm_end_op();
 
     return ret;
@@ -200,9 +200,9 @@ oldhat_put(oldhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    
+
     ret = oldhat_store_put(self->store_current, self, hv, item, found);
-    
+
     mmm_end_op();
 
     return ret;
@@ -223,9 +223,9 @@ oldhat_replace(oldhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    
+
     ret = oldhat_store_replace(self->store_current, self, hv, item, found);
-    
+
     mmm_end_op();
 
     return ret;
@@ -243,9 +243,9 @@ oldhat_add(oldhat_t *self, hatrack_hash_t hv, void *item)
     bool ret;
 
     mmm_start_basic_op();
-    
+
     ret = oldhat_store_add(self->store_current, self, hv, item);
-    
+
     mmm_end_op();
 
     return ret;
@@ -265,9 +265,9 @@ oldhat_remove(oldhat_t *self, hatrack_hash_t hv, bool *found)
     void *ret;
 
     mmm_start_basic_op();
-    
+
     ret = oldhat_store_remove(self->store_current, self, hv, found);
-    
+
     mmm_end_op();
 
     return ret;
@@ -389,11 +389,11 @@ oldhat_view(oldhat_t *self, uint64_t *num, bool sort)
 
     for (i = 0; i <= store->last_slot; i++) {
         record = atomic_read(&store->buckets[i]);
-	
+
         if (!record || !record->used) {
             continue;
         }
-	
+
         p->item       = record->item;
         p->sort_epoch = mmm_get_create_epoch(record);
         p++;
@@ -405,7 +405,7 @@ oldhat_view(oldhat_t *self, uint64_t *num, bool sort)
     if (!num_items) {
         free(view);
         mmm_end_op();
-	
+
         return NULL;
     }
 

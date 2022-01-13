@@ -126,7 +126,7 @@ hatrack_debug(char *msg)
     record_ptr           = &__hatrack_debug[index];
     record_ptr->sequence = mysequence;
     record_ptr->thread   = mmm_mytid;
-    
+
     strncpy(record_ptr->msg, msg, HATRACK_DEBUG_MSG_SIZE);
 
     return;
@@ -226,7 +226,7 @@ hatrack_debug_assert(bool        expression_result,
         while (true) {
             __asm("");
         }
-	
+
         fprintf(stderr, "Use the debugger to jump here to keep going.\n");
     }
 
@@ -271,7 +271,7 @@ hatrack_debug_assert_w_params(bool        expression_result,
                 __asm("");
             }
         }
-	
+
         fprintf(stderr, "Use the debugger to jump here to keep going.\n");
     }
 

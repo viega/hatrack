@@ -152,7 +152,7 @@ counters_output_delta(void)
         if (hatrack_counters[i] == hatrack_last_counters[i]) {
             continue;
         }
-	
+
         fprintf(stderr,
                 "%s:\t %llu\n",
                 hatrack_counter_names[i],
@@ -205,7 +205,7 @@ counters_output_alltime(void)
             unused_counters = true;
             continue;
         }
-	
+
         fprintf(stderr,
                 "%s:\t %llu\n",
                 hatrack_counter_names[i],
@@ -237,7 +237,7 @@ counters_output_alltime(void)
             if (hatrack_counters[i]) {
                 continue;
             }
-	    
+
             if (print_comma) {
                 fprintf(stderr, ", %s", hatrack_counter_names[i]);
             }
@@ -250,7 +250,7 @@ counters_output_alltime(void)
             if (hatrack_yn_counters[i][0] || hatrack_yn_counters[i][1]) {
                 continue;
             }
-	    
+
             if (print_comma) {
                 fprintf(stderr, ", %s", hatrack_yn_counter_names[i]);
             }

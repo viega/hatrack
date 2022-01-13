@@ -171,7 +171,7 @@ static inline _Bool
 hatrack_yn_ctr_t(uint64_t id)
 {
     atomic_fetch_add(&hatrack_yn_counters[id][0], 1);
-    
+
     return 1;
 }
 
@@ -179,7 +179,7 @@ static inline _Bool
 hatrack_yn_ctr_f(uint64_t id)
 {
     atomic_fetch_add(&hatrack_yn_counters[id][1], 1);
-    
+
     return 0;
 }
 
@@ -188,7 +188,7 @@ void counters_output_alltime(void);
 
 #define HATRACK_CTR_ON(id) atomic_fetch_add(&hatrack_counters[id], 1)
 #define HATRACK_CTR_OFF(id)
-#define HATRACK_YN_ON(x, id) ((x) ? hatrack_yn_ctr_t(id) : hatrack_yn_ctr_f(id))
+#define HATRACK_YN_ON(x, id)  ((x) ? hatrack_yn_ctr_t(id) : hatrack_yn_ctr_f(id))
 #define HATRACK_YN_OFF(x, id) (x)
 #define HATRACK_YN_ON_NORET(x, id)                                             \
     ((x) ? hatrack_yn_ctr_t(id) : hatrack_yn_ctr_f(id))

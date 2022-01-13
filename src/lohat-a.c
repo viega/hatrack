@@ -75,10 +75,10 @@ lohat_a_get(lohat_a_t *self, hatrack_hash_t hv, bool *found)
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
-    
+
     store = atomic_read(&self->store_current);
     ret   = lohat_a_store_get(store, self, hv, found);
-    
+
     mmm_end_op();
 
     return ret;
@@ -92,10 +92,10 @@ lohat_a_put(lohat_a_t *self, hatrack_hash_t hv, void *item, bool *found)
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
-    
+
     store = atomic_read(&self->store_current);
     ret   = lohat_a_store_put(store, self, hv, item, found);
-    
+
     mmm_end_op();
 
     return ret;
@@ -109,10 +109,10 @@ lohat_a_replace(lohat_a_t *self, hatrack_hash_t hv, void *item, bool *found)
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
-    
+
     store = atomic_read(&self->store_current);
     ret   = lohat_a_store_replace(store, self, hv, item, found);
-    
+
     mmm_end_op();
 
     return ret;
@@ -125,10 +125,10 @@ lohat_a_add(lohat_a_t *self, hatrack_hash_t hv, void *item)
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
-    
+
     store = atomic_read(&self->store_current);
     ret   = lohat_a_store_add(store, self, hv, item);
-    
+
     mmm_end_op();
 
     return ret;
@@ -141,10 +141,10 @@ lohat_a_remove(lohat_a_t *self, hatrack_hash_t hv, bool *found)
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
-    
+
     store = atomic_read(&self->store_current);
     ret   = lohat_a_store_remove(store, self, hv, found);
-    
+
     mmm_end_op();
 
     return ret;
@@ -167,7 +167,7 @@ lohat_a_delete(lohat_a_t *self)
     while (p < end) {
         rec = hatrack_pflag_clear(atomic_load(&p->head),
                                   LOHAT_F_MOVED | LOHAT_F_MOVING);
-	
+
         if (rec) {
             mmm_retire_unused(rec);
         }
@@ -214,7 +214,7 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
     while (cur < end) {
         rec = hatrack_pflag_clear(atomic_read(&cur->head),
                                   LOHAT_F_MOVING | LOHAT_F_MOVED);
-	
+
         if (rec) {
             mmm_help_commit(rec);
         }
@@ -245,7 +245,7 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
     if (!num_items) {
         free(view);
         mmm_end_op();
-	
+
         return NULL;
     }
 
@@ -281,14 +281,14 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
         else {
             lohat_a_insertion_sort(view, num_items);
         }
-	
+
 #elif defined(HATRACK_ALWAYS_USE_QSORT)
         qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
 #else
         lohat_a_insertion_sort(view, num_items);
 #endif
     }
-    
+
     mmm_end_op();
 
     return view;

@@ -149,7 +149,7 @@ duncecap_get(duncecap_t *self, hatrack_hash_t hv, bool *found)
 
     store = duncecap_reader_enter(self);
     ret   = duncecap_store_get(store, hv, found);
-    
+
     duncecap_reader_exit(store);
 
     return ret;
@@ -247,7 +247,7 @@ bool
 duncecap_add(duncecap_t *self, hatrack_hash_t hv, void *item)
 {
     bool ret;
-    
+
     if (pthread_mutex_lock(&self->mutex)) {
         abort();
     }
@@ -324,7 +324,7 @@ void
 duncecap_delete(duncecap_t *self)
 {
     pthread_mutex_destroy(&self->mutex);
-    
+
     free(self->store_current);
     free(self);
 
@@ -384,10 +384,10 @@ duncecap_view(duncecap_t *self, uint64_t *num, bool sort)
             cur++;
             continue;
         }
-	
+
         p->item       = record.item;
         p->sort_epoch = record.epoch;
-	
+
         count++;
         p++;
         cur++;
@@ -398,7 +398,7 @@ duncecap_view(duncecap_t *self, uint64_t *num, bool sort)
     if (!count) {
         free(view);
         duncecap_viewer_exit(self, store);
-	
+
         return NULL;
     }
 
@@ -749,9 +749,9 @@ duncecap_migrate(duncecap_t *self)
     uint64_t           new_last_slot;
     uint64_t           i, n, bix;
 
+    cur_store     = self->store_current;
     new_size      = hatrack_new_size(cur_store->last_slot,
 				     duncecap_len(self) + 1);
-    cur_store     = self->store_current;
     cur_last_slot = cur_store->last_slot;
     new_last_slot = new_size - 1;
     new_store     = duncecap_store_new(new_size);

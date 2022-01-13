@@ -371,31 +371,31 @@ mmm_get_header(void *ptr)
 static inline void
 hatrack_debug_mmm(void *addr, char *msg)
 {
-    char              buf[HATRACK_DEBUG_MSG_SIZE] = {
+    char buf[HATRACK_DEBUG_MSG_SIZE] = {
         '0',
         'x',
     };
-    static const char rest[]                      = " :)  :r , :w , :c( :x0";
-    const char       *r                           = &rest[0];
-    mmm_header_t     *hdr                         = mmm_get_header(addr);
+    static const char rest[] = " :)  :r , :w , :c( :x0";
+    const char       *r      = &rest[0];
+    mmm_header_t     *hdr    = mmm_get_header(addr);
     char             *p;
     uint64_t          i;
     uintptr_t         n;
-    
+
     p = buf + (HATRACK_PTR_CHRS + 3 * HATRACK_EPOCH_DEBUG_LEN + sizeof(rest));
 
     strncpy(p, msg, HATRACK_DEBUG_MSG_SIZE - (p - buf));
-    
+
     *--p = *r++;
     *--p = *r++;
     *--p = *r++;
     n    = hdr->retire_epoch;
-    
+
     for (i = 0; i < HATRACK_EPOCH_DEBUG_LEN; i++) {
         *--p = __hatrack_hex_conversion_table[n & 0xf];
         n >>= 4;
     }
-    
+
     *--p = *r++;
     *--p = *r++;
     *--p = *r++;
@@ -403,24 +403,24 @@ hatrack_debug_mmm(void *addr, char *msg)
     *--p = *r++;
     *--p = *r++;
     n    = hdr->write_epoch;
-    
+
     for (i = 0; i < HATRACK_EPOCH_DEBUG_LEN; i++) {
         *--p = __hatrack_hex_conversion_table[n & 0xf];
         n >>= 4;
     }
-    
+
     *--p = *r++;
     *--p = *r++;
     *--p = *r++;
     *--p = *r++;
     *--p = *r++;
     n    = hdr->create_epoch;
-    
+
     for (i = 0; i < HATRACK_EPOCH_DEBUG_LEN; i++) {
         *--p = __hatrack_hex_conversion_table[n & 0xf];
         n >>= 4;
     }
-    
+
     *--p = *r++;
     *--p = *r++;
     *--p = *r++;
@@ -428,15 +428,15 @@ hatrack_debug_mmm(void *addr, char *msg)
     *--p = *r++;
     *--p = *r++;
     n    = (intptr_t)addr;
-    
+
     for (i = 0; i < HATRACK_PTR_CHRS; i++) {
         *--p = __hatrack_hex_conversion_table[n & 0xf];
         n >>= 4;
     }
-    
+
     *--p = *r++;
     *--p = *r++;
-    
+
     hatrack_debug(p);
 
     return;
@@ -523,7 +523,7 @@ mmm_start_linearized_op(void)
     uint64_t read_epoch;
 
     pthread_once(&mmm_inited, mmm_register_thread);
-    
+
     mmm_reservations[mmm_mytid] = atomic_load(&mmm_epoch);
     read_epoch                  = atomic_load(&mmm_epoch);
 
@@ -598,7 +598,7 @@ mmm_alloc_committed(uint64_t size)
     mmm_header_t *item        = (mmm_header_t *)calloc(1, actual_size);
 
     atomic_store(&item->write_epoch, atomic_fetch_add(&mmm_epoch, 1) + 1);
-    
+
     HATRACK_MALLOC_CTR();
     DEBUG_MMM_INTERNAL(item->data, "mmm_alloc_committed");
 
@@ -690,7 +690,7 @@ mmm_retire_unused(void *ptr)
     HATRACK_RETIRE_UNUSED_CTR();
 
     free(mmm_get_header(ptr));
-    
+
     return;
 }
 
@@ -710,7 +710,7 @@ static inline uint64_t
 mmm_get_create_epoch(void *ptr)
 {
     mmm_header_t *header = mmm_get_header(ptr);
-    
+
     return header->create_epoch ? header->create_epoch : header->write_epoch;
 }
 
