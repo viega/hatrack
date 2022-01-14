@@ -7,7 +7,6 @@ AC_CONFIG_AUX_DIR([autotools])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
 AC_CONFIG_COMMANDS([default],[],[])
 AC_PROG_RANLIB
-AC_OUTPUT
 AC_COPYRIGHT([Copyright 2021-2022, John Viega])
 AC_CONFIG_SRCDIR([src/refhat.c])
 AC_CONFIG_HEADERS([include/config.h])
@@ -19,7 +18,7 @@ AC_CONFIG_HEADERS([include/config.h])
 #AC_CHECK_LIB([hoard], [malloc])
 
 # Checks for header files.
-AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h])
+AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h pthread.h stdalign.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_CHECK_HEADER_STDBOOL
