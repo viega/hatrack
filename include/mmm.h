@@ -24,7 +24,7 @@
 #ifndef __MMM_H__
 #define __MMM_H__
 
-#include "config.h"
+#include "hatrack_config.h"
 #include "debug.h"
 #include "counters.h"
 #include "hatomic.h"

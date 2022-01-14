@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           config.h
+ *  Name:           hatrack_config.h
  *  Description:    Preprocessor configurtion variables / defaults.
  *                  You can make changes here where appropriate, but
  *                  generally it's best to do it externally, by editing
@@ -25,8 +25,8 @@
  *  Author:         John Viega, john@zork.org
  */
 
-#ifndef __CONFIG_H__
-#define __CONFIG_H__
+#ifndef __HATRACK_CONFIG_H__
+#define __HATRACK_CONFIG_H__
 
 /* HATRACK_MIN_SIZE_LOG
  *

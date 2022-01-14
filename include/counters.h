@@ -50,7 +50,7 @@
  *
  */
 
-#include "config.h"
+#include "hatrack_config.h"
 #ifndef __COUNTERS_H__
 #define __COUNTERS_H__
 
