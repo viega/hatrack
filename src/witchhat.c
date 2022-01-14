@@ -41,7 +41,6 @@
 // export this explicitly; it's effectively a "friend" function not public.
        witchhat_store_t  *witchhat_store_new    (uint64_t);
 static void              *witchhat_store_get    (witchhat_store_t *,
-						 witchhat_t *,
 						 hatrack_hash_t, bool *);
 static void              *witchhat_store_put    (witchhat_store_t *,
 						 witchhat_t *,
@@ -87,7 +86,7 @@ witchhat_get(witchhat_t *self, hatrack_hash_t hv, bool *found)
     mmm_start_basic_op();
     
     store = atomic_read(&self->store_current);
-    ret   = witchhat_store_get(store, self, hv, found);
+    ret   = witchhat_store_get(store, hv, found);
     
     mmm_end_op();
 
@@ -247,7 +246,6 @@ witchhat_store_new(uint64_t size)
 
 static void *
 witchhat_store_get(witchhat_store_t *self,
-                 witchhat_t         *top,
                  hatrack_hash_t      hv1,
                  bool               *found)
 {

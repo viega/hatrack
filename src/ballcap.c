@@ -51,8 +51,8 @@
 // clang-format off
 
        ballcap_store_t *ballcap_store_new    (uint64_t);
-static void            *ballcap_store_get    (ballcap_store_t *, ballcap_t *,
-					      hatrack_hash_t, bool *);
+static void            *ballcap_store_get    (ballcap_store_t *, hatrack_hash_t,
+					      bool *);
 static void            *ballcap_store_put    (ballcap_store_t *, ballcap_t *,
 					      hatrack_hash_t, void *, bool *);
 static void            *ballcap_store_replace(ballcap_store_t *, ballcap_t *,
@@ -87,7 +87,7 @@ ballcap_get(ballcap_t *self, hatrack_hash_t hv, bool *found)
 
     mmm_start_basic_op();
 
-    ret = ballcap_store_get(self->store_current, self, hv, found);
+    ret = ballcap_store_get(self->store_current, hv, found);
 
     mmm_end_op();
 
@@ -311,7 +311,6 @@ ballcap_store_new(uint64_t size)
 
 static void *
 ballcap_store_get(ballcap_store_t *self,
-                  ballcap_t       *top,
                   hatrack_hash_t   hv,
                   bool            *found)
 {

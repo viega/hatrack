@@ -31,7 +31,6 @@ static lohat_a_store_t *lohat_a_store_new          (uint64_t);
 static void             lohat_a_retire_store       (lohat_a_store_t *);
 static void             lohat_a_retire_unused_store(lohat_a_store_t *);
 static void            *lohat_a_store_get          (lohat_a_store_t *,
-						    lohat_a_t *,
 						    hatrack_hash_t, bool *);
 static void            *lohat_a_store_put          (lohat_a_store_t *,
 						    lohat_a_t *,
@@ -77,7 +76,7 @@ lohat_a_get(lohat_a_t *self, hatrack_hash_t hv, bool *found)
     mmm_start_basic_op();
 
     store = atomic_read(&self->store_current);
-    ret   = lohat_a_store_get(store, self, hv, found);
+    ret   = lohat_a_store_get(store, hv, found);
 
     mmm_end_op();
 
@@ -345,7 +344,6 @@ lohat_a_retire_unused_store(lohat_a_store_t *self)
 
 static void *
 lohat_a_store_get(lohat_a_store_t *self,
-                  lohat_a_t       *top,
                   hatrack_hash_t   hv1,
                   bool            *found)
 {

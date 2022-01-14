@@ -30,8 +30,8 @@
 // clang-format off
 
 static lohat_store_t  *lohat_store_new    (uint64_t);
-static void           *lohat_store_get    (lohat_store_t *, lohat_t *,
-					   hatrack_hash_t, bool *);
+static void           *lohat_store_get    (lohat_store_t *, hatrack_hash_t,
+					   bool *);
 static void           *lohat_store_put    (lohat_store_t *, lohat_t *,
 					   hatrack_hash_t, void *, bool *);
 static void           *lohat_store_replace(lohat_store_t *, lohat_t *,
@@ -92,7 +92,7 @@ lohat_get(lohat_t *self, hatrack_hash_t hv, bool *found)
     mmm_start_basic_op();
 
     store = atomic_read(&self->store_current);
-    ret   = lohat_store_get(store, self, hv, found);
+    ret   = lohat_store_get(store, hv, found);
 
     mmm_end_op();
 
@@ -432,7 +432,6 @@ lohat_store_new(uint64_t size)
  */
 static void *
 lohat_store_get(lohat_store_t *self,
-                lohat_t       *top,
                 hatrack_hash_t hv1,
                 bool          *found)
 {

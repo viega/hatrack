@@ -43,8 +43,7 @@ static void            *swimcap_store_put    (swimcap_store_t *,
 					      swimcap_t *, hatrack_hash_t,
 					      void *, bool *);
 static void            *swimcap_store_replace(swimcap_store_t *,
-					      swimcap_t *, hatrack_hash_t,
-					      void *, bool *);
+					      hatrack_hash_t, void *, bool *);
 static bool             swimcap_store_add    (swimcap_store_t *,
 					      swimcap_t *, hatrack_hash_t,
 					      void *);
@@ -206,7 +205,7 @@ swimcap_replace(swimcap_t *self, hatrack_hash_t hv, void *item, bool *found)
         abort();
     }
 
-    ret = swimcap_store_replace(self->store_current, self, hv, item, found);
+    ret = swimcap_store_replace(self->store_current, hv, item, found);
 
     if (pthread_mutex_unlock(&self->write_mutex)) {
         abort();
@@ -588,7 +587,6 @@ swimcap_store_put(swimcap_store_t *self,
 
 static void *
 swimcap_store_replace(swimcap_store_t *self,
-                      swimcap_t       *top,
                       hatrack_hash_t   hv,
                       void            *item,
                       bool            *found)

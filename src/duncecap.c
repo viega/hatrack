@@ -39,8 +39,7 @@ static void             *duncecap_store_put    (duncecap_store_t *,
 						duncecap_t *, hatrack_hash_t,
 						void *, bool *);
 static void             *duncecap_store_replace(duncecap_store_t *,
-						duncecap_t *, hatrack_hash_t,
-						void *, bool *);
+						hatrack_hash_t, void *, bool *);
 static bool              duncecap_store_add    (duncecap_store_t *,
 						duncecap_t *, hatrack_hash_t,
 						void *);
@@ -218,7 +217,7 @@ duncecap_replace(duncecap_t *self, hatrack_hash_t hv, void *item, bool *found)
         abort();
     }
 
-    ret = duncecap_store_replace(self->store_current, self, hv, item, found);
+    ret = duncecap_store_replace(self->store_current, hv, item, found);
 
     if (pthread_mutex_unlock(&self->mutex)) {
         abort();
@@ -561,7 +560,6 @@ duncecap_store_put(duncecap_store_t *self,
 
 static void *
 duncecap_store_replace(duncecap_store_t *self,
-                       duncecap_t       *top,
                        hatrack_hash_t    hv,
                        void             *item,
                        bool             *found)

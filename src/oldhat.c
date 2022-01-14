@@ -69,8 +69,8 @@
 // clang-format off
 static oldhat_store_t  *oldhat_store_new    (uint64_t);
 static void             oldhat_store_delete (oldhat_store_t *);
-static void            *oldhat_store_get    (oldhat_store_t *, oldhat_t *,
-					      hatrack_hash_t, bool *);
+static void            *oldhat_store_get    (oldhat_store_t *, hatrack_hash_t,
+					     bool *);
 static void            *oldhat_store_put    (oldhat_store_t *, oldhat_t *,
 					      hatrack_hash_t, void *, bool *);
 static void            *oldhat_store_replace(oldhat_store_t *, oldhat_t *,
@@ -177,7 +177,7 @@ oldhat_get(oldhat_t *self, hatrack_hash_t hv, bool *found)
 
     mmm_start_basic_op();
 
-    ret = oldhat_store_get(self->store_current, self, hv, found);
+    ret = oldhat_store_get(self->store_current, hv, found);
 
     mmm_end_op();
 
@@ -486,7 +486,6 @@ oldhat_store_delete(oldhat_store_t *self)
  */
 static void *
 oldhat_store_get(oldhat_store_t *self,
-                 oldhat_t       *top,
                  hatrack_hash_t  hv,
                  bool           *found)
 {

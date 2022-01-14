@@ -369,8 +369,7 @@ functionality_test(test_func_t func,
 }
 
 static void
-run_one_time_test(char       *name,
-                  test_func_t func,
+run_one_time_test(test_func_t func,
                   uint32_t    iters,
                   char       *type,
                   uint32_t    range,
@@ -406,8 +405,7 @@ run_one_time_test(char       *name,
 }
 
 static void
-run_one_func_test(char       *name,
-                  test_func_t func,
+run_one_func_test(test_func_t func,
                   uint32_t    iters,
                   char       *type,
                   uint32_t    range,
@@ -467,8 +465,7 @@ run_time_test(char       *name,
                     dict_ix = 0;
 
                     while (types[dict_ix]) {
-                        run_one_time_test(name,
-                                          func,
+                        run_one_time_test(func,
                                           iters,
                                           types[dict_ix],
                                           ranges[range_ix],
@@ -489,8 +486,7 @@ run_time_test(char       *name,
                     dict_ix = 0;
 
                     while (types[dict_ix]) {
-                        run_one_time_test(name,
-                                          func,
+                        run_one_time_test(func,
                                           iters,
                                           types[dict_ix],
                                           ranges[range_ix],
@@ -541,8 +537,7 @@ run_func_test(char       *name,
                             extra[extra_ix]);
                     dict_ix = 0;
                     while (types[dict_ix]) {
-                        run_one_func_test(name,
-                                          func,
+                        run_one_func_test(func,
                                           iters,
                                           types[dict_ix],
                                           ranges[range_ix],
@@ -562,8 +557,7 @@ run_func_test(char       *name,
                             ranges[range_ix]);
                     dict_ix = 0;
                     while (types[dict_ix]) {
-                        run_one_func_test(name,
-                                          func,
+                        run_one_func_test(func,
                                           iters,
                                           types[dict_ix],
                                           ranges[range_ix],
@@ -985,7 +979,7 @@ char *all_dicts[]     = {
 };
 
 int
-main(int argc, char *argv[], char *envp[])
+main(void)
 {
     test_init();
     run_func_test("basic",

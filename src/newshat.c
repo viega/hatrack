@@ -32,8 +32,8 @@
 // stick it in our public prototypes.
        newshat_store_t *newshat_store_new    (uint64_t);
 static void             newshat_store_delete (newshat_store_t *);
-static void            *newshat_store_get    (newshat_store_t *, newshat_t *,
-					      hatrack_hash_t, bool *);
+static void            *newshat_store_get    (newshat_store_t *, hatrack_hash_t,
+					      bool *);
 static void            *newshat_store_put    (newshat_store_t *, newshat_t *,
 					      hatrack_hash_t, void *,
 					      bool *);
@@ -123,7 +123,7 @@ newshat_get(newshat_t *self, hatrack_hash_t hv, bool *found)
 
     mmm_start_basic_op();
 
-    ret = newshat_store_get(self->store_current, self, hv, found);
+    ret = newshat_store_get(self->store_current, hv, found);
 
     mmm_end_op();
 
@@ -375,7 +375,6 @@ newshat_store_delete(newshat_store_t *self)
  */
 static void *
 newshat_store_get(newshat_store_t *self,
-                  newshat_t       *top,
                   hatrack_hash_t   hv,
                   bool            *found)
 {

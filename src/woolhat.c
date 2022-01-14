@@ -33,8 +33,8 @@
 // Needs to be non-static because tophat needs it; nonetheless, do not
 // export this explicitly; it's effectively a "friend" function not public.
        woolhat_store_t *woolhat_store_new    (uint64_t);
-static void            *woolhat_store_get    (woolhat_store_t *, woolhat_t *,
-					      hatrack_hash_t, bool *);
+static void            *woolhat_store_get    (woolhat_store_t *, hatrack_hash_t,
+					      bool *);
 static void            *woolhat_store_put    (woolhat_store_t *, woolhat_t *,
 					      hatrack_hash_t, void *, bool *,
 					      uint64_t);
@@ -76,7 +76,7 @@ woolhat_get(woolhat_t *self, hatrack_hash_t hv, bool *found)
     mmm_start_basic_op();
 
     store = atomic_read(&self->store_current);
-    ret   = woolhat_store_get(store, self, hv, found);
+    ret   = woolhat_store_get(store, hv, found);
 
     mmm_end_op();
 
@@ -276,7 +276,6 @@ woolhat_store_new(uint64_t size)
 
 static void *
 woolhat_store_get(woolhat_store_t *self,
-                  woolhat_t       *top,
                   hatrack_hash_t   hv1,
                   bool            *found)
 {

@@ -40,8 +40,8 @@
 
 // clang-format off
 static hihat_store_t *hihat_a_store_new    (uint64_t);
-static void          *hihat_a_store_get    (hihat_store_t *, hihat_t *,
-					    hatrack_hash_t, bool *);
+static void          *hihat_a_store_get    (hihat_store_t *, hatrack_hash_t,
+					    bool *);
 static void          *hihat_a_store_put    (hihat_store_t *, hihat_t *,
 					    hatrack_hash_t, void *, bool *);
 static void          *hihat_a_store_replace(hihat_store_t *, hihat_t *,
@@ -75,7 +75,7 @@ hihat_a_get(hihat_t *self, hatrack_hash_t hv, bool *found)
     mmm_start_basic_op();
     
     store = atomic_read(&self->store_current);
-    ret   = hihat_a_store_get(store, self, hv, found);
+    ret   = hihat_a_store_get(store, hv, found);
     
     mmm_end_op();
 
@@ -236,7 +236,6 @@ hihat_a_store_new(uint64_t size)
 
 static void *
 hihat_a_store_get(hihat_store_t *self,
-                 hihat_t        *top,
                  hatrack_hash_t  hv1,
                  bool           *found)
 {
