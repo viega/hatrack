@@ -606,7 +606,9 @@ test_basic(test_info_t *info)
 
     for (; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
-            fprintf(stderr, "%u != %lu\n", test_get(info->dict, i + 1), i + 1);
+            fprintf(stderr, "%u != %llu\n",
+		    test_get(info->dict, i + 1),
+		    (unsigned long long)(i + 1));
             return false;
         }
     }
@@ -685,9 +687,9 @@ test_condput(test_info_t *info)
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
             fprintf(stderr,
-                    "Get != put (%d != %lu)\n",
+                    "Get != put (%d != %llu)\n",
                     test_get(info->dict, i + 1),
-                    i + 1);
+                    (unsigned long long)(i + 1));
             return false;
         }
     }
@@ -711,8 +713,8 @@ test_condput(test_info_t *info)
         if (test_get(info->dict, i + 1) != i + 2) {
             fprintf(stderr,
                     "No consistency in final check (expected: "
-                    "%lu, got: %u)\n",
-                    i + 2,
+                    "%llu, got: %u)\n",
+                    (unsigned long long)(i + 2),
                     test_get(info->dict, i + 1));
             return false;
         }
@@ -788,7 +790,9 @@ test_parallel(test_info_t *info)
         n = test_get(info->dict, i);
 
         if (n != i) {
-            printf("%lu != %lu\n", n, i);
+            printf("%llu != %llu\n",
+		   (unsigned long long)n,
+		   (unsigned long long)i);
             printf("Is HATRACK_TEST_MAX_KEYS high enough?\n");
 
             return false;
