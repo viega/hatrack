@@ -683,7 +683,6 @@ hihat_store_replace(hihat_store_t   *self,
 		     void           *item,
 		     bool           *found)
 {
-    void           *old_item;
     uint64_t        bix;
     uint64_t        i;
     hatrack_hash_t  hv2;
@@ -730,7 +729,6 @@ hihat_store_replace(hihat_store_t   *self,
 	goto not_found;
     }
 
-    old_item       = record.item;
     candidate.item = item;
     candidate.info = record.info;
 

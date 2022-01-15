@@ -172,10 +172,9 @@ struct lohat_record_st {
  * necessarily will have a later epoch than the reader cares
  * about... even if the reader gets suspended.
  */
-enum : uint64_t
-{
+enum64(lohat_flag_t,
     LOHAT_F_MOVING = 0x0000000000000001,
     LOHAT_F_MOVED  = 0x0000000000000002
-};
+);
 
 #endif

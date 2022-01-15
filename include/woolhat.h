@@ -35,11 +35,10 @@ struct woolhat_record_st {
     bool              deleted;
 };
 
-enum : uint64_t
-{
+enum64(woolhat_flag_t,
     WOOLHAT_F_MOVING = 0x0000000000000001,
     WOOLHAT_F_MOVED  = 0x0000000000000002
-};
+);
 
 // clang-format off
 

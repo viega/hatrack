@@ -28,6 +28,8 @@
 #ifndef __HATRACK_CONFIG_H__
 #define __HATRACK_CONFIG_H__
 
+#include "config.h"
+
 /* HATRACK_MIN_SIZE_LOG
  *
  * Specifies the minimum table size, but represented as a base two
@@ -556,6 +558,12 @@
  */
 #ifndef HATRACK_MAX_HATS
 #define HATRACK_MAX_HATS 1024
+#endif
+
+#ifdef HAVE_C11_ENUMS
+#define enum64(x, ...) typedef enum : uint64_t { __VA_ARGS__ } x
+#else
+#define enum64(x, ...) typedef enum { HACK_TO_MAKE_64_BIT_ ## x = 0xffffffffffffffff, __VA_ARGS__} x
 #endif
 
 #endif

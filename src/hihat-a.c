@@ -372,7 +372,6 @@ hihat_a_store_replace(hihat_store_t *self,
 		     void           *item,
 		     bool           *found)
 {
-    void           *old_item;
     uint64_t        bix;
     uint64_t        i;
     hatrack_hash_t  hv2;
@@ -418,7 +417,6 @@ hihat_a_store_replace(hihat_store_t *self,
 	goto not_found;
     }
 
-    old_item       = record.item;
     candidate.item = item;
     candidate.info = record.info;
 
@@ -597,7 +595,7 @@ found_bucket:
  * It starts with the below static const value, which is our sleep time,
  * when we choose to wait for threads in front of us.
  */
-const static struct timespec sleep_time = {
+static const struct timespec sleep_time = {
     .tv_sec  = 0,
     .tv_nsec = HIHATa_MIGRATE_SLEEP_TIME_NS
 };

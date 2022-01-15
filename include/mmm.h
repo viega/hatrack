@@ -333,13 +333,12 @@ static inline void hatrack_debug_mmm(void *, char *);
  * then we can delete all our records.
  */
 
-enum : uint64_t
-{
+enum64(mmm_enum_t,
     HATRACK_EPOCH_UNRESERVED   = 0xffffffffffffffff,
     HATRACK_EPOCH_FIRST        = 0x0000000000000001,
     HATRACK_F_RESERVATION_HELP = 0x8000000000000000,
     HATRACK_EPOCH_MAX          = 0xffffffffffffffff
-};
+);
 
 /* This is a macro that allows us to access our hidden header.  Note
  * that, while this is straightforward, I did run into an issue where

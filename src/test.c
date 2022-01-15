@@ -54,7 +54,7 @@ test_put(testhat_t *self, uint32_t key, uint32_t value)
     return;
 }
 
-/*static*/ inline void
+static inline void
 test_replace(testhat_t *self, uint32_t key, uint32_t value)
 {
     test_item item;
@@ -606,7 +606,7 @@ test_basic(test_info_t *info)
 
     for (; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
-            fprintf(stderr, "%u != %llu\n", test_get(info->dict, i + 1), i + 1);
+            fprintf(stderr, "%u != %lu\n", test_get(info->dict, i + 1), i + 1);
             return false;
         }
     }
@@ -685,7 +685,7 @@ test_condput(test_info_t *info)
     for (i = 0; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
             fprintf(stderr,
-                    "Get != put (%d != %llu)\n",
+                    "Get != put (%d != %lu)\n",
                     test_get(info->dict, i + 1),
                     i + 1);
             return false;
@@ -711,7 +711,7 @@ test_condput(test_info_t *info)
         if (test_get(info->dict, i + 1) != i + 2) {
             fprintf(stderr,
                     "No consistency in final check (expected: "
-                    "%llu, got: %u)\n",
+                    "%lu, got: %u)\n",
                     i + 2,
                     test_get(info->dict, i + 1));
             return false;
@@ -720,6 +720,33 @@ test_condput(test_info_t *info)
 
     return true;
 }
+
+bool
+test_replace_op(test_info_t *info)
+{
+  uint64_t i;
+  
+  for (i = 0; i < 50; i++) {
+    test_put(info->dict, i + 1, i + 1);
+  }
+  for (i = 0; i < 100; i++) {
+    test_replace(info->dict, i + 1, i + 2);
+  }
+  for (i = 0; i < 50; i++) {
+    if (test_get(info->dict, i + 1) != i + 2) {
+      return false;
+    }
+  }
+
+  for (; i < 100; i++) {
+    if (test_get(info->dict, i + 1)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 
 // Validate this by looking at counters.
 bool
@@ -761,7 +788,7 @@ test_parallel(test_info_t *info)
         n = test_get(info->dict, i);
 
         if (n != i) {
-            printf("%llu != %llu\n", n, i);
+            printf("%lu != %lu\n", n, i);
             printf("Is HATRACK_TEST_MAX_KEYS high enough?\n");
 
             return false;
@@ -1006,6 +1033,16 @@ main(void)
 		  one_thread,
 		  0);
     counters_output_delta();
+#if 0    
+    run_func_test("replace",
+		  test_replace_op,
+		  1,
+		  all_dicts,
+		  shrug_sizes,
+		  one_thread,
+		  0);
+    counters_output_delta();
+#endif
     run_func_test("condput",
 		  test_condput,
 		  1,
