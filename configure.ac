@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.69])
+AC_PREREQ([2.71])
 AC_INIT([hatrack],[0.9],[john@zork.org])
 AC_CONFIG_AUX_DIR([autotools])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
@@ -15,7 +15,7 @@ AC_CONFIG_HEADERS([include/config.h])
 AC_PROG_CC([clang])
 
 # Autconf doesn't seem to have an option to check for C11 unfortunately :/
-AC_PROG_CC_C99
+
 
 # Checks for libraries.
 #AC_CHECK_LIB([hoard], [malloc])
@@ -36,7 +36,7 @@ if test $ac_cv_c11enum = yes; then
   AC_DEFINE([HAVE_C11_ENUMS], [1], [C11 enums are present])
 fi
 
-AX_PTHREAD
+ACX_PTHREAD
 
 CFLAGS+= ${PTHREAD_CFLAGS}
 LIBS+= ${PTHREAD_LIBS}
