@@ -157,7 +157,7 @@ counters_output_delta(void)
         fprintf(stderr,
                 "%s:\t %llu\n",
                 hatrack_counter_names[i],
-                (unsigned long long)ydelta;
+                (unsigned long long)ydelta);
 
         hatrack_last_counters[i] = hatrack_counters[i];
     }
