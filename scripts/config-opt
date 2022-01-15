@@ -1,0 +1,12 @@
+#!/bin/sh
+
+if [ ! -d scripts ]
+then
+    cd ..
+    if [ ! -d scripts ]
+       then 
+         echo "Must be run from the scripts directory or the toplevel directory"
+         exit
+    fi
+fi
+./configure CFLAGS="-Ofast -flto -DHATRACK_MMM_DEBUG -DHATRACK_COUNTERS"
