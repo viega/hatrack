@@ -9,4 +9,4 @@ then
          exit
     fi
 fi
-./configure CFLAGS="-Ofast -flto -DHATRACK_MMM_DEBUG -DHATRACK_COUNTERS"
+./configure CFLAGS="-Ofast -flto"
