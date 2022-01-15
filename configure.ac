@@ -36,10 +36,15 @@ if test $ac_cv_c11enum = yes; then
   AC_DEFINE([HAVE_C11_ENUMS], [1], [C11 enums are present])
 fi
 
-ACX_PTHREAD
+AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
+AC_CHECK_LIB([atomic], [__atomic_load_16], [LDFLAGS="${LDFLAGS} -latomic"])
 
-CFLAGS+= ${PTHREAD_CFLAGS}
-LIBS+= ${PTHREAD_LIBS}
+if test "$ac_have_pthread" = yes; then
+  AC_SUBST(PTHREAD_LIBS, "-pthread")
+fi
+
+#CFLAGS+= ${PTHREAD_CFLAGS}
+#LIBS+= ${PTHREAD_LIBS}
 
 #CHECK_LIB(pthread, pthread_create, [PTHREAD_LIBS+=-lpthread])
 
