@@ -61,7 +61,7 @@ debug_dump(uint64_t max_msgs)
         for (i = oldest_sequence; i < HATRACK_DEBUG_RING_SIZE; i++) {
             fprintf(stderr,
                     "%06llu: (tid %ld) %s\n",
-                    __hatrack_debug[i].sequence,
+                    (unsigned long long)__hatrack_debug[i].sequence,
                     (long)__hatrack_debug[i].thread,
                     __hatrack_debug[i].msg);
         }
@@ -75,7 +75,7 @@ debug_dump(uint64_t max_msgs)
     for (; i < cur_sequence; i++) {
         fprintf(stderr,
                 "%06llu: (tid %ld) %s\n",
-                __hatrack_debug[i].sequence,
+                (unsigned long long)__hatrack_debug[i].sequence,
                 (long)__hatrack_debug[i].thread,
                 __hatrack_debug[i].msg);
     }
@@ -115,7 +115,7 @@ debug_other_thread(int64_t tid)
         if (tid == __hatrack_debug[i].thread) {
             fprintf(stderr,
                     "%06llu: (tid %ld) %s\n",
-                    __hatrack_debug[i].sequence,
+                    (unsigned long long)__hatrack_debug[i].sequence,
                     (long)__hatrack_debug[i].thread,
                     __hatrack_debug[i].msg);
         }
@@ -125,7 +125,7 @@ debug_other_thread(int64_t tid)
         if (tid == __hatrack_debug[i].thread) {
             fprintf(stderr,
                     "%06llu: (tid %ld) %s\n",
-                    __hatrack_debug[i].sequence,
+                    (unsigned long long)__hatrack_debug[i].sequence,
                     (long)__hatrack_debug[i].thread,
                     __hatrack_debug[i].msg);
         }
@@ -156,7 +156,7 @@ debug_grep(char *s)
         if (strstr(__hatrack_debug[i].msg, s)) {
             fprintf(stderr,
                     "%06llu: (tid %ld) %s\n",
-                    __hatrack_debug[i].sequence,
+                    (unsigned long long)__hatrack_debug[i].sequence,
                     (long)__hatrack_debug[i].thread,
                     __hatrack_debug[i].msg);
         }
@@ -166,7 +166,7 @@ debug_grep(char *s)
         if (strstr(__hatrack_debug[i].msg, s)) {
             fprintf(stderr,
                     "%06llu: (tid %ld) %s\n",
-                    __hatrack_debug[i].sequence,
+                    (unsigned long long)__hatrack_debug[i].sequence,
                     (long)__hatrack_debug[i].thread,
                     __hatrack_debug[i].msg);
         }

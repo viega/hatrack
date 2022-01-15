@@ -153,10 +153,11 @@ counters_output_delta(void)
             continue;
         }
 
+	ydelta = hatrack_counters[i] - hatrack_last_counters[i];
         fprintf(stderr,
                 "%s:\t %llu\n",
                 hatrack_counter_names[i],
-                hatrack_counters[i] - hatrack_last_counters[i]);
+                (unsigned long long)ydelta;
 
         hatrack_last_counters[i] = hatrack_counters[i];
     }
@@ -181,9 +182,9 @@ counters_output_delta(void)
         fprintf(stderr,
                 "%s:\t %llu y, %llu n of %llu (%.2f%% y)\n",
                 hatrack_yn_counter_names[i],
-                ydelta,
-                ndelta,
-                total,
+                (unsigned long long)ydelta,
+                (unsigned long long)ndelta,
+                (unsigned long long)total,
                 percent);
     }
 
@@ -209,7 +210,7 @@ counters_output_alltime(void)
         fprintf(stderr,
                 "%s:\t %llu\n",
                 hatrack_counter_names[i],
-                hatrack_counters[i]);
+                (unsigned long long)hatrack_counters[i]);
     }
 
     for (i = 0; i < HATRACK_YN_COUNTERS_NUM; i++) {
@@ -223,9 +224,9 @@ counters_output_alltime(void)
         fprintf(stderr,
                 "%s:\t %llu y, %llu n of %llu (%.2f%% y)\n",
                 hatrack_yn_counter_names[i],
-                hatrack_yn_counters[i][0],
-                hatrack_yn_counters[i][1],
-                total,
+                (unsigned long long)hatrack_yn_counters[i][0],
+                (unsigned long long)hatrack_yn_counters[i][1],
+                (unsigned long long)total,
                 (double)100.0
                     * (((double)hatrack_yn_counters[i][0]) / (double)total));
     }
