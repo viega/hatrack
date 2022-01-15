@@ -1,5 +1,5 @@
-# Hatrack
-## Hash tables for parallel programming
+# Hatrack implementation overview
+## Introduction
 
 This project consisists of several different hash tables suitable for
 parallel programming, and one reference hash table that is only
