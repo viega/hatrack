@@ -1037,7 +1037,6 @@ main(void)
 		  one_thread,
 		  0);
     counters_output_delta();
-#if 0    
     run_func_test("replace",
 		  test_replace_op,
 		  1,
@@ -1046,7 +1045,6 @@ main(void)
 		  one_thread,
 		  0);
     counters_output_delta();
-#endif
     run_func_test("condput",
 		  test_condput,
 		  1,
