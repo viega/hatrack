@@ -173,8 +173,7 @@ struct lohat_record_st {
  * about... even if the reader gets suspended.
  */
 enum64(lohat_flag_t,
-    LOHAT_F_MOVING = 0x0000000000000001,
-    LOHAT_F_MOVED  = 0x0000000000000002
-);
+       LOHAT_F_MOVING = 0x0000000000000001,
+       LOHAT_F_MOVED  = 0x0000000000000002);
 
 #endif

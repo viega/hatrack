@@ -606,9 +606,10 @@ test_basic(test_info_t *info)
 
     for (; i < info->range; i++) {
         if (test_get(info->dict, i + 1) != i + 1) {
-            fprintf(stderr, "%u != %llu\n",
-		    test_get(info->dict, i + 1),
-		    (unsigned long long)(i + 1));
+            fprintf(stderr,
+                    "%u != %llu\n",
+                    test_get(info->dict, i + 1),
+                    (unsigned long long)(i + 1));
             return false;
         }
     }
@@ -726,29 +727,28 @@ test_condput(test_info_t *info)
 bool
 test_replace_op(test_info_t *info)
 {
-  uint64_t i;
-  
-  for (i = 0; i < 50; i++) {
-    test_put(info->dict, i + 1, i + 1);
-  }
-  for (i = 0; i < 100; i++) {
-    test_replace(info->dict, i + 1, i + 2);
-  }
-  for (i = 0; i < 50; i++) {
-    if (test_get(info->dict, i + 1) != i + 2) {
-      return false;
-    }
-  }
+    uint64_t i;
 
-  for (; i < 100; i++) {
-    if (test_get(info->dict, i + 1)) {
-      return false;
+    for (i = 0; i < 50; i++) {
+        test_put(info->dict, i + 1, i + 1);
     }
-  }
+    for (i = 0; i < 100; i++) {
+        test_replace(info->dict, i + 1, i + 2);
+    }
+    for (i = 0; i < 50; i++) {
+        if (test_get(info->dict, i + 1) != i + 2) {
+            return false;
+        }
+    }
 
-  return true;
+    for (; i < 100; i++) {
+        if (test_get(info->dict, i + 1)) {
+            return false;
+        }
+    }
+
+    return true;
 }
-
 
 // Validate this by looking at counters.
 bool
@@ -791,8 +791,8 @@ test_parallel(test_info_t *info)
 
         if (n != i) {
             printf("%llu != %llu\n",
-		   (unsigned long long)n,
-		   (unsigned long long)i);
+                   (unsigned long long)n,
+                   (unsigned long long)i);
             printf("Is HATRACK_TEST_MAX_KEYS high enough?\n");
 
             return false;

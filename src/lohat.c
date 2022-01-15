@@ -431,9 +431,7 @@ lohat_store_new(uint64_t size)
  * applications.
  */
 static void *
-lohat_store_get(lohat_store_t *self,
-                hatrack_hash_t hv1,
-                bool          *found)
+lohat_store_get(lohat_store_t *self, hatrack_hash_t hv1, bool *found)
 {
     uint64_t         bix;
     uint64_t         i;

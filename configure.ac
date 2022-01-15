@@ -14,6 +14,14 @@ AC_CONFIG_HEADERS([include/config.h])
 # Checks for programs.
 AC_PROG_CC([clang])
 
+AC_CHECK_HEADER_STDBOOL
+AC_C_INLINE
+AC_TYPE_INT64_T
+AC_TYPE_SIZE_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
+
 # Autconf doesn't seem to have an option to check for C11 unfortunately :/
 
 
@@ -39,29 +47,11 @@ fi
 AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
 AC_CHECK_LIB([atomic], [__atomic_load_16], [LDFLAGS="${LDFLAGS} -latomic"])
 
-if test "$ac_have_pthread" = yes; then
-  AC_SUBST(PTHREAD_LIBS, "-pthread")
-fi
-
-#CFLAGS+= ${PTHREAD_CFLAGS}
-#LIBS+= ${PTHREAD_LIBS}
-
-#CHECK_LIB(pthread, pthread_create, [PTHREAD_LIBS+=-lpthread])
-
-
-# These all are there if C11 is there.
-#AC_CHECK_HEADER_STDBOOL
-#AC_C_INLINE
-#AC_TYPE_INT64_T
-#AC_TYPE_SIZE_T
-#AC_TYPE_UINT32_T
-#AC_TYPE_UINT64_T
-#AC_TYPE_UINT8_T
-
 # Checks for library functions.
-AC_FUNC_MALLOC
-AC_FUNC_REALLOC
 AC_CHECK_FUNCS([clock_gettime memset strstr])
+
+AC_PATH_PROG([PATH_TO_ENV], [env], [])
+
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
 

@@ -44,10 +44,9 @@ typedef struct {
 } witchhat_record_t;
 
 enum64(witchhat_flag_t,
-    WITCHHAT_F_MOVING   = 0x8000000000000000,
-    WITCHHAT_F_MOVED    = 040000000000000000,
-    WITCHHAT_EPOCH_MASK = 0x3fffffffffffffff
-);
+       WITCHHAT_F_MOVING   = 0x8000000000000000,
+       WITCHHAT_F_MOVED    = 040000000000000000,
+       WITCHHAT_EPOCH_MASK = 0x3fffffffffffffff);
 
 typedef struct {
     _Atomic hatrack_hash_t    hv;

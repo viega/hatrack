@@ -153,7 +153,7 @@ counters_output_delta(void)
             continue;
         }
 
-	ydelta = hatrack_counters[i] - hatrack_last_counters[i];
+        ydelta = hatrack_counters[i] - hatrack_last_counters[i];
         fprintf(stderr,
                 "%s:\t %llu\n",
                 hatrack_counter_names[i],

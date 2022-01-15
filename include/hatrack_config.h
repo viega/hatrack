@@ -561,9 +561,18 @@
 #endif
 
 #ifdef HAVE_C11_ENUMS
-#define enum64(x, ...) typedef enum : uint64_t { __VA_ARGS__ } x
+#define enum64(x, ...)                                                         \
+    typedef enum : uint64_t                                                    \
+    {                                                                          \
+        __VA_ARGS__                                                            \
+    } x
 #else
-#define enum64(x, ...) typedef enum { HACK_TO_MAKE_64_BIT_ ## x = 0xffffffffffffffff, __VA_ARGS__} x
+#define enum64(x, ...)                                                         \
+    typedef enum                                                               \
+    {                                                                          \
+        HACK_TO_MAKE_64_BIT_##x = 0xffffffffffffffff,                          \
+        __VA_ARGS__                                                            \
+    } x
 #endif
 
 #endif

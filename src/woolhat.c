@@ -275,9 +275,7 @@ woolhat_store_new(uint64_t size)
 }
 
 static void *
-woolhat_store_get(woolhat_store_t *self,
-                  hatrack_hash_t   hv1,
-                  bool            *found)
+woolhat_store_get(woolhat_store_t *self, hatrack_hash_t hv1, bool *found)
 {
     uint64_t           bix;
     uint64_t           i;

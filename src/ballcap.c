@@ -310,9 +310,7 @@ ballcap_store_new(uint64_t size)
 }
 
 static void *
-ballcap_store_get(ballcap_store_t *self,
-                  hatrack_hash_t   hv,
-                  bool            *found)
+ballcap_store_get(ballcap_store_t *self, hatrack_hash_t hv, bool *found)
 {
     uint64_t          bix;
     uint64_t          last_slot;

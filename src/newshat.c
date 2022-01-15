@@ -374,9 +374,7 @@ newshat_store_delete(newshat_store_t *self)
  * reader, need is in there, readers do not have to hold the lock.
  */
 static void *
-newshat_store_get(newshat_store_t *self,
-                  hatrack_hash_t   hv,
-                  bool            *found)
+newshat_store_get(newshat_store_t *self, hatrack_hash_t hv, bool *found)
 {
     uint64_t          bix;
     uint64_t          last_slot;

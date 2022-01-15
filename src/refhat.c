@@ -269,7 +269,7 @@ refhat_replace(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
             if (found) {
                 *found = false;
             }
-	    return NULL;
+            return NULL;
         }
 
         bix = (bix + 1) & self->last_slot;
