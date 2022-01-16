@@ -5,7 +5,7 @@ AC_PREREQ([2.69])
 AC_INIT([hatrack],[0.9],[john@zork.org])
 AC_CONFIG_AUX_DIR([autotools])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
-#AM_SILENT_RULES([yes])
+AM_SILENT_RULES([yes])
 AC_CONFIG_COMMANDS([default],[],[])
 AC_COPYRIGHT([Copyright 2021-2022, John Viega])
 
