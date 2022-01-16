@@ -27,9 +27,9 @@
 #include <hatrack.h>
 
 #ifdef SANE_FETCH_ADD_PTR_SEMANTICS
-#define fa_ptr_incr(t) (sizeof(t))
-#else
 #define fa_ptr_incr(t) (1)
+#else
+#define fa_ptr_incr(t) (sizeof(t))
 #endif
 
 // clang-format off
