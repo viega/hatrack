@@ -70,7 +70,7 @@ woolhat_init(woolhat_t *self)
 void *
 woolhat_get(woolhat_t *self, hatrack_hash_t hv, bool *found)
 {
-    void *           ret;
+    void            *ret;
     woolhat_store_t *store;
 
     mmm_start_basic_op();
@@ -86,7 +86,7 @@ woolhat_get(woolhat_t *self, hatrack_hash_t hv, bool *found)
 void *
 woolhat_put(woolhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
-    void *           ret;
+    void            *ret;
     woolhat_store_t *store;
 
     mmm_start_basic_op();
@@ -102,7 +102,7 @@ woolhat_put(woolhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 void *
 woolhat_replace(woolhat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
-    void *           ret;
+    void            *ret;
     woolhat_store_t *store;
 
     mmm_start_basic_op();
@@ -134,7 +134,7 @@ woolhat_add(woolhat_t *self, hatrack_hash_t hv, void *item)
 void *
 woolhat_remove(woolhat_t *self, hatrack_hash_t hv, bool *found)
 {
-    void *           ret;
+    void            *ret;
     woolhat_store_t *store;
 
     mmm_start_basic_op();
@@ -150,11 +150,11 @@ woolhat_remove(woolhat_t *self, hatrack_hash_t hv, bool *found)
 void
 woolhat_delete(woolhat_t *self)
 {
-    woolhat_store_t *  store;
+    woolhat_store_t   *store;
     woolhat_history_t *buckets;
     woolhat_history_t *p;
     woolhat_history_t *end;
-    woolhat_record_t * rec;
+    woolhat_record_t  *rec;
 
     store   = atomic_load(&self->store_current);
     buckets = store->hist_buckets;
@@ -186,10 +186,10 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
 {
     woolhat_history_t *cur;
     woolhat_history_t *end;
-    woolhat_store_t *  store;
-    hatrack_view_t *   view;
-    hatrack_view_t *   p;
-    woolhat_record_t * rec;
+    woolhat_store_t   *store;
+    hatrack_view_t    *view;
+    hatrack_view_t    *p;
+    woolhat_record_t  *rec;
     uint64_t           epoch;
     uint64_t           sort_epoch;
     uint64_t           num_items;
@@ -281,7 +281,7 @@ woolhat_store_get(woolhat_store_t *self, hatrack_hash_t hv1, bool *found)
     uint64_t           i;
     hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t * head;
+    woolhat_record_t  *head;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -323,10 +323,10 @@ not_found:
 
 static void *
 woolhat_store_put(woolhat_store_t *self,
-                  woolhat_t *      top,
+                  woolhat_t       *top,
                   hatrack_hash_t   hv1,
-                  void *           item,
-                  bool *           found,
+                  void            *item,
+                  bool            *found,
                   uint64_t         count)
 {
     uint64_t           bix;
@@ -334,9 +334,9 @@ woolhat_store_put(woolhat_store_t *self,
     uint64_t           used_count;
     hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t * head;
-    woolhat_record_t * candidate;
-    void *             ret;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
+    void              *ret;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -484,19 +484,19 @@ not_overwriting:
 
 static void *
 woolhat_store_replace(woolhat_store_t *self,
-                      woolhat_t *      top,
+                      woolhat_t       *top,
                       hatrack_hash_t   hv1,
-                      void *           item,
-                      bool *           found,
+                      void            *item,
+                      bool            *found,
                       uint64_t         count)
 {
-    void *             ret;
+    void              *ret;
     uint64_t           bix;
     uint64_t           i;
     hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t * head;
-    woolhat_record_t * candidate;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -609,9 +609,9 @@ migrate_and_retry:
 
 static bool
 woolhat_store_add(woolhat_store_t *self,
-                  woolhat_t *      top,
+                  woolhat_t       *top,
                   hatrack_hash_t   hv1,
-                  void *           item,
+                  void            *item,
                   uint64_t         count)
 {
     uint64_t           bix;
@@ -619,8 +619,8 @@ woolhat_store_add(woolhat_store_t *self,
     uint64_t           used_count;
     hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t * head;
-    woolhat_record_t * candidate;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -709,17 +709,17 @@ found_history_bucket:
 
 static void *
 woolhat_store_remove(woolhat_store_t *self,
-                     woolhat_t *      top,
+                     woolhat_t       *top,
                      hatrack_hash_t   hv1,
-                     bool *           found,
+                     bool            *found,
                      uint64_t         count)
 {
     uint64_t           bix;
     uint64_t           i;
     hatrack_hash_t     hv2;
     woolhat_history_t *bucket;
-    woolhat_record_t * head;
-    woolhat_record_t * candidate;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -834,14 +834,14 @@ migrate_and_retry:
 static woolhat_store_t *
 woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
 {
-    woolhat_store_t *  new_store;
-    woolhat_store_t *  candidate_store;
+    woolhat_store_t   *new_store;
+    woolhat_store_t   *candidate_store;
     uint64_t           new_size;
     woolhat_history_t *cur;
     woolhat_history_t *bucket;
-    woolhat_record_t * head;
-    woolhat_record_t * candidate;
-    woolhat_record_t * expected_head;
+    woolhat_record_t  *head;
+    woolhat_record_t  *candidate;
+    woolhat_record_t  *expected_head;
     hatrack_hash_t     hv;
     hatrack_hash_t     expected_hv;
     uint64_t           i, j;

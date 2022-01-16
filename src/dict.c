@@ -78,7 +78,7 @@ void
 hatrack_dict_cleanup(hatrack_dict_t *self)
 {
     uint64_t           i;
-    witchhat_store_t * store;
+    witchhat_store_t  *store;
     witchhat_bucket_t *bucket;
     hatrack_hash_t     hv;
     witchhat_record_t  record;
@@ -289,8 +289,8 @@ hatrack_dict_remove(hatrack_dict_t *self, void *key)
 hatrack_dict_key_t *
 hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t *     view;
-    hatrack_dict_key_t * ret;
+    hatrack_view_t      *view;
+    hatrack_dict_key_t  *ret;
     hatrack_dict_item_t *item;
     uint64_t             alloc_len;
     uint32_t             i;
@@ -312,9 +312,9 @@ hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
 hatrack_dict_value_t *
 hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t *      view;
+    hatrack_view_t       *view;
     hatrack_dict_value_t *ret;
-    hatrack_dict_item_t * item;
+    hatrack_dict_item_t  *item;
     uint64_t              alloc_len;
     uint32_t              i;
 
@@ -335,7 +335,7 @@ hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
 hatrack_dict_item_t *
 hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t *     view;
+    hatrack_view_t      *view;
     hatrack_dict_item_t *ret;
     hatrack_dict_item_t *item;
     uint64_t             alloc_len;
@@ -359,8 +359,8 @@ hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
 hatrack_dict_key_t *
 hatrack_dict_keys_sort(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t *     view;
-    hatrack_dict_key_t * ret;
+    hatrack_view_t      *view;
+    hatrack_dict_key_t  *ret;
     hatrack_dict_item_t *item;
     uint64_t             alloc_len;
     uint32_t             i;
@@ -382,9 +382,9 @@ hatrack_dict_keys_sort(hatrack_dict_t *self, uint64_t *num)
 hatrack_dict_value_t *
 hatrack_dict_values_sort(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t *      view;
+    hatrack_view_t       *view;
     hatrack_dict_value_t *ret;
-    hatrack_dict_item_t * item;
+    hatrack_dict_item_t  *item;
     uint64_t              alloc_len;
     uint32_t              i;
 
@@ -405,7 +405,7 @@ hatrack_dict_values_sort(hatrack_dict_t *self, uint64_t *num)
 hatrack_dict_item_t *
 hatrack_dict_items_sort(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t *     view;
+    hatrack_view_t      *view;
     hatrack_dict_item_t *ret;
     hatrack_dict_item_t *item;
     uint64_t             alloc_len;
@@ -489,7 +489,7 @@ hatrack_dict_get_hash_value(hatrack_dict_t *self, void *key)
 static void
 hatrack_dict_record_cleanup(void *void_record)
 {
-    hatrack_dict_t *     dict;
+    hatrack_dict_t      *dict;
     hatrack_dict_item_t *record;
 
     record = (hatrack_dict_item_t *)void_record;

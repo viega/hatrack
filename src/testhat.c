@@ -34,7 +34,7 @@
 #include <stdio.h>
 
 typedef struct {
-    char *            name;
+    char             *name;
     hatrack_vtable_t *vtable;
     size_t            size;
 } testhat_table_info_t;

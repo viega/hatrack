@@ -86,7 +86,7 @@ lohat_init(lohat_t *self)
 void *
 lohat_get(lohat_t *self, hatrack_hash_t hv, bool *found)
 {
-    void *         ret;
+    void          *ret;
     lohat_store_t *store;
 
     mmm_start_basic_op();
@@ -102,7 +102,7 @@ lohat_get(lohat_t *self, hatrack_hash_t hv, bool *found)
 void *
 lohat_put(lohat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
-    void *         ret;
+    void          *ret;
     lohat_store_t *store;
 
     mmm_start_basic_op();
@@ -118,7 +118,7 @@ lohat_put(lohat_t *self, hatrack_hash_t hv, void *item, bool *found)
 void *
 lohat_replace(lohat_t *self, hatrack_hash_t hv, void *item, bool *found)
 {
-    void *         ret;
+    void          *ret;
     lohat_store_t *store;
 
     mmm_start_basic_op();
@@ -150,7 +150,7 @@ lohat_add(lohat_t *self, hatrack_hash_t hv, void *item)
 void *
 lohat_remove(lohat_t *self, hatrack_hash_t hv, bool *found)
 {
-    void *         ret;
+    void          *ret;
     lohat_store_t *store;
 
     mmm_start_basic_op();
@@ -194,11 +194,11 @@ lohat_remove(lohat_t *self, hatrack_hash_t hv, bool *found)
 void
 lohat_delete(lohat_t *self)
 {
-    lohat_store_t *  store;
+    lohat_store_t   *store;
     lohat_history_t *buckets;
     lohat_history_t *p;
     lohat_history_t *end;
-    lohat_record_t * rec;
+    lohat_record_t  *rec;
 
     store   = atomic_load(&self->store_current);
     buckets = store->hist_buckets;
@@ -272,10 +272,10 @@ lohat_view(lohat_t *self, uint64_t *out_num, bool sort)
 {
     lohat_history_t *cur;
     lohat_history_t *end;
-    lohat_store_t *  store;
-    hatrack_view_t * view;
-    hatrack_view_t * p;
-    lohat_record_t * rec;
+    lohat_store_t   *store;
+    hatrack_view_t  *view;
+    hatrack_view_t  *p;
+    lohat_record_t  *rec;
     uint64_t         epoch;
     uint64_t         sort_epoch;
     uint64_t         num_items;
@@ -437,7 +437,7 @@ lohat_store_get(lohat_store_t *self, hatrack_hash_t hv1, bool *found)
     uint64_t         i;
     hatrack_hash_t   hv2;
     lohat_history_t *bucket;
-    lohat_record_t * head;
+    lohat_record_t  *head;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -486,18 +486,18 @@ found_history_bucket:
 
 static void *
 lohat_store_put(lohat_store_t *self,
-                lohat_t *      top,
+                lohat_t       *top,
                 hatrack_hash_t hv1,
-                void *         item,
-                bool *         found)
+                void          *item,
+                bool          *found)
 {
     uint64_t         bix;
     uint64_t         i;
     uint64_t         used_count;
     hatrack_hash_t   hv2;
     lohat_history_t *bucket;
-    lohat_record_t * head;
-    lohat_record_t * candidate;
+    lohat_record_t  *head;
+    lohat_record_t  *candidate;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -634,17 +634,17 @@ not_overwriting:
 
 static void *
 lohat_store_replace(lohat_store_t *self,
-                    lohat_t *      top,
+                    lohat_t       *top,
                     hatrack_hash_t hv1,
-                    void *         item,
-                    bool *         found)
+                    void          *item,
+                    bool          *found)
 {
     uint64_t         bix;
     uint64_t         i;
     hatrack_hash_t   hv2;
     lohat_history_t *bucket;
-    lohat_record_t * head;
-    lohat_record_t * candidate;
+    lohat_record_t  *head;
+    lohat_record_t  *candidate;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -731,17 +731,17 @@ migrate_and_retry:
 
 static bool
 lohat_store_add(lohat_store_t *self,
-                lohat_t *      top,
+                lohat_t       *top,
                 hatrack_hash_t hv1,
-                void *         item)
+                void          *item)
 {
     uint64_t         bix;
     uint64_t         i;
     uint64_t         used_count;
     hatrack_hash_t   hv2;
     lohat_history_t *bucket;
-    lohat_record_t * head;
-    lohat_record_t * candidate;
+    lohat_record_t  *head;
+    lohat_record_t  *candidate;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -829,16 +829,16 @@ found_history_bucket:
 
 static void *
 lohat_store_remove(lohat_store_t *self,
-                   lohat_t *      top,
+                   lohat_t       *top,
                    hatrack_hash_t hv1,
-                   bool *         found)
+                   bool          *found)
 {
     uint64_t         bix;
     uint64_t         i;
     hatrack_hash_t   hv2;
     lohat_history_t *bucket;
-    lohat_record_t * head;
-    lohat_record_t * candidate;
+    lohat_record_t  *head;
+    lohat_record_t  *candidate;
 
     bix = hatrack_bucket_index(hv1, self->last_slot);
 
@@ -942,14 +942,14 @@ migrate_and_retry:
 static lohat_store_t *
 lohat_store_migrate(lohat_store_t *self, lohat_t *top)
 {
-    lohat_store_t *  new_store;
-    lohat_store_t *  candidate_store;
+    lohat_store_t   *new_store;
+    lohat_store_t   *candidate_store;
     uint64_t         new_size;
     lohat_history_t *cur;
     lohat_history_t *bucket;
-    lohat_record_t * head;
-    lohat_record_t * candidate;
-    lohat_record_t * expected_head;
+    lohat_record_t  *head;
+    lohat_record_t  *candidate;
+    lohat_record_t  *expected_head;
     hatrack_hash_t   hv;
     hatrack_hash_t   expected_hv;
     uint64_t         i, j;

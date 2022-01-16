@@ -240,7 +240,7 @@ test_init(void)
 
 typedef struct {
     uint32_t   tid;
-    char *     type;
+    char      *type;
     testhat_t *dict;
     uint32_t   range; // Specifies range of keys and values, 0 - range-1
     uint32_t   iters; // Number of times to run the test;
@@ -273,7 +273,7 @@ start_one_thread(void *info)
 static uint32_t
 time_test(test_func_t      func,
           uint32_t         iters,
-          char *           type,
+          char            *type,
           uint32_t         num_threads,
           uint32_t         range,
           uint32_t         extra,
@@ -284,7 +284,7 @@ time_test(test_func_t      func,
     pthread_t   threads[num_threads];
     test_info_t info[num_threads];
     uint32_t    i;
-    testhat_t * dict;
+    testhat_t  *dict;
 
     atomic_store(&test_func, NULL);
     atomic_store(&mmm_nexttid, 0); // Reset thread ids.
@@ -324,14 +324,14 @@ functionality_test(test_func_t func,
                    uint32_t    iters,
                    uint32_t    num_threads,
                    uint32_t    range,
-                   char *      type,
+                   char       *type,
                    uint32_t    extra)
 {
     pthread_t   threads[num_threads];
     test_info_t info[num_threads];
     uint32_t    i;
     uint64_t    res;
-    testhat_t * dict;
+    testhat_t  *dict;
 
     atomic_store(&test_func, NULL);
     atomic_store(&mmm_nexttid, 0); // Reset thread ids.
@@ -372,7 +372,7 @@ functionality_test(test_func_t func,
 static void
 run_one_time_test(test_func_t func,
                   uint32_t    iters,
-                  char *      type,
+                  char       *type,
                   uint32_t    range,
                   uint32_t    thread_count,
                   uint32_t    extra)
@@ -408,7 +408,7 @@ run_one_time_test(test_func_t func,
 static void
 run_one_func_test(test_func_t func,
                   uint32_t    iters,
-                  char *      type,
+                  char       *type,
                   uint32_t    range,
                   uint32_t    thread_count,
                   uint32_t    extra)
@@ -431,13 +431,13 @@ run_one_func_test(test_func_t func,
 }
 
 static void
-run_time_test(char *      name,
+run_time_test(char       *name,
               test_func_t func,
               uint32_t    iters,
-              char *      types[],
-              uint32_t *  ranges,
-              uint32_t *  tcounts,
-              uint32_t *  extra)
+              char       *types[],
+              uint32_t   *ranges,
+              uint32_t   *tcounts,
+              uint32_t   *extra)
 {
     uint32_t dict_ix;
     uint32_t range_ix;
@@ -506,13 +506,13 @@ run_time_test(char *      name,
 }
 
 static void
-run_func_test(char *      name,
+run_func_test(char       *name,
               test_func_t func,
               uint32_t    iters,
-              char *      types[],
-              uint32_t *  ranges,
-              uint32_t *  tcounts,
-              uint32_t *  extra)
+              char       *types[],
+              uint32_t   *ranges,
+              uint32_t   *tcounts,
+              uint32_t   *extra)
 {
     uint32_t dict_ix;
     uint32_t range_ix;

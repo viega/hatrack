@@ -363,13 +363,13 @@ oldhat_len(oldhat_t *self)
 hatrack_view_t *
 oldhat_view(oldhat_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t * view;
-    hatrack_view_t * p;
+    hatrack_view_t  *view;
+    hatrack_view_t  *p;
     oldhat_record_t *record;
     uint64_t         i;
     uint64_t         num_items;
     uint64_t         alloc_len;
-    oldhat_store_t * store;
+    oldhat_store_t  *store;
 
     /* Again, we need to do this before grabbing our pointer to the
      * store, to make sure it doesn't get deallocated out from under

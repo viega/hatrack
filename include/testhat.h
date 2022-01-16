@@ -46,7 +46,7 @@
 
 typedef struct {
     hatrack_vtable_t vtable;
-    void *           htable;
+    void            *htable;
 } testhat_t;
 
 testhat_t *testhat_new(char *);
