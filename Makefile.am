@@ -8,7 +8,7 @@ lib_LIBRARIES = libhatrack.a
 
 test_SOURCES = src/test.c src/testhat.c
 test_CFLAGS = -Wall -Wextra -Wno-atomic-alignment -I./include/
-test_LDFLAGS = -L. -lhatrack
+test_LDADD = ./libhatrack.a
 
 include_HEADERS = include/hatrack.h 
 pkginclude_HEADERS = include/hatrack/xxhash.h include/hatrack/ballcap.h include/hatrack/config.h include/hatrack/counters.h include/hatrack/debug.h include/hatrack/dict.h include/hatrack/duncecap.h include/hatrack/hash.h include/hatrack/hatomic.h include/hatrack/hatrack_common.h include/hatrack/hatrack_config.h include/hatrack/hatvtable.h include/hatrack/hihat.h include/hatrack/lohat-a.h include/hatrack/lohat.h include/hatrack/lohat_common.h include/hatrack/mmm.h include/hatrack/newshat.h include/hatrack/oldhat.h include/hatrack/refhat.h include/hatrack/swimcap.h include/hatrack/tophat.h include/hatrack/witchhat.h include/hatrack/woolhat.h

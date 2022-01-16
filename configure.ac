@@ -5,16 +5,19 @@ AC_PREREQ([2.69])
 AC_INIT([hatrack],[0.9],[john@zork.org])
 AC_CONFIG_AUX_DIR([autotools])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
-AM_SILENT_RULES([yes])
+#AM_SILENT_RULES([yes])
 AC_CONFIG_COMMANDS([default],[],[])
 AC_COPYRIGHT([Copyright 2021-2022, John Viega])
-AC_CONFIG_SRCDIR([src/refhat.c])
-AC_CONFIG_HEADERS([include/hatrack/config.h])
-AC_CHECK_HEADERS([include/hatrack.h])
+
+
+AC_LANG([C])
+AC_PROG_CC(clang cc gcc)
 
 AC_PROG_RANLIB
 
-AC_PROG_CC([clang, cc])
+AC_CONFIG_SRCDIR([src/refhat.c])
+AC_CONFIG_HEADERS([include/hatrack/config.h])
+AC_CHECK_HEADERS([include/hatrack.h])
 
 AC_CHECK_HEADER_STDBOOL
 AC_C_INLINE
