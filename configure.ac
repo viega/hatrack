@@ -33,13 +33,13 @@ AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h pthread.h stdalign.h])
 # AC_MSG_CHECKING([C11 typed enums])
 AC_CACHE_CHECK([for C11 typed enums],
                [ac_cv_c11enum],
-	       [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <stdint.h>
-						    enum : uint64_t { FIRST_ITEM };])],
-						    [ac_cv_c11enum=yes],
-						    [ac_cv_c11enum=no])])
+	       [AC_COMPILE_IFELSE([
+	       AC_LANG_PROGRAM([#include <stdint.h>
+			        enum : uint64_t { FIRST_ITEM };])],
+ 	 		       [ac_cv_c11enum=yes], 	       			                               [ac_cv_c11enum=no])])
 
 if test $ac_cv_c11enum = yes; then
-  AC_DEFINE([HAVE_C11_ENUMS], [1], [C11 enums are present])
+  AC_DEFINE([HAVE_C11_ENUMS], [1], [Defined when C11 enums are present])
 fi
 
 AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
