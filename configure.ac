@@ -5,14 +5,16 @@ AC_PREREQ([2.69])
 AC_INIT([hatrack],[0.9],[john@zork.org])
 AC_CONFIG_AUX_DIR([autotools])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
+AM_SILENT_RULES([yes])
 AC_CONFIG_COMMANDS([default],[],[])
-AC_PROG_RANLIB
 AC_COPYRIGHT([Copyright 2021-2022, John Viega])
 AC_CONFIG_SRCDIR([src/refhat.c])
-AC_CONFIG_HEADERS([include/config.h])
+AC_CONFIG_HEADERS([include/hatrack/config.h])
+AC_CHECK_HEADERS([include/hatrack.h])
 
-# Checks for programs.
-AC_PROG_CC([clang])
+AC_PROG_RANLIB
+
+AC_PROG_CC([clang, cc])
 
 AC_CHECK_HEADER_STDBOOL
 AC_C_INLINE
@@ -23,10 +25,6 @@ AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
 # Autconf doesn't seem to have an option to check for C11 unfortunately :/
-
-
-# Checks for libraries.
-#AC_CHECK_LIB([hoard], [malloc])
 
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h pthread.h stdalign.h])
@@ -46,6 +44,7 @@ fi
 
 AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
 AC_CHECK_LIB([atomic], [__atomic_load_16], [LDFLAGS="${LDFLAGS} -latomic"])
+
 
 # Checks for library functions.
 AC_CHECK_FUNCS([clock_gettime memset strstr])

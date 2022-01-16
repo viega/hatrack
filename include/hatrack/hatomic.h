@@ -17,13 +17,13 @@
  *  Description:    Macros useful for atomicity
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __HATOMIC_H__
 #define __HATOMIC_H__
 
-#include "counters.h"
+#include <hatrack/counters.h>
+
 #include <stdatomic.h>
 
 /* While we don't explicitly discuss it much in the comments of the

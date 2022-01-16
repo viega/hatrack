@@ -26,11 +26,7 @@
  *
  */
 
-#include "tophat.h"
-#include "newshat.h"
-#include "witchhat.h"
-#include "ballcap.h"
-#include "woolhat.h"
+#include <hatrack.h>
 
 // clang-format off
 static void             tophat_init_base     (tophat_t *);

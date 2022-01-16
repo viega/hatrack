@@ -20,7 +20,7 @@
  *  Author:         John Viega, john@zork.org
  */
 
-#include "counters.h"
+#include <hatrack.h>
 
 #ifdef HATRACK_COUNTERS
 

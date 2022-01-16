@@ -24,7 +24,7 @@
  *
  */
 
-#include "lohat-a.h"
+#include <hatrack.h>
 
 // clang-format off
 static lohat_a_store_t *lohat_a_store_new          (uint64_t);

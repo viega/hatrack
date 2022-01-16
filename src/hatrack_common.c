@@ -21,7 +21,7 @@
  *  Author:         John Viega, john@zork.org
  */
 
-#include "hatrack_common.h"
+#include <hatrack.h>
 
 /* Used when using quicksort to sort the contents of a hash table
  * 'view' by insertion time (the sort_epoch field).

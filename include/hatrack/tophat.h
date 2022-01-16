@@ -91,14 +91,13 @@
  *                  threading, and then swap out a vtable.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __TOPHAT_H__
 #define __TOPHAT_H__
 
-#include "hatrack_common.h"
-#include "hatvtable.h"
+#include <hatrack/hatrack_common.h>
+#include <hatrack/hatvtable.h>
 
 /* tophat_migration_t
  *

@@ -30,19 +30,19 @@
 
 // Pull in the various implementations.
 
-#include "hatvtable.h"
-#include "refhat.h"
-#include "duncecap.h"
-#include "swimcap.h"
-#include "newshat.h"
-#include "ballcap.h"
-#include "hihat.h"
-#include "oldhat.h"
-#include "lohat.h"
-#include "lohat-a.h"
-#include "witchhat.h"
-#include "woolhat.h"
-#include "tophat.h"
+#include <hatrack/hatvtable.h>
+#include <hatrack/refhat.h>
+#include <hatrack/duncecap.h>
+#include <hatrack/swimcap.h>
+#include <hatrack/newshat.h>
+#include <hatrack/ballcap.h>
+#include <hatrack/hihat.h>
+#include <hatrack/oldhat.h>
+#include <hatrack/lohat.h>
+#include <hatrack/lohat-a.h>
+#include <hatrack/witchhat.h>
+#include <hatrack/woolhat.h>
+#include <hatrack/tophat.h>
 
 typedef struct {
     hatrack_vtable_t vtable;

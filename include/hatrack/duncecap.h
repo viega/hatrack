@@ -31,13 +31,12 @@
  *                  atomics.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __DUNCECAP_H__
 #define __DUNCECAP_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 #include <pthread.h>
 

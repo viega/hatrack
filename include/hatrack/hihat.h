@@ -21,13 +21,12 @@
  *                  but does not guarantee the consistency of that view.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __HIHAT_H__
 #define __HIHAT_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 /* hihat_record_t
  *

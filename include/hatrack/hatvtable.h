@@ -19,13 +19,12 @@
  *                  test harness.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __HAT_VTABLE_H__
 #define __HAT_VTABLE_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 /* For testing, and for our tophat implementation (which switches the
  * backend hash table out when it notices multiple writers), we keep

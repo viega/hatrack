@@ -33,7 +33,7 @@
  *
  */
 
-#include "witchhat.h"
+#include <hatrack.h>
 
 // clang-format off
 

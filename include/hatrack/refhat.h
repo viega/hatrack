@@ -17,13 +17,12 @@
  *  Description:    A reference hashtable that only works single-threaded.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __REFHAT_H__
 #define __REFHAT_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 // clang-format off
 

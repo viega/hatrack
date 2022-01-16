@@ -18,13 +18,12 @@
  *                  our default hash tables.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __HATRACK_COMMON_H__
 #define __HATRACK_COMMON_H__
 
-#include "mmm.h"
+#include <hatrack/mmm.h>
 
 /* hatrack_hash_t
  *

@@ -40,6 +40,7 @@ script and Makefile.in, using autotools:
 
 ```
 aclocal
+autoheader
 autoconf
 automake
 ```

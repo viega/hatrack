@@ -18,16 +18,16 @@
  *                  linearization and safe reclaimation for my hash tables.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __MMM_H__
 #define __MMM_H__
 
-#include "hatrack_config.h"
-#include "debug.h"
-#include "counters.h"
-#include "hatomic.h"
+#include <hatrack/hatrack_config.h>
+#include <hatrack/debug.h>
+#include <hatrack/counters.h>
+#include <hatrack/hatomic.h>
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <pthread.h>

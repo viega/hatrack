@@ -40,7 +40,7 @@
 #ifndef __HATRACK_DEBUG_H__
 #define __HATRACK_DEBUG_H__
 
-#include "hatrack_config.h"
+#include <hatrack/hatrack_config.h>
 
 #ifdef HATRACK_DEBUG
 

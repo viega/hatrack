@@ -116,13 +116,12 @@
  *
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __LOHATa_H__
 #define __LOHATa_H__
 
-#include "lohat_common.h"
+#include <hatrack/lohat_common.h>
 
 /* lohat_a_history_t
  *

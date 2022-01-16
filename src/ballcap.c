@@ -46,7 +46,7 @@
  *  Author:         John Viega, john@zork.org
  */
 
-#include "ballcap.h"
+#include <hatrack.h>
 
 // clang-format off
 

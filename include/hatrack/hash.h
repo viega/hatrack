@@ -23,14 +23,13 @@
  *                  harness that dispatches to the algorithm.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __HATRACK_HASH_H__
 #define __HATRACK_HASH_H__
 
-#include "xxhash.h"
-#include "hatrack_common.h"
+#include <hatrack/xxhash.h>
+#include <hatrack/hatrack_common.h>
 
 #include <string.h>
 

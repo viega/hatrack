@@ -24,8 +24,9 @@
  *
  */
 
-#include "hash.h"
-#include "testhat.h"
+#include <hatrack.h>
+#include "testhat.h" // Will NOT be installed, so leave in quotes.
+
 #include <fcntl.h>  // For open
 #include <unistd.h> // For close and read
 #include <time.h>

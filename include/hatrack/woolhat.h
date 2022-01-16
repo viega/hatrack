@@ -19,13 +19,12 @@
  *                  by epoch when needed. Views are fully consistent.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __WOOLHAT_H__
 #define __WOOLHAT_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 typedef struct woolhat_record_st woolhat_record_t;
 

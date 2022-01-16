@@ -21,13 +21,12 @@
  *                  performing table migration.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __NEWSHAT_H__
 #define __NEWSHAT_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 #include <pthread.h>
 

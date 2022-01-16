@@ -28,7 +28,7 @@
 #ifndef __HATRACK_CONFIG_H__
 #define __HATRACK_CONFIG_H__
 
-#include "config.h"
+#include <hatrack/config.h>
 
 /* HATRACK_MIN_SIZE_LOG
  *

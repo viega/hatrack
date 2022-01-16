@@ -30,13 +30,12 @@
  *                  the things that are different about witchhat.
  *
  *  Author: John Viega, john@zork.org
- *
  */
 
 #ifndef __WITCHHAT_H__
 #define __WITCHHAT_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 typedef struct {
     void    *item;

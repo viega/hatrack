@@ -257,13 +257,12 @@
  *                  that are common to the various lohats.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __LOHAT_H__
 #define __LOHAT_H__
 
-#include "lohat_common.h"
+#include <hatrack/lohat_common.h>
 
 /* lohat_history_t
  *

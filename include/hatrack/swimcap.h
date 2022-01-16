@@ -30,13 +30,12 @@
  *                  even if a resize has completed.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
-#ifndef __SWIMCAP2_H__
-#define __SWIMCAP2_H__
+#ifndef __SWIMCAP_H__
+#define __SWIMCAP_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 #include <pthread.h>
 

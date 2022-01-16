@@ -56,7 +56,7 @@
 #ifndef __BALLCAP_H__
 #define __BALLCAP_H__
 
-#include "hatrack_common.h"
+#include <hatrack_common.h>
 
 #include <pthread.h>
 

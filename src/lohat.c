@@ -25,7 +25,7 @@
  *
  */
 
-#include "lohat.h"
+#include <hatrack.h>
 
 // clang-format off
 

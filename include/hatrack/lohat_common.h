@@ -24,13 +24,12 @@
  *                  stay here.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __LOHAT_COMMON_H__
 #define __LOHAT_COMMON_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 /* We use an "epoch" counter that is incremented with every write
  * committment, that gives us an insertion order that we can sort on,

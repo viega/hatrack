@@ -1,5 +1,25 @@
-#include "hatrack_dict.h"
-#include "hash.h"
+/*
+ * Copyright © 2022 John Viega
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ *  Name:           dict.c
+ *  Description:    High-level dictionary based on witchhat.
+ *
+ *  Author:         John Viega, john@zork.org
+ */
+
+#include <hatrack.h>
 
 static hatrack_hash_t hatrack_dict_get_hash_value(hatrack_dict_t *, void *);
 static void           hatrack_dict_record_cleanup(void *);
@@ -48,7 +68,7 @@ hatrack_dict_init(hatrack_dict_t *self, uint32_t key_type)
     }
 
     self->hash_info.offsets.hash_offset  = 0;
-    self->hash_info.offsets.cache_offset = 0;
+    self->hash_info.offsets.cache_offset = HATRACK_DICT_NO_CACHE;
     self->free_handler                   = NULL;
 
     return;
@@ -58,13 +78,16 @@ void
 hatrack_dict_cleanup(hatrack_dict_t *self)
 {
     uint64_t           i;
+    witchhat_store_t  *store;
     witchhat_bucket_t *bucket;
     hatrack_hash_t     hv;
     witchhat_record_t  record;
     
     if (self->free_handler) {
-	for (i = 0; i <= self->witchhat_instance.store_current->last_slot; i++) {
-	    bucket = &self->witchhat_instance.store_current->buckets[i];
+	store = self->witchhat_instance.store_current;
+	
+	for (i = 0; i <= store->last_slot; i++) {
+	    bucket = &store->buckets[i];
 	    hv     = atomic_load(&bucket->hv);
 	    
 	    if (hatrack_bucket_unreserved(hv)) {

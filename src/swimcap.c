@@ -33,7 +33,7 @@
  *
  */
 
-#include "swimcap.h"
+#include <hatrack.h>
 
 // clang-format off
 static swimcap_store_t *swimcap_store_new    (uint64_t);

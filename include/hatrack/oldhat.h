@@ -25,13 +25,12 @@
  *                  memory allocation.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #ifndef __OLDHAT_H__
 #define __OLDHAT_H__
 
-#include "hatrack_common.h"
+#include <hatrack/hatrack_common.h>
 
 /* oldhat_record_t
  *
