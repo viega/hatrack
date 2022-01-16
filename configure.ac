@@ -33,10 +33,6 @@ AC_TYPE_UINT8_T
 AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h pthread.h stdalign.h])
 
 
-if test $ac_cv_c11enum = yes; then
-  AC_DEFINE([HAVE_C11_ENUMS], [1], [Defined when C11 enums are present])
-fi
-
 AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
 AC_CHECK_LIB([atomic], [__atomic_load_16], [LDFLAGS="${LDFLAGS} -latomic"])
 
@@ -48,6 +44,9 @@ AC_CACHE_CHECK([for C11 typed enums],
 	       AC_LANG_PROGRAM([#include <stdint.h>
 			        enum : uint64_t { FIRST_ITEM };])],
  	 		       [ac_cv_c11enum=yes], 	       			                               [ac_cv_c11enum=no])])
+if test $ac_cv_c11enum = yes; then
+  AC_DEFINE([HAVE_C11_ENUMS], [1], [Defined when C11 enums are present])
+fi
 
 AC_CACHE_CHECK([to see if atomic_fetch_add(ptr, 1) adds sizeof(ptr)],
                [ac_cv_afa_ptr],
