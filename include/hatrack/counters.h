@@ -66,8 +66,7 @@ extern char            *hatrack_counter_names[];
 extern _Atomic uint64_t hatrack_yn_counters[][2];
 extern char            *hatrack_yn_counter_names[];
 
-enum : uint64_t
-{
+enum64(hatrack_counter_names,
     HATRACK_CTR_MALLOCS,
     HATRACK_CTR_FREES,
     HATRACK_CTR_RETIRE_UNUSED,
@@ -77,11 +76,10 @@ enum : uint64_t
     HATRACK_CTR_HIa_SLEEP1_FAILED,
     HATRACK_CTR_HIa_SLEEP2_WORKED,
     HATRACK_CTR_HIa_SLEEP2_FAILED,
-    HATRACK_COUNTERS_NUM,
-};
+    HATRACK_COUNTERS_NUM
+);
 
-enum : uint64_t
-{
+enum64(hatrack_yn_counter_names,
     HATRACK_CTR_LINEAR_EPOCH_EQ = 0,
     HATRACK_CTR_COMMIT          = 1,
     HATRACK_CTR_COMMIT_HELPS    = 2,
@@ -166,7 +164,7 @@ enum : uint64_t
     WOOLHAT_CTR_LEN_INSTALL     = 81,
     WOOLHAT_CTR_STORE_INSTALL   = 82,
     HATRACK_YN_COUNTERS_NUM
-};
+);
 
 static inline _Bool
 hatrack_yn_ctr_t(uint64_t id)
