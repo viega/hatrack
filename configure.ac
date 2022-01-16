@@ -32,6 +32,14 @@ AC_TYPE_UINT8_T
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h pthread.h stdalign.h])
 
+
+if test $ac_cv_c11enum = yes; then
+  AC_DEFINE([HAVE_C11_ENUMS], [1], [Defined when C11 enums are present])
+fi
+
+AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
+AC_CHECK_LIB([atomic], [__atomic_load_16], [LDFLAGS="${LDFLAGS} -latomic"])
+
 # Checks for C11's typed enums
 # AC_MSG_CHECKING([C11 typed enums])
 AC_CACHE_CHECK([for C11 typed enums],
@@ -41,12 +49,21 @@ AC_CACHE_CHECK([for C11 typed enums],
 			        enum : uint64_t { FIRST_ITEM };])],
  	 		       [ac_cv_c11enum=yes], 	       			                               [ac_cv_c11enum=no])])
 
-if test $ac_cv_c11enum = yes; then
-  AC_DEFINE([HAVE_C11_ENUMS], [1], [Defined when C11 enums are present])
-fi
+AC_CACHE_CHECK([to see if atomic_fetch_add(ptr, 1) adds sizeof(ptr)],
+               [ac_cv_afa_ptr],
+	       [AC_RUN_IFELSE([
+	       AC_LANG_PROGRAM([[#include <stdatomic.h>
+	                        typedef struct s { int a; int b; int c; } foo_t;
+	                       _Atomic(foo_t *) x = ATOMIC_VAR_INIT(NULL);]],
+	       [[atomic_fetch_add(&x, 1);
+	        if ((intptr_t)(atomic_load(&x)) == sizeof(foo_t)) { return 0; }
+		return 1;]] )],
+		[ac_cv_afa_ptr=yes],
+		[ac_cv_afa_ptr=no])])
 
-AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
-AC_CHECK_LIB([atomic], [__atomic_load_16], [LDFLAGS="${LDFLAGS} -latomic"])
+if test $ac_cv_afa_ptr = yes; then
+  AC_DEFINE([SANE_FETCH_ADD_PTR_SEMANTICS], [1], [Defined when atomic_fetch_add(ptr, 1) adds sizeof(ptr)])
+fi
 
 
 # Checks for library functions.

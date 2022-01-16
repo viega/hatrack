@@ -26,10 +26,10 @@
 
 #include <hatrack.h>
 
-#ifdef __GNUC__
-#define PTR_STEP sizeof(lohat_a_history_t)
+#ifdef SANE_FETCH_ADD_PTR_SEMANTICS
+#define fa_ptr_incr(t) (sizeof(t))
 #else
-#define PTR_STEP 1
+#define fa_ptr_incr(t) (1)
 #endif
 
 // clang-format off
@@ -466,7 +466,8 @@ found_ptr_bucket:
         bucket = atomic_read(&ptrbucket->ptr);
 	
         if (!bucket) {
-            new_bucket = atomic_fetch_add(&self->hist_next, PTR_STEP);
+            new_bucket = atomic_fetch_add(&self->hist_next,
+					  fa_ptr_incr(lohat_a_history_t));
             /* This is us testing to see if we need to resize; once
              * 'hist_next' advances to 'hist_end', we know we have
              * given out all available ordered slots, which is set to
@@ -693,7 +694,8 @@ lohat_a_store_add(lohat_a_store_t *self,
 found_ptr_bucket:
         bucket = atomic_read(&ptrbucket->ptr);
         if (!bucket) {
-            new_bucket = atomic_fetch_add(&self->hist_next, PTR_STEP);
+            new_bucket = atomic_fetch_add(&self->hist_next,
+					  fa_ptr_incr(lohat_a_history_t));
 	    
             if (new_bucket >= self->hist_end) {
                 goto migrate_and_retry;
