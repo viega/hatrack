@@ -1,4 +1,4 @@
-check_PROGRAMS = test
+check_PROGRAMS = tests/test
 noinst_PROGRAMS = examples/basic
 
 # 64-bit systems will complain up the wazoo about the 128-bit CAS operations.
@@ -8,9 +8,9 @@ libhatrack_a_SOURCES = src/mmm.c src/debug.c src/xxhash.c src/counters.c src/hat
 
 lib_LIBRARIES = libhatrack.a
 
-test_SOURCES = src/test.c src/testhat.c
-test_CFLAGS = -Wall -Wextra -Wno-atomic-alignment -I./include/
-test_LDADD = ./libhatrack.a
+tests_test_SOURCES = tests/test.c tests/testhat.c
+tests_test_CFLAGS = -Wall -Wextra -Wno-atomic-alignment -I./include/
+tests_test_LDADD = ./libhatrack.a
 
 examples_basic_SOURCES = examples/basic.c
 examples_basic_CFLAGS = -Wall -Wextra -I./include
