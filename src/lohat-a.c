@@ -70,7 +70,7 @@ lohat_a_init(lohat_a_t *self)
 void *
 lohat_a_get(lohat_a_t *self, hatrack_hash_t hv, bool *found)
 {
-    void            *ret;
+    void *           ret;
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
@@ -87,7 +87,7 @@ void *
 lohat_a_put(lohat_a_t *self, hatrack_hash_t hv, void *item, bool *found)
 
 {
-    void            *ret;
+    void *           ret;
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
@@ -104,7 +104,7 @@ void *
 lohat_a_replace(lohat_a_t *self, hatrack_hash_t hv, void *item, bool *found)
 
 {
-    void            *ret;
+    void *           ret;
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
@@ -136,7 +136,7 @@ lohat_a_add(lohat_a_t *self, hatrack_hash_t hv, void *item)
 void *
 lohat_a_remove(lohat_a_t *self, hatrack_hash_t hv, bool *found)
 {
-    void            *ret;
+    void *           ret;
     lohat_a_store_t *store;
 
     mmm_start_basic_op();
@@ -152,11 +152,11 @@ lohat_a_remove(lohat_a_t *self, hatrack_hash_t hv, bool *found)
 void
 lohat_a_delete(lohat_a_t *self)
 {
-    lohat_a_store_t   *store;
+    lohat_a_store_t *  store;
     lohat_a_history_t *buckets;
     lohat_a_history_t *p;
     lohat_a_history_t *end;
-    lohat_record_t    *rec;
+    lohat_record_t *   rec;
 
     store   = atomic_load(&self->store_current);
     buckets = store->hist_buckets;
@@ -190,10 +190,10 @@ lohat_a_view(lohat_a_t *self, uint64_t *out_num, bool sort)
 {
     lohat_a_history_t *cur;
     lohat_a_history_t *end;
-    lohat_a_store_t   *store;
-    hatrack_view_t    *view;
-    hatrack_view_t    *p;
-    lohat_record_t    *rec;
+    lohat_a_store_t *  store;
+    hatrack_view_t *   view;
+    hatrack_view_t *   p;
+    lohat_record_t *   rec;
     uint64_t           epoch;
     uint64_t           sort_epoch;
     uint64_t           num_items;

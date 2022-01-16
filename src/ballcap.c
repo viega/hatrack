@@ -201,10 +201,10 @@ ballcap_len(ballcap_t *self)
 hatrack_view_t *
 ballcap_view(ballcap_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t   *view;
-    ballcap_store_t  *store;
+    hatrack_view_t *  view;
+    ballcap_store_t * store;
     ballcap_record_t *record;
-    hatrack_view_t   *p;
+    hatrack_view_t *  p;
     ballcap_bucket_t *cur;
     ballcap_bucket_t *end;
     uint64_t          count;
@@ -357,10 +357,10 @@ ballcap_store_get(ballcap_store_t *self, hatrack_hash_t hv, bool *found)
 
 static void *
 ballcap_store_put(ballcap_store_t *self,
-                  ballcap_t       *top,
+                  ballcap_t *      top,
                   hatrack_hash_t   hv,
-                  void            *item,
-                  bool            *found)
+                  void *           item,
+                  bool *           found)
 {
     uint64_t          bix;
     uint64_t          i;
@@ -368,7 +368,7 @@ ballcap_store_put(ballcap_store_t *self,
     ballcap_bucket_t *cur;
     ballcap_record_t *record;
     ballcap_record_t *old_record;
-    void             *ret;
+    void *            ret;
 
     last_slot    = self->last_slot;
     bix          = hatrack_bucket_index(hv, last_slot);
@@ -501,17 +501,17 @@ check_bucket_again:
 
 static void *
 ballcap_store_replace(ballcap_store_t *self,
-                      ballcap_t       *top,
+                      ballcap_t *      top,
                       hatrack_hash_t   hv,
-                      void            *item,
-                      bool            *found)
+                      void *           item,
+                      bool *           found)
 {
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
     ballcap_bucket_t *cur;
     ballcap_record_t *record;
-    void             *ret;
+    void *            ret;
 
     last_slot = self->last_slot;
 
@@ -591,9 +591,9 @@ ballcap_store_replace(ballcap_store_t *self,
 
 bool
 ballcap_store_add(ballcap_store_t *self,
-                  ballcap_t       *top,
+                  ballcap_t *      top,
                   hatrack_hash_t   hv,
-                  void            *item)
+                  void *           item)
 {
     uint64_t          bix;
     uint64_t          i;
@@ -694,16 +694,16 @@ fill_record:
 
 void *
 ballcap_store_remove(ballcap_store_t *self,
-                     ballcap_t       *top,
+                     ballcap_t *      top,
                      hatrack_hash_t   hv,
-                     bool            *found)
+                     bool *           found)
 {
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
     ballcap_bucket_t *cur;
     ballcap_record_t *record;
-    void             *ret;
+    void *            ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -774,7 +774,7 @@ ballcap_store_remove(ballcap_store_t *self,
 static ballcap_store_t *
 ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
 {
-    ballcap_store_t  *new_store;
+    ballcap_store_t * new_store;
     ballcap_bucket_t *cur;
     ballcap_bucket_t *target;
     uint64_t          new_size;

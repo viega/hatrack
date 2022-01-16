@@ -66,7 +66,7 @@ extern char            *hatrack_counter_names[];
 extern _Atomic uint64_t hatrack_yn_counters[][2];
 extern char            *hatrack_yn_counter_names[];
 
-enum64(hatrack_counter_names,
+enum64(hatrack_counter_names_enum,
     HATRACK_CTR_MALLOCS,
     HATRACK_CTR_FREES,
     HATRACK_CTR_RETIRE_UNUSED,
@@ -79,7 +79,7 @@ enum64(hatrack_counter_names,
     HATRACK_COUNTERS_NUM
 );
 
-enum64(hatrack_yn_counter_names,
+enum64(hatrack_yn_counter_names_enum,
     HATRACK_CTR_LINEAR_EPOCH_EQ = 0,
     HATRACK_CTR_COMMIT          = 1,
     HATRACK_CTR_COMMIT_HELPS    = 2,

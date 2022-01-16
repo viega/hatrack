@@ -570,9 +570,10 @@
 #define enum64(x, ...)                                                         \
     typedef enum                                                               \
     {                                                                          \
-        HACK_TO_MAKE_64_BIT_##x = 0xffffffffffffffff,                          \
-        __VA_ARGS__                                                            \
+        __VA_ARGS__,                                                           \
+        HACK_TO_MAKE_64_BIT_##x = 0xffffffffffffffff                           \
     } x
 #endif
 
 #endif
+

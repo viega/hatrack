@@ -185,7 +185,7 @@ void
 debug_pgrep(uintptr_t n)
 {
     char    s[HATRACK_PTR_CHRS + 1] = {};
-    char   *p                       = s + HATRACK_PTR_CHRS;
+    char *  p                       = s + HATRACK_PTR_CHRS;
     int64_t i;
 
     for (i = 0; i < HATRACK_PTR_CHRS; i++) {

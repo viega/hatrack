@@ -164,7 +164,7 @@ refhat_put(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     uint64_t         bix;
     uint64_t         i;
     refhat_bucket_t *cur;
-    void            *ret;
+    void *           ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
 
@@ -239,7 +239,7 @@ refhat_replace(refhat_t *self, hatrack_hash_t hv, void *item, bool *found)
     uint64_t         bix;
     uint64_t         i;
     refhat_bucket_t *cur;
-    void            *ret;
+    void *           ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
 
@@ -348,7 +348,7 @@ refhat_remove(refhat_t *self, hatrack_hash_t hv, bool *found)
     uint64_t         bix;
     uint64_t         i;
     refhat_bucket_t *cur;
-    void            *ret;
+    void *           ret;
 
     bix = hatrack_bucket_index(hv, self->last_slot);
 
@@ -439,8 +439,8 @@ refhat_len(refhat_t *self)
 hatrack_view_t *
 refhat_view(refhat_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t  *view;
-    hatrack_view_t  *p;
+    hatrack_view_t * view;
+    hatrack_view_t * p;
     refhat_bucket_t *cur;
     refhat_bucket_t *end;
 

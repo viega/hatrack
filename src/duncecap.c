@@ -143,7 +143,7 @@ duncecap_init(duncecap_t *self)
 void *
 duncecap_get(duncecap_t *self, hatrack_hash_t hv, bool *found)
 {
-    void             *ret;
+    void *            ret;
     duncecap_store_t *store;
 
     store = duncecap_reader_enter(self);
@@ -357,9 +357,9 @@ duncecap_len(duncecap_t *self)
 hatrack_view_t *
 duncecap_view(duncecap_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t    *view;
-    duncecap_store_t  *store;
-    hatrack_view_t    *p;
+    hatrack_view_t *   view;
+    duncecap_store_t * store;
+    hatrack_view_t *   p;
     duncecap_bucket_t *cur;
     duncecap_bucket_t *end;
     duncecap_record_t  record;

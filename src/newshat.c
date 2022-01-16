@@ -244,9 +244,9 @@ newshat_len(newshat_t *self)
 hatrack_view_t *
 newshat_view(newshat_t *self, uint64_t *num, bool sort)
 {
-    hatrack_view_t   *view;
-    newshat_store_t  *store;
-    hatrack_view_t   *p;
+    hatrack_view_t *  view;
+    newshat_store_t * store;
+    hatrack_view_t *  p;
     newshat_bucket_t *cur;
     newshat_bucket_t *end;
     newshat_record_t  record;
@@ -420,17 +420,17 @@ newshat_store_get(newshat_store_t *self, hatrack_hash_t hv, bool *found)
 
 static void *
 newshat_store_put(newshat_store_t *self,
-                  newshat_t       *top,
+                  newshat_t *      top,
                   hatrack_hash_t   hv,
-                  void            *item,
-                  bool            *found)
+                  void *           item,
+                  bool *           found)
 {
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
     newshat_bucket_t *cur;
     newshat_record_t  record;
-    void             *ret;
+    void *            ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -542,17 +542,17 @@ newshat_store_put(newshat_store_t *self,
 
 static void *
 newshat_store_replace(newshat_store_t *self,
-                      newshat_t       *top,
+                      newshat_t *      top,
                       hatrack_hash_t   hv,
-                      void            *item,
-                      bool            *found)
+                      void *           item,
+                      bool *           found)
 {
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
     newshat_bucket_t *cur;
     newshat_record_t  record;
-    void             *ret;
+    void *            ret;
 
     last_slot = self->last_slot;
 
@@ -627,9 +627,9 @@ newshat_store_replace(newshat_store_t *self,
 
 bool
 newshat_store_add(newshat_store_t *self,
-                  newshat_t       *top,
+                  newshat_t *      top,
                   hatrack_hash_t   hv,
-                  void            *item)
+                  void *           item)
 {
     uint64_t          bix;
     uint64_t          i;
@@ -718,16 +718,16 @@ newshat_store_add(newshat_store_t *self,
 
 void *
 newshat_store_remove(newshat_store_t *self,
-                     newshat_t       *top,
+                     newshat_t *      top,
                      hatrack_hash_t   hv,
-                     bool            *found)
+                     bool *           found)
 {
     uint64_t          bix;
     uint64_t          i;
     uint64_t          last_slot;
     newshat_bucket_t *cur;
     newshat_record_t  record;
-    void             *ret;
+    void *            ret;
 
     last_slot = self->last_slot;
     bix       = hatrack_bucket_index(hv, last_slot);
@@ -794,7 +794,7 @@ newshat_store_remove(newshat_store_t *self,
 static newshat_store_t *
 newshat_store_migrate(newshat_store_t *store, newshat_t *top)
 {
-    newshat_store_t  *new_store;
+    newshat_store_t * new_store;
     newshat_bucket_t *cur;
     newshat_bucket_t *target;
     newshat_record_t  record;
