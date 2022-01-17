@@ -77,7 +77,8 @@ woolhat_init(woolhat_t *self)
     atomic_store(&self->store_current, store);
 
     self->cleanup_func = NULL;
-    
+    self->cleanup_aux  = NULL;
+
     return;
 }
 
@@ -128,7 +129,7 @@ woolhat_delete(woolhat_t *self)
  * item in question (unless re-inserted, of course).
  *
  * That's useful for cases where the set conceptually show "own"
- * memory management of the items contained in it. 
+ * memory management of the items contained in it.
  *
  * Such cases are very application-dependent of course.
  *
@@ -136,7 +137,7 @@ woolhat_delete(woolhat_t *self)
  * notify when an item is officially removed from the table, because
  * witchhat does not use mmm on its records, so it does not know in a
  * timely manner when all threads that might be looking at the record
- * are done with the record. 
+ * are done with the record.
  *
  * We could address that by adding a mmm cleanup callback on stores
  * that triggers a user-callback on every item ejected since the last
@@ -148,9 +149,10 @@ woolhat_delete(woolhat_t *self)
  * for more detail on what we do there.
  */
 void
-woolhat_set_cleanup_func(woolhat_t *self, mmm_cleanup_func func)
+woolhat_set_cleanup_func(woolhat_t *self, mmm_cleanup_func func, void *aux)
 {
     self->cleanup_func = func;
+    self->cleanup_aux  = aux;
 
     return;
 }
@@ -507,11 +509,11 @@ found_history_bucket:
     }
 
     mmm_commit_write(candidate);
-    
+
     if (top->cleanup_func) {
-	mmm_add_cleanup_handler(candidate, top->cleanup_func);
+        mmm_add_cleanup_handler(candidate, top->cleanup_func, top->cleanup_aux);
     }
-	
+
     if (!head) {
 not_overwriting:
         atomic_fetch_add(&top->item_count, 1);
@@ -655,7 +657,7 @@ migrate_and_retry:
     mmm_retire(head);
 
     if (top->cleanup_func) {
-	mmm_add_cleanup_handler(candidate, top->cleanup_func);
+        mmm_add_cleanup_handler(candidate, top->cleanup_func, top->cleanup_aux);
     }
 
     if (found) {
@@ -766,16 +768,16 @@ found_history_bucket:
     if (head) {
         mmm_help_commit(head);
         mmm_commit_write(candidate);
-        mmm_retire(head);	
+        mmm_retire(head);
     }
     else {
         mmm_commit_write(candidate);
     }
 
     if (top->cleanup_func) {
-	mmm_add_cleanup_handler(candidate, top->cleanup_func);
+        mmm_add_cleanup_handler(candidate, top->cleanup_func, top->cleanup_aux);
     }
-    
+
     return true;
 }
 
@@ -885,9 +887,9 @@ migrate_and_retry:
     mmm_retire(head);
 
     if (top->cleanup_func) {
-	mmm_add_cleanup_handler(candidate, top->cleanup_func);
+        mmm_add_cleanup_handler(candidate, top->cleanup_func, top->cleanup_aux);
     }
-    
+
     if (found) {
         *found = true;
     }

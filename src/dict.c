@@ -21,8 +21,10 @@
 
 #include <hatrack.h>
 
+// clang-format off
 static hatrack_hash_t hatrack_dict_get_hash_value(hatrack_dict_t *, void *);
-static void           hatrack_dict_record_cleanup(void *);
+static void           hatrack_dict_record_eject  (hatrack_dict_item_t *,
+						  hatrack_free_handler_t);
 
 hatrack_dict_t *
 hatrack_dict_new(uint32_t key_type)
@@ -199,8 +201,9 @@ hatrack_dict_put(hatrack_dict_t *self, void *key, void *value)
 
     if (old_item) {
         if (self->free_handler) {
-            old_item->associated_dict = self;
-            mmm_add_cleanup_handler(old_item, hatrack_dict_record_cleanup);
+            mmm_add_cleanup_handler(old_item,
+                                    (mmm_cleanup_func)hatrack_dict_record_eject,
+                                    self->free_handler);
         }
 
         mmm_retire(old_item);
@@ -237,8 +240,9 @@ hatrack_dict_replace(hatrack_dict_t *self, void *key, void *value)
 
     if (old_item) {
         if (self->free_handler) {
-            old_item->associated_dict = self;
-            mmm_add_cleanup_handler(old_item, hatrack_dict_record_cleanup);
+            mmm_add_cleanup_handler(old_item,
+                                    (mmm_cleanup_func)hatrack_dict_record_eject,
+                                    self->free_handler);
         }
 
         mmm_retire(old_item);
@@ -298,8 +302,9 @@ hatrack_dict_remove(hatrack_dict_t *self, void *key)
 
     if (old_item) {
         if (self->free_handler) {
-            old_item->associated_dict = self;
-            mmm_add_cleanup_handler(old_item, hatrack_dict_record_cleanup);
+            mmm_add_cleanup_handler(old_item,
+                                    (mmm_cleanup_func)hatrack_dict_record_eject,
+                                    self->free_handler);
         }
 
         mmm_retire(old_item);
@@ -514,15 +519,10 @@ hatrack_dict_get_hash_value(hatrack_dict_t *self, void *key)
 }
 
 static void
-hatrack_dict_record_cleanup(void *void_record)
+hatrack_dict_record_eject(hatrack_dict_item_t *record,
+			  hatrack_free_handler_t callback)
 {
-    hatrack_dict_t      *dict;
-    hatrack_dict_item_t *record;
-
-    record = (hatrack_dict_item_t *)void_record;
-    dict   = (hatrack_dict_t *)record->associated_dict;
-
-    (*dict->free_handler)(record);
+    (*callback)(record);
 
     return;
 }

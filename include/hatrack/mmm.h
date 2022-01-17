@@ -41,7 +41,7 @@
  * on a per-store basis will use this cleanup function, and have a
  * handler run through to destroy the locks.
  */
-typedef void (*mmm_cleanup_func)(void *);
+typedef void (*mmm_cleanup_func)(void *, void *);
 
 typedef struct mmm_header_st    mmm_header_t;
 typedef struct mmm_free_tids_st mmm_free_tids_t;
@@ -82,6 +82,7 @@ struct mmm_header_st {
     _Atomic uint64_t write_epoch;
     uint64_t         retire_epoch;
     mmm_cleanup_func cleanup;
+    void            *cleanup_aux; // Data needed for cleanup, usually the object
     alignas(16)
     uint8_t          data[];
 };
@@ -608,11 +609,12 @@ mmm_alloc_committed(uint64_t size)
  * mutex objects.
  */
 static inline void
-mmm_add_cleanup_handler(void *ptr, void (*handler)(void *))
+mmm_add_cleanup_handler(void *ptr, mmm_cleanup_func handler, void *aux)
 {
     mmm_header_t *header = mmm_get_header(ptr);
 
-    header->cleanup = handler;
+    header->cleanup     = handler;
+    header->cleanup_aux = aux;
 
     return;
 }

@@ -378,7 +378,7 @@ newshat_store_new(uint64_t size)
     alloc_len = sizeof(newshat_store_t) + size * sizeof(newshat_bucket_t);
     ret       = (newshat_store_t *)mmm_alloc_committed(alloc_len);
 
-    mmm_add_cleanup_handler(ret, (void (*)(void *))newshat_store_delete);
+    mmm_add_cleanup_handler(ret, (mmm_cleanup_func)newshat_store_delete, NULL);
 
     ret->last_slot = size - 1;
     ret->threshold = hatrack_compute_table_threshold(size);

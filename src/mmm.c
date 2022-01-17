@@ -291,7 +291,7 @@ mmm_empty(void)
 
 	// Call the cleanup handler, if one exists.
 	if (tmp->cleanup) {
-	    (*tmp->cleanup)(&tmp->data);
+	    (*tmp->cleanup)(&tmp->data, tmp->cleanup_aux);
 	}
 	
 	free(tmp);

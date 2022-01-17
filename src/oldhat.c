@@ -472,7 +472,7 @@ oldhat_store_new(uint64_t size)
     store->last_slot = size - 1;
     store->threshold = hatrack_compute_table_threshold(size);
 
-    mmm_add_cleanup_handler(store, (void (*)(void *))oldhat_store_delete);
+    mmm_add_cleanup_handler(store, (mmm_cleanup_func)oldhat_store_delete, NULL);
 
     return store;
 }

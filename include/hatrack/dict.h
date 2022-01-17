@@ -50,7 +50,6 @@ typedef struct {
 typedef struct {
     void *key;
     void *value;
-    void *associated_dict;
 } hatrack_dict_item_t;
 
 typedef void *hatrack_dict_key_t;

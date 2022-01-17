@@ -200,7 +200,7 @@ ballcap_remove(ballcap_t *self, hatrack_hash_t hv, bool *found)
  * mutexes.
  */
 static void
-ballcap_store_delete(ballcap_store_t *self)
+ballcap_store_delete(ballcap_store_t *self, void *unused)
 {
     uint64_t i;
 
@@ -316,7 +316,7 @@ ballcap_store_new(uint64_t size)
     len = sizeof(ballcap_store_t) + size * sizeof(ballcap_bucket_t);
     ret = (ballcap_store_t *)mmm_alloc_committed(len);
 
-    mmm_add_cleanup_handler(ret, (void (*)(void *))ballcap_store_delete);
+    mmm_add_cleanup_handler(ret, (mmm_cleanup_func)ballcap_store_delete, NULL);
 
     ret->last_slot = size - 1;
     ret->threshold = hatrack_compute_table_threshold(size);
