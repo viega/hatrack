@@ -165,12 +165,21 @@ hatrack_dict_get(hatrack_dict_t *self, void *key, bool *found)
     return item->value;
 }
 
+/*
+ * Because we are going to protect our dict_item allocations with mmm,
+ * and we don't want to double-call MMM: it will replace our
+ * reservation, and also end our reservation before we want it.
+ *
+ * We could do two layers of MMM, but instead we just lift it out here,
+ * and skip directly to the witchhat_store() calls.
+ */
 void
 hatrack_dict_put(hatrack_dict_t *self, void *key, void *value)
 {
     hatrack_hash_t       hv;
     hatrack_dict_item_t *new_item;
     hatrack_dict_item_t *old_item;
+    witchhat_store_t    *store;
 
     hv = hatrack_dict_get_hash_value(self, key);
 
@@ -179,8 +188,14 @@ hatrack_dict_put(hatrack_dict_t *self, void *key, void *value)
     new_item        = mmm_alloc_committed(sizeof(hatrack_dict_item_t));
     new_item->key   = key;
     new_item->value = value;
+    store           = atomic_read(&self->witchhat_instance.store_current);
 
-    old_item = witchhat_put(&self->witchhat_instance, hv, new_item, NULL);
+    old_item = witchhat_store_put(store,
+                                  &self->witchhat_instance,
+                                  hv,
+                                  new_item,
+                                  NULL,
+                                  0);
 
     if (old_item) {
         if (self->free_handler) {
@@ -202,6 +217,7 @@ hatrack_dict_replace(hatrack_dict_t *self, void *key, void *value)
     hatrack_hash_t       hv;
     hatrack_dict_item_t *new_item;
     hatrack_dict_item_t *old_item;
+    witchhat_store_t    *store;
 
     hv = hatrack_dict_get_hash_value(self, key);
 
@@ -210,8 +226,14 @@ hatrack_dict_replace(hatrack_dict_t *self, void *key, void *value)
     new_item        = mmm_alloc_committed(sizeof(hatrack_dict_item_t));
     new_item->key   = key;
     new_item->value = value;
+    store           = atomic_read(&self->witchhat_instance.store_current);
 
-    old_item = witchhat_replace(&self->witchhat_instance, hv, new_item, NULL);
+    old_item = witchhat_store_put(store,
+                                  &self->witchhat_instance,
+                                  hv,
+                                  new_item,
+                                  NULL,
+                                  0);
 
     if (old_item) {
         if (self->free_handler) {
@@ -236,6 +258,7 @@ hatrack_dict_add(hatrack_dict_t *self, void *key, void *value)
 {
     hatrack_hash_t       hv;
     hatrack_dict_item_t *new_item;
+    witchhat_store_t    *store;
 
     hv = hatrack_dict_get_hash_value(self, key);
 
@@ -244,8 +267,9 @@ hatrack_dict_add(hatrack_dict_t *self, void *key, void *value)
     new_item        = mmm_alloc_committed(sizeof(hatrack_dict_item_t));
     new_item->key   = key;
     new_item->value = value;
+    store           = atomic_read(&self->witchhat_instance.store_current);
 
-    if (witchhat_add(&self->witchhat_instance, hv, new_item)) {
+    if (witchhat_store_add(store, &self->witchhat_instance, hv, new_item, 0)) {
         mmm_end_op();
 
         return true;
@@ -262,12 +286,15 @@ hatrack_dict_remove(hatrack_dict_t *self, void *key)
 {
     hatrack_hash_t       hv;
     hatrack_dict_item_t *old_item;
+    witchhat_store_t    *store;
 
     hv = hatrack_dict_get_hash_value(self, key);
 
     mmm_start_basic_op();
 
-    old_item = witchhat_remove(&self->witchhat_instance, hv, NULL);
+    store = atomic_read(&self->witchhat_instance.store_current);
+    old_item
+        = witchhat_store_remove(store, &self->witchhat_instance, hv, NULL, 0);
 
     if (old_item) {
         if (self->free_handler) {

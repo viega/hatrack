@@ -45,9 +45,11 @@ static void *tophat_migrate_to_woolhat (tophat_t *);
  *
  * We simply dispatch to the right migration method based on the
  * dst_type field, set at initialization time.
+ *
+ * We also use witchhat_store_new(), but dict.c uses a bunch of the
+ * witchhat_store functions as well, so they got lifted to witchhat.h.
  */
 extern newshat_store_t  *newshat_store_new (uint64_t);
-extern witchhat_store_t *witchhat_store_new(uint64_t);
 extern ballcap_store_t  *ballcap_store_new (uint64_t);
 extern woolhat_store_t  *woolhat_store_new (uint64_t);
 

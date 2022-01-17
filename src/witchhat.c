@@ -36,28 +36,10 @@
 #include <hatrack.h>
 
 // clang-format off
-
-// Needs to be non-static because tophat needs it; nonetheless, do not
-// export this explicitly; it's effectively a "friend" function not public.
-       witchhat_store_t  *witchhat_store_new    (uint64_t);
+// Most of the store functions are needed by other modules, for better
+// or worse, so we lifted their prototypes into the header.
 static void              *witchhat_store_get    (witchhat_store_t *,
 						 hatrack_hash_t, bool *);
-static void              *witchhat_store_put    (witchhat_store_t *,
-						 witchhat_t *,
-						 hatrack_hash_t, 
-						 void *, bool *, uint64_t);
-static void              *witchhat_store_replace(witchhat_store_t *,
-						 witchhat_t *,
-						 hatrack_hash_t, 
-						 void *, bool *, uint64_t);
-static bool               witchhat_store_add    (witchhat_store_t *,
-						 witchhat_t *,
-						 hatrack_hash_t,
-						 void *, uint64_t);
-static void              *witchhat_store_remove (witchhat_store_t *,
-						 witchhat_t *,
-						 hatrack_hash_t,
-						 bool *, uint64_t);
 static witchhat_store_t  *witchhat_store_migrate(witchhat_store_t *,
 						 witchhat_t *);
 static inline bool        witchhat_help_required(uint64_t);
@@ -289,7 +271,7 @@ not_found:
     return NULL;
 }
 
-static void *
+void *
 witchhat_store_put(witchhat_store_t *self,
 		   witchhat_t       *top,
 		   hatrack_hash_t    hv1,
@@ -434,7 +416,7 @@ witchhat_store_put(witchhat_store_t *self,
     return item;
 }
 
-static void *
+void *
 witchhat_store_replace(witchhat_store_t *self,
 		       witchhat_t       *top,
 		       hatrack_hash_t    hv1,
@@ -554,7 +536,7 @@ witchhat_store_replace(witchhat_store_t *self,
     return record.item;
 }
 
-static bool
+bool
 witchhat_store_add(witchhat_store_t *self,
 		   witchhat_t       *top,
 		   hatrack_hash_t    hv1,
@@ -638,7 +620,7 @@ found_bucket:
     return false;
 }
 
-static void *
+void *
 witchhat_store_remove(witchhat_store_t *self,
 		      witchhat_t       *top,
 		      hatrack_hash_t    hv1,
