@@ -76,6 +76,8 @@ woolhat_init(woolhat_t *self)
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
 
+    self->cleanup_func = NULL;
+    
     return;
 }
 
@@ -111,6 +113,29 @@ woolhat_delete(woolhat_t *self)
 {
     woolhat_cleanup(self);
     free(self);
+
+    return;
+}
+
+/* woolhat_set_cleanup_func()
+ *
+ * If this is set, we will add the associated function as a handler
+ * for when we allocate records via MMM (though not stores).
+ *
+ * This allows our set implementation to determine when items in the
+ * set cannot again be accessed through the woolhat API, allowing us
+ * to notify the caller that the hash table is totally done with the
+ * item in question (unless re-inserted, of course).
+ *
+ * That's useful for cases where the set conceptually show "own"
+ * memory management of the items contained in it. 
+ *
+ * Such cases are very application-dependent of course.
+ */
+void
+woolhat_set_cleanup_func(woolhat_t *self, mmm_cleanup_func func)
+{
+    self->cleanup_func = func;
 
     return;
 }
@@ -467,7 +492,11 @@ found_history_bucket:
     }
 
     mmm_commit_write(candidate);
-
+    
+    if (top->cleanup_func) {
+	mmm_add_cleanup_handler(candidate, top->cleanup_func);
+    }
+	
     if (!head) {
 not_overwriting:
         atomic_fetch_add(&top->item_count, 1);
@@ -610,6 +639,10 @@ migrate_and_retry:
     mmm_commit_write(candidate);
     mmm_retire(head);
 
+    if (top->cleanup_func) {
+	mmm_add_cleanup_handler(candidate, top->cleanup_func);
+    }
+
     if (found) {
         *found = true;
     }
@@ -718,12 +751,16 @@ found_history_bucket:
     if (head) {
         mmm_help_commit(head);
         mmm_commit_write(candidate);
-        mmm_retire(head);
+        mmm_retire(head);	
     }
     else {
         mmm_commit_write(candidate);
     }
 
+    if (top->cleanup_func) {
+	mmm_add_cleanup_handler(candidate, top->cleanup_func);
+    }
+    
     return true;
 }
 
@@ -832,6 +869,10 @@ migrate_and_retry:
     mmm_commit_write(candidate);
     mmm_retire(head);
 
+    if (top->cleanup_func) {
+	mmm_add_cleanup_handler(candidate, top->cleanup_func);
+    }
+    
     if (found) {
         *found = true;
     }

@@ -62,12 +62,15 @@ typedef struct woolhat_st {
     _Atomic(woolhat_store_t *) store_current;
     _Atomic uint64_t           item_count;
     _Atomic uint64_t           help_needed;
+    mmm_cleanup_func           cleanup_func;
 } woolhat_t;
 
-woolhat_t      *woolhat_new    (void);
-void            woolhat_init   (woolhat_t *);
-void            woolhat_cleanup(woolhat_t *);
-void            woolhat_delete (woolhat_t *);
+woolhat_t      *woolhat_new             (void);
+void            woolhat_init            (woolhat_t *);
+void            woolhat_cleanup         (woolhat_t *);
+void            woolhat_delete          (woolhat_t *);
+void            woolhat_set_cleanup_func(woolhat_t *, mmm_cleanup_func);
+
 void           *woolhat_get    (woolhat_t *, hatrack_hash_t, bool *);
 void           *woolhat_put    (woolhat_t *, hatrack_hash_t, void *, bool *);
 void           *woolhat_replace(woolhat_t *, hatrack_hash_t, void *, bool *);
