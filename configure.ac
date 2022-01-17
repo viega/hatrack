@@ -27,6 +27,17 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 AC_TYPE_UINT8_T
 
+AC_CACHE_CHECK([for __int128_t],
+              [ac_cv_i128],
+	      [AC_COMPILE_IFELSE([
+	       AC_LANG_PROGRAM([__int128_t x;])],
+	           [ac_cv_i128=yes],
+ 	           [ac_cv_i128=no])])
+
+if test $ac_cv_i128 = yes; then
+  AC_DEFINE([HAVE___INT128_T], [1], [Defined when __int128_t exists])
+fi
+
 # Autconf doesn't seem to have an option to check for C11 unfortunately :/
 
 # Checks for header files.

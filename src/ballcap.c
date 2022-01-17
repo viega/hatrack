@@ -828,7 +828,7 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
             abort();
         }
 
-        if (cur->hv.w1 && cur->hv.w2 && !cur->record->deleted) {
+        if (!hatrack_bucket_unreserved(cur->hv) && !cur->record->deleted) {
             items_to_migrate++;
         }
     }

@@ -1201,6 +1201,8 @@ tophat_migrate_to_woolhat(tophat_t *self)
     new_table                = (woolhat_t *)malloc(sizeof(woolhat_t));
     new_table->store_current = woolhat_store_new(ctx->last_slot + 1);
     record_len               = sizeof(woolhat_record_t);
+    new_table->cleanup_func  = NULL;
+    new_table->cleanup_aux   = NULL;
     
     atomic_store(&new_table->help_needed, 0);
 

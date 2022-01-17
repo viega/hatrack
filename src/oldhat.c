@@ -1208,8 +1208,10 @@ oldhat_store_migrate(oldhat_store_t *self, oldhat_t *top)
 	
         do {
             if (!record) {
-                candidate_record->hv.w1  = 0;
-                candidate_record->hv.w2  = 0;
+
+		// Sets the hash value to 0.
+		hatrack_bucket_initialize(&candidate_record->hv);
+		
                 candidate_record->item   = NULL;
                 candidate_record->used   = false;
                 candidate_record->moving = true;

@@ -34,10 +34,15 @@
  * standin for identity, so that we never have to worry about
  * comparing keys.
  */
+
+#ifdef HAVE___INT128_T
+typedef __int128_t hatrack_hash_t;
+#else
 typedef struct {
     uint64_t w1;
     uint64_t w2;
 } hatrack_hash_t;
+#endif
 
 /* hatrack_view_t
  *
@@ -142,11 +147,32 @@ hatrack_new_size(uint64_t last_bucket, uint64_t size)
     return table_size;
 }
 
+#ifdef HAVE___INT128_T
+
+static inline bool
+hatrack_hashes_eq(hatrack_hash_t hv1, hatrack_hash_t hv2)
+{
+    return hv1 == hv2;
+}
+
+#else
+
 static inline bool
 hatrack_hashes_eq(hatrack_hash_t hv1, hatrack_hash_t hv2)
 {
     return (hv1.w1 == hv2.w1) && (hv1.w2 == hv2.w2);
 }
+
+#endif
+
+#ifdef HAVE___INT128_T
+static inline bool
+hatrack_hash_gt(hatrack_hash_t hv1, hatrack_hash_t hv2)
+{
+    return hv1 > hv2;
+}
+
+#else
 
 static inline bool
 hatrack_hash_gt(hatrack_hash_t hv1, hatrack_hash_t hv2)
@@ -162,15 +188,29 @@ hatrack_hash_gt(hatrack_hash_t hv1, hatrack_hash_t hv2)
     return false;
 }
 
+#endif
+
 /* Since we use 128-bit hash values, we can safely use the null hash
  * value to mean "unreserved" (and even "empty" in our locking
  * tables).
  */
+
+#ifdef HAVE___INT128_T
+
+static inline bool
+hatrack_bucket_unreserved(hatrack_hash_t hv)
+{
+    return !hv;
+}
+
+#else
 static inline bool
 hatrack_bucket_unreserved(hatrack_hash_t hv)
 {
     return !hv.w1 && !hv.w2;
 }
+
+#endif
 
 /*
  * Calculates the starting bucket that a hash value maps to, given the
@@ -183,16 +223,47 @@ hatrack_bucket_unreserved(hatrack_hash_t hv)
  * enough that it could matter a bit.
  *
  * Also, since our table sizes will never get to 2^64 (and since we
- * can use the bitwise AND due to the power of two table size), we
- * only need to look at one of the two 64-bit chunks in the hash
- * (conceptually the one we look at we consider the most significant
- * chunk).
+ * can use the bitwise AND due to the power of two table size), when
+ * we don't have a native 128-bit type, we only need to look at one of
+ * the two 64-bit chunks in the hash (conceptually the one we look at
+ * we consider the most significant chunk).
  */
+
+#ifdef HAVE___INT128_T
+
+static inline uint64_t
+hatrack_bucket_index(hatrack_hash_t hv, uint64_t last_slot)
+{
+    return hv & last_slot;
+}
+
+#else
+
 static inline uint64_t
 hatrack_bucket_index(hatrack_hash_t hv, uint64_t last_slot)
 {
     return hv.w1 & last_slot;
 }
+
+#endif
+
+#ifdef HAVE___INT128_T
+
+static inline void
+hatrack_bucket_initialize(hatrack_hash_t *hv)
+{
+    *hv = 0;
+}
+
+#else
+
+static inline void
+hatrack_bucket_initialize(hatrack_hash_t *hv)
+{
+    *hv->w1 = 0;
+    *hv->w2 = 0;
+}
+#endif
 
 /* These are just basic bitwise operations, but performing them on
  * pointers requires some messy casting.  These inline functions just

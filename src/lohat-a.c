@@ -1010,9 +1010,10 @@ didnt_win:
          *
          * New array starts off zero-initialized. If there's anything else
          * after any specific swap, it means we lost a race.
+	 *
+	 * hatrack_bucket_initialize() will zero-out expected_hv.
          */
-        expected_hv.w1 = 0;
-        expected_hv.w2 = 0;
+        hatrack_bucket_initialize(&expected_hv);
         expected_head  = NULL;
 
         cur_hv = atomic_read(&cur->hv);
@@ -1031,8 +1032,8 @@ didnt_win:
 
         for (i = 0; i <= new_store->last_slot; i++) {
             ptr_bucket     = &new_store->ptr_buckets[bix];
-            expected_hv.w1 = 0;
-            expected_hv.w2 = 0;
+
+	    hatrack_bucket_initialize(&expected_hv);
 	    
             if (!LCAS(&ptr_bucket->hv,
                       &expected_hv,

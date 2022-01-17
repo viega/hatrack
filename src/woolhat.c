@@ -1132,9 +1132,10 @@ didnt_win:
         bix = hatrack_bucket_index(hv, new_store->last_slot);
 
         for (j = 0; j <= new_store->last_slot; j++) {
-            bucket         = &new_store->hist_buckets[bix];
-            expected_hv.w1 = 0;
-            expected_hv.w2 = 0;
+            bucket = &new_store->hist_buckets[bix];
+
+            // Set expected_hv to 0.
+            hatrack_bucket_initialize(&expected_hv);
 
             if (!LCAS(&bucket->hv, &expected_hv, hv, WOOLHAT_CTR_MIGRATE_HV)) {
                 if (!hatrack_hashes_eq(expected_hv, hv)) {
