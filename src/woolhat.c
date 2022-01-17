@@ -321,6 +321,92 @@ woolhat_view(woolhat_t *self, uint64_t *out_num, bool sort)
     return view;
 }
 
+/* woolhat_view_epoch()
+ *
+ * This version of woolhat_view allows the caller to supply an epoch
+ * of interest, for use in set operations, so that we can use the same
+ * epoch across multiple sets. However, note that this requires the
+ * caller to use the appopriate calls to MMM start/end functions.
+ *
+ * Note that, unlike woolhat_view, this also plops in the hash value
+ * into the output, so that we can do membership tests.
+ *
+ * And, there's no sort option here; the caller must choose how to
+ * sort, and do it herself.
+ */
+hatrack_set_view_t *
+woolhat_view_epoch(woolhat_t *self, uint64_t *out_num, uint64_t epoch)
+{
+    woolhat_history_t  *cur;
+    woolhat_history_t  *end;
+    woolhat_store_t    *store;
+    hatrack_set_view_t *view;
+    hatrack_set_view_t *p;
+    woolhat_record_t   *rec;
+    uint64_t            sort_epoch;
+    uint64_t            num_items;
+    uint64_t            alloc_len;
+
+    store     = self->store_current;
+    cur       = store->hist_buckets;
+    end       = cur + (store->last_slot + 1);
+    alloc_len = sizeof(hatrack_set_view_t);
+    view      = (hatrack_set_view_t *)calloc(end - cur, alloc_len);
+    p         = view;
+
+    while (cur < end) {
+        rec = hatrack_pflag_clear(atomic_read(&cur->head),
+                                  WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
+
+        if (rec) {
+            mmm_help_commit(rec);
+        }
+
+        /* This loop is bounded by the number of writes to this bucket
+         * since the call to mmm_start_linearized_op(), which could
+         * be large, but not unbounded.
+         */
+        while (rec) {
+            sort_epoch = mmm_get_write_epoch(rec);
+            if (sort_epoch <= epoch) {
+                break;
+            }
+            rec = rec->next;
+        }
+
+        /* If the sort_epoch is larger than the epoch, then no records
+         * in this bucket are old enough to be part of the linearization.
+         * Similarly, if the top record is a delete record, then the
+         * bucket was empty at the linearization point.
+         */
+        if (sort_epoch > epoch || !rec || rec->deleted) {
+            cur++;
+            continue;
+        }
+
+        p->hv         = atomic_load(&cur->hv);
+        p->item       = rec->item;
+        p->sort_epoch = mmm_get_create_epoch(rec);
+
+        p++;
+        cur++;
+    }
+
+    num_items = p - view;
+    *out_num  = num_items;
+
+    if (!num_items) {
+        free(view);
+
+        return NULL;
+    }
+
+    view = (hatrack_set_view_t *)realloc(view,
+                                         num_items * sizeof(hatrack_view_t));
+
+    return view;
+}
+
 woolhat_store_t *
 woolhat_store_new(uint64_t size)
 {

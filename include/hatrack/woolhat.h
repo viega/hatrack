@@ -66,6 +66,18 @@ typedef struct woolhat_st {
     void                      *cleanup_aux;
 } woolhat_t;
 
+
+/* This is a special type of view result that includes the hash
+ * value, intended for set operations. Currently, it is only in use
+ * by woolhat (and by hatrack_set, which is built on woolhat).
+ */
+
+typedef struct {
+    hatrack_hash_t hv;
+    void          *item;
+    int64_t        sort_epoch;
+} hatrack_set_view_t;
+
 woolhat_t      *woolhat_new             (void);
 void            woolhat_init            (woolhat_t *);
 void            woolhat_cleanup         (woolhat_t *);
@@ -78,6 +90,8 @@ void           *woolhat_replace(woolhat_t *, hatrack_hash_t, void *, bool *);
 bool            woolhat_add    (woolhat_t *, hatrack_hash_t, void *);
 void           *woolhat_remove (woolhat_t *, hatrack_hash_t, bool *);
 uint64_t        woolhat_len    (woolhat_t *);
-hatrack_view_t *woolhat_view   (woolhat_t *, uint64_t *, bool);
+
+hatrack_view_t     *woolhat_view      (woolhat_t *, uint64_t *, bool);
+hatrack_set_view_t *woolhat_view_epoch(woolhat_t *, uint64_t *, uint64_t);
 
 #endif

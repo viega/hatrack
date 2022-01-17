@@ -67,7 +67,7 @@ typedef struct {
  */
 typedef struct {
     void    *item;
-    uint64_t sort_epoch;
+    int64_t  sort_epoch;
 } hatrack_view_t;
 
 /* These inline functions are used across all the hatrack
@@ -146,6 +146,20 @@ static inline bool
 hatrack_hashes_eq(hatrack_hash_t hv1, hatrack_hash_t hv2)
 {
     return (hv1.w1 == hv2.w1) && (hv1.w2 == hv2.w2);
+}
+
+static inline bool
+hatrack_hash_gt(hatrack_hash_t hv1, hatrack_hash_t hv2)
+{
+    if (hv1.w1 > hv2.w1) {
+	return true;
+    }
+
+    if ((hv1.w1 == hv2.w1) && (hv1.w2 > hv2.w2)) {
+	return true;
+    }
+    
+    return false;
 }
 
 /* Since we use 128-bit hash values, we can safely use the null hash
