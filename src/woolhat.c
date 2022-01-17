@@ -131,6 +131,21 @@ woolhat_delete(woolhat_t *self)
  * memory management of the items contained in it. 
  *
  * Such cases are very application-dependent of course.
+ *
+ * Note that it does not make quite as much sense to have witchhat
+ * notify when an item is officially removed from the table, because
+ * witchhat does not use mmm on its records, so it does not know in a
+ * timely manner when all threads that might be looking at the record
+ * are done with the record. 
+ *
+ * We could address that by adding a mmm cleanup callback on stores
+ * that triggers a user-callback on every item ejected since the last
+ * store migration, but that doesn't seem appropriate.
+ *
+ * Instead, we made the appropriate 'store' functions non-static so
+ * that implementations can use mmm themselves, and apply mmm on the
+ * items they store.  See the implementation of hatrack_dict (dict.c)
+ * for more detail on what we do there.
  */
 void
 woolhat_set_cleanup_func(woolhat_t *self, mmm_cleanup_func func)
