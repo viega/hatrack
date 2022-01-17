@@ -260,8 +260,8 @@ hatrack_bucket_initialize(hatrack_hash_t *hv)
 static inline void
 hatrack_bucket_initialize(hatrack_hash_t *hv)
 {
-    *hv->w1 = 0;
-    *hv->w2 = 0;
+    hv->w1 = 0;
+    hv->w2 = 0;
 }
 #endif
 
