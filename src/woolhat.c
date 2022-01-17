@@ -401,8 +401,8 @@ woolhat_view_epoch(woolhat_t *self, uint64_t *out_num, uint64_t epoch)
         return NULL;
     }
 
-    view = (hatrack_set_view_t *)realloc(view,
-                                         num_items * sizeof(hatrack_view_t));
+    alloc_len = num_items * sizeof(hatrack_set_view_t);
+    view      = (hatrack_set_view_t *)realloc(view, alloc_len);
 
     return view;
 }

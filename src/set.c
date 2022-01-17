@@ -204,7 +204,7 @@ hatrack_set_items_base(hatrack_set_t *self, uint64_t *num, bool sort)
     ret  = malloc(sizeof(void *) * *num);
 
     for (i = 0; i < *num; i++) {
-        ret[i] = view->item;
+        ret[i] = view[i].item;
     }
 
     free(view);
@@ -225,7 +225,53 @@ hatrack_set_items_sort(hatrack_set_t *self, uint64_t *num)
 }
 
 bool
-hatrack_set_is_superset(hatrack_set_t *set1, hatrack_set_t *set2)
+hatrack_set_is_eq(hatrack_set_t *set1, hatrack_set_t *set2)
+{
+    bool                ret;
+    uint64_t            epoch;
+    uint64_t            num1;
+    uint64_t            num2;
+    hatrack_set_view_t *view1;
+    hatrack_set_view_t *view2;
+    uint64_t            i;
+
+    epoch = mmm_start_linearized_op();
+
+    view1 = woolhat_view_epoch(&set1->woolhat_instance, &num1, epoch);
+    view2 = woolhat_view_epoch(&set2->woolhat_instance, &num2, epoch);
+
+    if (num2 != num1) {
+        ret = false;
+        goto finished;
+    }
+
+    qsort(view1, num1, sizeof(hatrack_set_view_t), hatrack_set_hv_sort_cmp);
+    qsort(view2, num2, sizeof(hatrack_set_view_t), hatrack_set_hv_sort_cmp);
+
+    for (i = 0; i < num2; i++) {
+        /* view2's item must appear in view1, so we keep scanning
+         * view1, until we get to the end of view1, as long as
+         * view1's hash is less than view2's.
+         */
+        if (!hatrack_hashes_eq(view1[i].hv, view2[i].hv)) {
+            ret = false;
+            goto finished;
+        }
+    }
+
+    ret = true;
+
+finished:
+    mmm_end_op();
+
+    free(view1);
+    free(view2);
+
+    return ret;
+}
+
+bool
+hatrack_set_is_superset(hatrack_set_t *set1, hatrack_set_t *set2, bool proper)
 {
     bool                ret;
     uint64_t            epoch;
@@ -272,10 +318,17 @@ hatrack_set_is_superset(hatrack_set_t *set1, hatrack_set_t *set2)
                 ret = false;
                 goto finished;
             }
+
+            j++;
         }
     }
 
-    ret = true;
+    if (proper && (num1 == num2)) {
+        ret = false;
+    }
+    else {
+        ret = true;
+    }
 
 finished:
     mmm_end_op();
@@ -287,9 +340,9 @@ finished:
 }
 
 bool
-hatrack_set_is_subset(hatrack_set_t *set1, hatrack_set_t *set2)
+hatrack_set_is_subset(hatrack_set_t *set1, hatrack_set_t *set2, bool proper)
 {
-    return hatrack_set_is_superset(set2, set1);
+    return hatrack_set_is_superset(set2, set1, proper);
 }
 
 bool
