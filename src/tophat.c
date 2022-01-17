@@ -70,6 +70,86 @@ tophat_migrate(tophat_t *self)
     }
 }    
 
+tophat_t *
+tophat_new_fast_mx(void)
+{
+    tophat_t *ret;
+
+    ret = (tophat_t *)malloc(sizeof(tophat_t));
+
+    tophat_init_fast_mx(ret);
+
+    return ret;
+}
+
+tophat_t *
+tophat_new_fast_wf(void)
+{
+    tophat_t *ret;
+
+    ret = (tophat_t *)malloc(sizeof(tophat_t));
+
+    tophat_init_fast_wf(ret);
+
+    return ret;
+}
+
+tophat_t *
+tophat_new_cst_mx(void)
+{
+    tophat_t *ret;
+
+    ret = (tophat_t *)malloc(sizeof(tophat_t));
+
+    tophat_init_cst_mx(ret);
+
+    return ret;
+}
+
+tophat_t *
+tophat_new_cst_wf(void)
+{
+    tophat_t *ret;
+
+    ret = (tophat_t *)malloc(sizeof(tophat_t));
+
+    tophat_init_cst_wf(ret);
+
+    return ret;
+}
+
+/* If we've migrated to a multi-threaded table, then the
+ * single-threaded implementation is already cleaned up, except for
+ * deallocating the mutex.
+ * 
+ * Similarly, if we never migrate, then there's nothing there to clean
+ * up.
+ */
+void
+tophat_cleanup(tophat_t *self)
+{
+    if (atomic_load(&self->mt_table)) {
+	(*self->mt_vtable.delete)(self->mt_table);
+    }
+    else {
+	mmm_retire(self->st_table->buckets);
+	mmm_retire(self->st_table);
+    }
+    
+    pthread_mutex_destroy(&self->mutex);
+
+    return;
+}
+
+void
+tophat_delete(tophat_t *self)
+{
+    tophat_cleanup(self);
+    free(self);
+
+    return;
+}
+
 /* The different initialization functions simply set up the right
  * virtual call table for the multi-threaded instance (in case it's
  * needed), and takes note of which table type it will be migrating
@@ -677,30 +757,6 @@ tophat_remove(tophat_t *self, hatrack_hash_t hv, bool *found)
         bix = (bix + 1) & ctx->last_slot;
     }
     __builtin_unreachable();
-}
-
-/* If we've migrated to a multi-threaded table, then the
- * single-threaded implementation is already cleaned up, except for
- * deallocating the mutex.
- * 
- * Similarly, if we never migrate, then there's nothing there to clean
- * up.
- */
-void
-tophat_delete(tophat_t *self)
-{
-    if (atomic_load(&self->mt_table)) {
-	(*self->mt_vtable.delete)(self->mt_table);
-    }
-    else {
-	mmm_retire(self->st_table->buckets);
-	mmm_retire(self->st_table);
-    }
-    
-    pthread_mutex_destroy(&self->mutex);
-    free(self);
-
-    return;
 }
 
 uint64_t

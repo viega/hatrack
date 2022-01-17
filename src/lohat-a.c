@@ -60,6 +60,18 @@ static void             lohat_a_insertion_sort     (hatrack_view_t *, uint64_t);
 #endif
 // clang-format on
 
+lohat_a_t *
+lohat_a_new(void)
+{
+    lohat_a_t *ret;
+
+    ret = (lohat_a_t *)malloc(sizeof(lohat_a_t));
+
+    lohat_a_init(ret);
+
+    return ret;
+}
+
 void
 lohat_a_init(lohat_a_t *self)
 {
@@ -69,6 +81,44 @@ lohat_a_init(lohat_a_t *self)
 
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
+
+    return;
+}
+
+void
+lohat_a_cleanup(lohat_a_t *self)
+{
+    lohat_a_store_t   *store;
+    lohat_a_history_t *buckets;
+    lohat_a_history_t *p;
+    lohat_a_history_t *end;
+    lohat_record_t    *rec;
+
+    store   = atomic_load(&self->store_current);
+    buckets = store->hist_buckets;
+    p       = buckets;
+    end     = store->hist_end;
+
+    while (p < end) {
+        rec = hatrack_pflag_clear(atomic_load(&p->head),
+                                  LOHAT_F_MOVED | LOHAT_F_MOVING);
+
+        if (rec) {
+            mmm_retire_unused(rec);
+        }
+        p++;
+    }
+
+    lohat_a_retire_store(store);
+
+    return;
+}
+
+void
+lohat_a_delete(lohat_a_t *self)
+{
+    lohat_a_cleanup(self);
+    free(self);
 
     return;
 }
@@ -153,36 +203,6 @@ lohat_a_remove(lohat_a_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-void
-lohat_a_delete(lohat_a_t *self)
-{
-    lohat_a_store_t   *store;
-    lohat_a_history_t *buckets;
-    lohat_a_history_t *p;
-    lohat_a_history_t *end;
-    lohat_record_t    *rec;
-
-    store   = atomic_load(&self->store_current);
-    buckets = store->hist_buckets;
-    p       = buckets;
-    end     = store->hist_end;
-
-    while (p < end) {
-        rec = hatrack_pflag_clear(atomic_load(&p->head),
-                                  LOHAT_F_MOVED | LOHAT_F_MOVING);
-
-        if (rec) {
-            mmm_retire_unused(rec);
-        }
-        p++;
-    }
-
-    lohat_a_retire_store(store);
-    free(self);
-
-    return;
 }
 
 uint64_t

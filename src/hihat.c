@@ -40,6 +40,22 @@ static void          *hihat_store_remove (hihat_store_t *, hihat_t *,
 					  hatrack_hash_t, bool *);
 static hihat_store_t *hihat_store_migrate(hihat_store_t *, hihat_t *);
 
+/* hihat_new()
+ *
+ * A wrapper for hihat_init() that allocates with the default malloc.
+ */
+hihat_t *
+hihat_new(void)
+{
+    hihat_t *ret;
+
+    ret = (hihat_t *)malloc(sizeof(hihat_t));
+
+    hihat_init(ret);
+
+    return ret;
+}
+
 /* hihat_init()
  *
  * For the definition of HATRACK_MIN_SIZE, this is computed in
@@ -60,6 +76,43 @@ hihat_init(hihat_t *self)
 
     return;
 }
+
+/* hihat_cleanup()
+ *
+ * Cleans up the internal state of a hihat object. Generally, you
+ * should be confident that all threads except the one from which
+ * you're calling this have stopped using the table (generally meaning
+ * they no longer hold a reference to the store).
+ *
+ * Note that this doesn't deallocate the object itself. If you used
+ * hihat_new() to allocate, then call hihat_delete(), which will call
+ * hihat_cleanup() as well.
+ */
+void
+hihat_cleanup(hihat_t *self)
+{
+    mmm_retire(atomic_load(&self->store_current));
+
+    return;
+}
+
+
+/* hihat_delete()
+ *
+ * Deallocate a hihat object and its internal state (via hihat_cleanup).
+ *
+ * Note that this function assumes the hihat object was allocated
+ * via the default malloc. 
+ */
+void
+hihat_delete(hihat_t *self)
+{
+    hihat_cleanup(self);
+    free(self);
+
+    return;
+}
+
 
 /* hihat_get(), _put(), _replace(), _add(), _remove()
  *
@@ -210,28 +263,6 @@ hihat_remove(hihat_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-/*
- * hihat_delete()
- *
- * Deletes a hihat object. Generally, you should be confident that
- * all threads except the one from which you're calling this have
- * stopped using the table (generally meaning they no longer hold a
- * reference to the store).
- *
- * Note that this function assumes the hihat object was allocated
- * via the default malloc. If it wasn't, don't call this directly, but
- * do note that the stores were created via mmm_alloc(), and the most
- * recent store will need to be retired via mmm_retire(). 
- */
-void
-hihat_delete(hihat_t *self)
-{
-    mmm_retire(atomic_load(&self->store_current));
-    free(self);
-
-    return;
 }
 
 /* hihat_len()

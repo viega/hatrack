@@ -52,6 +52,19 @@ static void          *hihat_a_store_remove (hihat_store_t *, hihat_t *,
 					    hatrack_hash_t, bool *);
 static hihat_store_t *hihat_a_store_migrate(hihat_store_t *, hihat_t *);
 
+
+hihat_t *
+hihat_a_new(void)
+{
+    hihat_t *ret;
+
+    ret = (hihat_t *)malloc(sizeof(hihat_t));
+
+    hihat_a_init(ret);
+
+    return ret;
+}
+
 void
 hihat_a_init(hihat_t *self)
 {
@@ -65,6 +78,24 @@ hihat_a_init(hihat_t *self)
 
     return;
 }
+
+void
+hihat_a_cleanup(hihat_t *self)
+{
+    mmm_retire(atomic_load(&self->store_current));
+
+    return;
+}
+
+void
+hihat_a_delete(hihat_t *self)
+{
+    hihat_a_cleanup(self);
+    free(self);
+
+    return;
+}
+
 
 void *
 hihat_a_get(hihat_t *self, hatrack_hash_t hv, bool *found)
@@ -144,15 +175,6 @@ hihat_a_remove(hihat_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-void
-hihat_a_delete(hihat_t *self)
-{
-    mmm_retire(atomic_load(&self->store_current));
-    free(self);
-
-    return;
 }
 
 uint64_t

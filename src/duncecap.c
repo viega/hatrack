@@ -91,6 +91,23 @@ duncecap_viewer_exit(duncecap_t *self, duncecap_store_t *unused)
 }
 #endif
 
+/* duncecap_new()
+ *
+ * Allocates a new duncecap object with the system malloc, and
+ * initializes it.
+ */
+duncecap_t *
+duncecap_new(void)
+{
+    duncecap_t *ret;
+
+    ret = (duncecap_t *)malloc(sizeof(duncecap_t));
+
+    duncecap_init(ret);
+
+    return ret;
+}
+
 /* duncecap_init()
  *
  * It's expected that duncecap instances will be created via the
@@ -113,6 +130,54 @@ duncecap_init(duncecap_t *self)
     self->next_epoch    = 1;
 
     pthread_mutex_init(&self->mutex, NULL);
+
+    return;
+}
+
+/* duncecap_cleanup()
+ *
+ * This function is meant to be called when duncecap should clean up
+ * its own internal state before deallocation. When you do so, it's
+ * your responsibility to make sure that no threads are going to use
+ * the object anymore.
+ *
+ * duncecap_delete() below is similar, except that it also calls
+ * free() on the actual top-level object as well, under the assumption
+ * it was created with the default malloc implementation.
+ */
+void
+duncecap_cleanup(duncecap_t *self)
+{
+    pthread_mutex_destroy(&self->mutex);
+    free(self->store_current);
+
+    return;
+}
+
+/*
+ * duncecap_delete()
+ *
+ * Deletes a duncecap object. Generally, you should be confident that
+ * all threads except the one from which you're calling this have
+ * stopped using the table (generally meaning they no longer hold a
+ * reference to the store).
+ *
+ * Note that this function assumes the duncecap object was allocated
+ * via the default malloc. If it wasn't, don't call this directly, but
+ * do note that the stores were created via the system malloc, and the
+ * most recent store will need to be freed (and the mutex destroyed).
+ *
+ * This is particularly important, not just because you might use
+ * memory after freeing it (a reliability and security concern), but
+ * also because using a mutex after it's destroyed is undefined. In
+ * practice, there's a good chance that any thread waiting on this
+ * mutex when it's destroyed will hang indefinitely.
+ */
+void
+duncecap_delete(duncecap_t *self)
+{
+    duncecap_cleanup(self);
+    free(self);
 
     return;
 }
@@ -298,36 +363,6 @@ duncecap_remove(duncecap_t *self, hatrack_hash_t hv, bool *found)
     }
 
     return ret;
-}
-
-/*
- * duncecap_delete()
- *
- * Deletes a duncecap object. Generally, you should be confident that
- * all threads except the one from which you're calling this have
- * stopped using the table (generally meaning they no longer hold a
- * reference to the store).
- *
- * Note that this function assumes the duncecap object was allocated
- * via the default malloc. If it wasn't, don't call this directly, but
- * do note that the stores were created via the system malloc, and the
- * most recent store will need to be freed (and the mutex destroyed).
- *
- * This is particularly important, not just because you might use
- * memory after freeing it (a reliability and security concern), but
- * also because using a mutex after it's destroyed is undefined. In
- * practice, there's a good chance that any thread waiting on this
- * mutex when it's destroyed will hang indefinitely.
- */
-void
-duncecap_delete(duncecap_t *self)
-{
-    pthread_mutex_destroy(&self->mutex);
-
-    free(self->store_current);
-    free(self);
-
-    return;
 }
 
 /* duncecap_len()

@@ -53,9 +53,26 @@ static void            *swimcap_store_remove (swimcap_store_t *,
 static void             swimcap_migrate      (swimcap_t *);
 // clang-format on
 
+/* swimcap_new()
+ *
+ * Allocates a new swimcap object with the system malloc, and
+ * initializes it.
+ */
+swimcap_t *
+swimcap_new(void)
+{
+    swimcap_t *ret;
+
+    ret = (swimcap_t *)malloc(sizeof(swimcap_t));
+
+    swimcap_init(ret);
+
+    return ret;
+}
+
 /* swimcap_init()
  *
- * This is identical to swimcap_init().
+ * This is identical to duncecap_init().
  *
  * It's expected that swimcap instances will be created via the
  * default malloc.  This function cannot rely on zero-initialization
@@ -77,6 +94,56 @@ swimcap_init(swimcap_t *self)
     self->store_current = store;
 
     pthread_mutex_init(&self->write_mutex, NULL);
+
+    return;
+}
+
+/* swimcap_cleanup()
+ *
+ * This function is meant to be called when the table should clean up
+ * its own internal state before deallocation. When you do so, it's
+ * your responsibility to make sure that no threads are going to use
+ * the object anymore.
+ *
+ * the delete function below is similar, except that it also calls
+ * free() on the actual top-level object as well, under the assumption
+ * it was created with the default malloc implementation.
+ */
+void
+swimcap_cleanup(swimcap_t *self)
+{
+    pthread_mutex_destroy(&self->write_mutex);
+    mmm_retire(self->store_current);
+
+    return;
+}
+
+/*
+ * swimcap_delete()
+ *
+ * This implementation is identical to swimcap_delete().
+ *
+ * Deletes a swimcap object. Generally, you should be confident that
+ * all threads except the one from which you're calling this have
+ * stopped using the table (generally meaning they no longer hold a
+ * reference to the store).
+ *
+ * Note that this function assumes the swimcap object was allocated
+ * via the default malloc. If it wasn't, don't call this directly, but
+ * do note that the stores were created via the system malloc, and the
+ * most recent store will need to be freed (and the mutex destroyed).
+ *
+ * This is particularly important, not just because you might use
+ * memory after freeing it (a reliability and security concern), but
+ * also because using a mutex after it's destroyed is undefined. In
+ * practice, there's a good chance that any thread waiting on this
+ * mutex when it's destroyed will hang indefinitely.
+ */
+void
+swimcap_delete(swimcap_t *self)
+{
+    swimcap_cleanup(self);
+    free(self);
 
     return;
 }
@@ -284,37 +351,6 @@ swimcap_remove(swimcap_t *self, hatrack_hash_t hv, bool *found)
     }
 
     return ret;
-}
-
-/*
- * swimcap_delete()
- *
- * This implementation is identical to swimcap_delete().
- *
- * Deletes a swimcap object. Generally, you should be confident that
- * all threads except the one from which you're calling this have
- * stopped using the table (generally meaning they no longer hold a
- * reference to the store).
- *
- * Note that this function assumes the swimcap object was allocated
- * via the default malloc. If it wasn't, don't call this directly, but
- * do note that the stores were created via the system malloc, and the
- * most recent store will need to be freed (and the mutex destroyed).
- *
- * This is particularly important, not just because you might use
- * memory after freeing it (a reliability and security concern), but
- * also because using a mutex after it's destroyed is undefined. In
- * practice, there's a good chance that any thread waiting on this
- * mutex when it's destroyed will hang indefinitely.
- */
-void
-swimcap_delete(swimcap_t *self)
-{
-    pthread_mutex_destroy(&self->write_mutex);
-    mmm_retire(self->store_current);
-    free(self);
-
-    return;
 }
 
 /* swimcap_len()

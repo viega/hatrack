@@ -152,6 +152,18 @@ static oldhat_store_t  *oldhat_store_migrate(oldhat_store_t *, oldhat_t *);
  * other hash table; see refhat.c or swimcap.c for more details on the
  * parameters, if needed.
  */
+oldhat_t *
+oldhat_new(void)
+{
+    oldhat_t *ret;
+
+    ret = (oldhat_t *)malloc(sizeof(oldhat_t));
+
+    oldhat_init(ret);
+
+    return ret;
+}
+
 void
 oldhat_init(oldhat_t *self)
 {
@@ -161,6 +173,50 @@ oldhat_init(oldhat_t *self)
 
     atomic_store(&self->store_current, store);
     atomic_store(&self->item_count, 0);
+
+    return;
+}
+
+/* oldhat_cleanup()
+ *
+ * Cleans up the internal state of an oldhat object. Generally, you
+ * should be confident that all threads except the one from which
+ * you're calling this have stopped using the table (generally meaning
+ * they no longer hold a reference to the store).
+ *
+ * Note that this function does not clean up the top-level object. You
+ * can either free it yourself (however it was allocated), or if you
+ * used oldhat_new() or the default malloc, you can call
+ * oldhat_delete(), in which case you should NOT call this function.
+ */
+void
+oldhat_cleanup(oldhat_t *self)
+{
+    oldhat_store_t *store;
+
+    store = atomic_load(&self->store_current);
+
+    mmm_retire(store);
+    return;
+}
+
+/* oldhat_delete()
+ *
+ * Deletes an oldhat object. Generally, you should be confident that
+ * all threads except the one from which you're calling this have
+ * stopped using the table (generally meaning they no longer hold a
+ * reference to the store).
+ *
+ * Note that this function assumes the oldhat object was allocated via
+ * the default malloc. If it wasn't, don't call this directly, but do
+ * note that the stores were created via mmm_alloc(), and the most
+ * recent store will need to be retired via mmm_retire().
+ */
+void
+oldhat_delete(oldhat_t *self)
+{
+    oldhat_cleanup(self);
+    free(self);
 
     return;
 }
@@ -271,31 +327,6 @@ oldhat_remove(oldhat_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-/* oldhat_delete()
- *
- * Deletes an oldhat object. Generally, you should be confident that
- * all threads except the one from which you're calling this have
- * stopped using the table (generally meaning they no longer hold a
- * reference to the store).
- *
- * Note that this function assumes the oldhat object was allocated via
- * the default malloc. If it wasn't, don't call this directly, but do
- * note that the stores were created via mmm_alloc(), and the most
- * recent store will need to be retired via mmm_retire().
- */
-void
-oldhat_delete(oldhat_t *self)
-{
-    oldhat_store_t *store;
-
-    store = atomic_load(&self->store_current);
-
-    mmm_retire(store);
-    free(self);
-
-    return;
 }
 
 /* oldhat_len()

@@ -24,6 +24,24 @@
 
 static void refhat_migrate(refhat_t *);
 
+/* refhat_new()
+ *
+ * Allocates a new refhat object with the system malloc, and
+ * initializes it.
+ */
+
+refhat_t *
+refhat_new(void)
+{
+    refhat_t *ret;
+
+    ret = (refhat_t *)malloc(sizeof(refhat_t));
+
+    refhat_init(ret);
+
+    return ret;
+}
+
 /* refhat_init()
  *
  * It's expected that refhat instances will be created via the default
@@ -51,6 +69,40 @@ refhat_init(refhat_t *self)
     self->item_count = 0;
     self->next_epoch = 1;
     self->buckets    = (refhat_bucket_t *)calloc(size, sizeof(refhat_bucket_t));
+
+    return;
+}
+
+/* refhat_cleanup()
+ *
+ * This function is meant to be called for refhat to clean up its own
+ * internal state before deallocation.
+ *
+ * refhat_delete() below is similar, except deletes the actual refhat
+ * object as well, under the assumption that it was allocated via the
+ * system malloc.
+ */
+
+void
+refhat_cleanup(refhat_t *self)
+{
+    free(self->buckets);
+
+    return;
+}
+
+/* refhat_delete()
+ *
+ * This deallocates a table allocated with the default malloc.  The
+ * buckets will always be allocated by the default malloc, so if,
+ * for some reason, you use a different allocator, use the default
+ * malloc on the buckets, and delete the object yourself.
+ */
+void
+refhat_delete(refhat_t *self)
+{
+    refhat_cleanup(self);
+    free(self);
 
     return;
 }
@@ -387,22 +439,6 @@ refhat_remove(refhat_t *self, hatrack_hash_t hv, bool *found)
         bix = (bix + 1) & self->last_slot;
     }
     __builtin_unreachable();
-}
-
-/* refhat_delete()
- *
- * This deallocates a table allocated with the default malloc.  The
- * buckets will always be allocated by the default malloc, so if,
- * for some reason, you use a different allocator, use the default
- * malloc on the buckets, and delete the object yourself.
- */
-void
-refhat_delete(refhat_t *self)
-{
-    free(self->buckets);
-    free(self);
-
-    return;
 }
 
 /* refhat_len()

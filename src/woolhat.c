@@ -53,6 +53,18 @@ static inline bool      woolhat_need_to_help (woolhat_t *);
 
 // clang-format on
 
+woolhat_t *
+woolhat_new(void)
+{
+    woolhat_t *ret;
+
+    ret = (woolhat_t *)malloc(sizeof(woolhat_t));
+
+    woolhat_init(ret);
+
+    return ret;
+}
+
 void
 woolhat_init(woolhat_t *self)
 {
@@ -63,6 +75,42 @@ woolhat_init(woolhat_t *self)
     atomic_store(&self->help_needed, 0);
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
+
+    return;
+}
+
+void
+woolhat_cleanup(woolhat_t *self)
+{
+    woolhat_store_t   *store;
+    woolhat_history_t *buckets;
+    woolhat_history_t *p;
+    woolhat_history_t *end;
+    woolhat_record_t  *rec;
+
+    store   = atomic_load(&self->store_current);
+    buckets = store->hist_buckets;
+    p       = buckets;
+    end     = buckets + (store->last_slot + 1);
+
+    while (p < end) {
+        rec = atomic_load(&p->head);
+        if (rec) {
+            mmm_retire_unused(rec);
+        }
+        p++;
+    }
+
+    mmm_retire(store);
+
+    return;
+}
+
+void
+woolhat_delete(woolhat_t *self)
+{
+    woolhat_cleanup(self);
+    free(self);
 
     return;
 }
@@ -145,34 +193,6 @@ woolhat_remove(woolhat_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-void
-woolhat_delete(woolhat_t *self)
-{
-    woolhat_store_t   *store;
-    woolhat_history_t *buckets;
-    woolhat_history_t *p;
-    woolhat_history_t *end;
-    woolhat_record_t  *rec;
-
-    store   = atomic_load(&self->store_current);
-    buckets = store->hist_buckets;
-    p       = buckets;
-    end     = buckets + (store->last_slot + 1);
-
-    while (p < end) {
-        rec = atomic_load(&p->head);
-        if (rec) {
-            mmm_retire_unused(rec);
-        }
-        p++;
-    }
-
-    mmm_retire(store);
-    free(self);
-
-    return;
 }
 
 uint64_t

@@ -44,6 +44,18 @@ static lohat_store_t  *lohat_store_migrate(lohat_store_t *, lohat_t *);
 
 // clang-format on
 
+lohat_t *
+lohat_new(void)
+{
+    lohat_t *ret;
+
+    ret = (lohat_t *)malloc(sizeof(lohat_t));
+
+    lohat_init(ret);
+
+    return ret;
+}
+
 // While mmm zeros out the memory it allocates, the system allocator may
 // not, so explicitly zero out item_count to be cautious.
 void
@@ -55,6 +67,74 @@ lohat_init(lohat_t *self)
 
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);
+
+    return;
+}
+
+/* lohat_cleanup()
+ *
+ * Deletes the internal state of a lohat object. Generally, you should
+ * be confident that all threads except the one from which you're
+ * calling this have stopped using the table (generally meaning they
+ * no longer hold a reference to the store).
+ *
+ * Note that, the most current store will also most likely have
+ * buckets that have not been retired. We could have a store register
+ * a callback with MMM to go through once it's time to retire the
+ * toplevel store.
+ *
+ * However, since no threads can be active here, we can just go
+ * through all the buckets of the top-level store, and free them all.
+ * Again, its important that this happen AFTER all threads are done
+ * with the table.
+ *
+ * It means there will be no migration in process (no sub-store to
+ * delete), and that we can immediately retire any record that's
+ * currently in the table.
+ *
+ */
+void
+lohat_cleanup(lohat_t *self)
+{
+    lohat_store_t   *store;
+    lohat_history_t *buckets;
+    lohat_history_t *p;
+    lohat_history_t *end;
+    lohat_record_t  *rec;
+
+    store   = atomic_load(&self->store_current);
+    buckets = store->hist_buckets;
+    p       = buckets;
+    end     = buckets + (store->last_slot + 1);
+
+    while (p < end) {
+        rec = atomic_load(&p->head);
+
+        if (rec) {
+            mmm_retire_unused(rec);
+        }
+        p++;
+    }
+
+    mmm_retire(store);
+
+    return;
+}
+
+/* lohat_delete()
+ *
+ * Deletes both a lohat object's internal state (via lohat_cleanup) as
+ * well as the object itself, assuming it was allocated by the default
+ * alloc (e.g., via lohat_new).
+ *
+ * This function assumes you've taken care to ensure no threads are
+ * still using the table.
+ */
+void
+lohat_delete(lohat_t *self)
+{
+    lohat_cleanup(self);
+    free(self);
 
     return;
 }
@@ -161,63 +241,6 @@ lohat_remove(lohat_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-/*
- * lohat_delete()
- *
- * Deletes a lohat object. Generally, you should be confident that
- * all threads except the one from which you're calling this have
- * stopped using the table (generally meaning they no longer hold a
- * reference to the store).
- *
- * Note that this function assumes the lohat object was allocated
- * via the default malloc. If it wasn't, don't call this directly, but
- * do note that the stores were created via mmm_alloc(), and the most
- * recent store will need to be retired via mmm_retire().
- *
- * Note that, the most current store will also most likely have
- * buckets that have not been retired. We could have a store register
- * a callback with MMM to go through once it's time to retire the
- * toplevel store.
- *
- * However, since no threads can be active here, we can just go
- * through all the buckets of the top-level store, and free them all.
- * Again, its important that this happen AFTER all threads are done
- * with the table.
- *
- * It means there will be no migration in process (no sub-store to
- * delete), and that we can immediately retire any record that's
- * currently in the table.
- *
- */
-void
-lohat_delete(lohat_t *self)
-{
-    lohat_store_t   *store;
-    lohat_history_t *buckets;
-    lohat_history_t *p;
-    lohat_history_t *end;
-    lohat_record_t  *rec;
-
-    store   = atomic_load(&self->store_current);
-    buckets = store->hist_buckets;
-    p       = buckets;
-    end     = buckets + (store->last_slot + 1);
-
-    while (p < end) {
-        rec = atomic_load(&p->head);
-
-        if (rec) {
-            mmm_retire_unused(rec);
-        }
-        p++;
-    }
-
-    mmm_retire(store);
-    free(self);
-
-    return;
 }
 
 /* lohat_len()

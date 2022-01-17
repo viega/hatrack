@@ -184,13 +184,15 @@ typedef struct {
  * choose a 3-universal keyed hash function, or if hash values need to
  * be consistent across runs, something fast and practical like XXH3.
  */
+oldhat_t       *oldhat_new    (void);
 void            oldhat_init   (oldhat_t *);
+void            oldhat_cleanup(oldhat_t *);
+void            oldhat_delete (oldhat_t *);
 void           *oldhat_get    (oldhat_t *, hatrack_hash_t, bool *);
 void           *oldhat_put    (oldhat_t *, hatrack_hash_t, void *, bool *);
 void           *oldhat_replace(oldhat_t *, hatrack_hash_t, void *, bool *);
 bool            oldhat_add    (oldhat_t *, hatrack_hash_t, void *);
 void           *oldhat_remove (oldhat_t *, hatrack_hash_t, bool *);
-void            oldhat_delete (oldhat_t *);
 uint64_t        oldhat_len    (oldhat_t *);
 hatrack_view_t *oldhat_view   (oldhat_t *, uint64_t *, bool);
 

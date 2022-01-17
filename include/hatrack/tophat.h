@@ -218,16 +218,21 @@ typedef struct {
  * _mx   = Mutex variant
  * _wf   = Wait-Free variant
  */
+tophat_t       *tophat_new_fast_mx (void);
+tophat_t       *tophat_new_fast_wf (void);
+tophat_t       *tophat_new_cst_mx  (void);
+tophat_t       *tophat_new_cst_wf  (void);
 void            tophat_init_fast_mx(tophat_t *);
 void            tophat_init_fast_wf(tophat_t *);
 void            tophat_init_cst_mx (tophat_t *);
 void            tophat_init_cst_wf (tophat_t *);
+void            tophat_cleanup     (tophat_t *);
+void            tophat_delete      (tophat_t *);
 void           *tophat_get         (tophat_t *, hatrack_hash_t, bool *);
 void           *tophat_put         (tophat_t *, hatrack_hash_t, void *, bool *);
 void           *tophat_replace     (tophat_t *, hatrack_hash_t, void *, bool *);
 bool            tophat_add         (tophat_t *, hatrack_hash_t, void *);
 void           *tophat_remove      (tophat_t *, hatrack_hash_t, bool *);
-void            tophat_delete      (tophat_t *);
 uint64_t        tophat_len         (tophat_t *);
 hatrack_view_t *tophat_view        (tophat_t *, uint64_t *, bool);
 

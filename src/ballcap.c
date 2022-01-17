@@ -65,6 +65,18 @@ static ballcap_store_t *ballcap_store_migrate(ballcap_store_t *, ballcap_t *);
 
 // clang-format on
 
+ballcap_t *
+ballcap_new(void)
+{
+    ballcap_t *ret;
+
+    ret = (ballcap_t *)malloc(sizeof(ballcap_t));
+
+    ballcap_init(ret);
+
+    return ret;
+}
+
 void
 ballcap_init(ballcap_t *self)
 {
@@ -76,6 +88,38 @@ ballcap_init(ballcap_t *self)
     self->store_current = store;
 
     pthread_mutex_init(&self->migrate_mutex, NULL);
+
+    return;
+}
+
+void
+ballcap_cleanup(ballcap_t *self)
+{
+    uint64_t          i;
+    ballcap_bucket_t *bucket;
+
+    for (i = 0; i <= self->store_current->last_slot; i++) {
+        bucket = &self->store_current->buckets[i];
+
+        if (bucket->record) {
+            mmm_retire_unused(bucket->record);
+        }
+    }
+
+    mmm_retire_unused(self->store_current);
+
+    if (pthread_mutex_destroy(&self->migrate_mutex)) {
+        abort();
+    }
+
+    return;
+}
+
+void
+ballcap_delete(ballcap_t *self)
+{
+    ballcap_cleanup(self);
+    free(self);
 
     return;
 }
@@ -148,31 +192,6 @@ ballcap_remove(ballcap_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-void
-ballcap_delete(ballcap_t *self)
-{
-    uint64_t          i;
-    ballcap_bucket_t *bucket;
-
-    for (i = 0; i <= self->store_current->last_slot; i++) {
-        bucket = &self->store_current->buckets[i];
-
-        if (bucket->record) {
-            mmm_retire_unused(bucket->record);
-        }
-    }
-
-    mmm_retire_unused(self->store_current);
-
-    if (pthread_mutex_destroy(&self->migrate_mutex)) {
-        abort();
-    }
-
-    free(self);
-
-    return;
 }
 
 /*

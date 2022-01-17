@@ -45,6 +45,18 @@ static witchhat_store_t  *witchhat_store_migrate(witchhat_store_t *,
 static inline bool        witchhat_help_required(uint64_t);
 static inline bool        witchhat_need_to_help (witchhat_t *);
 
+witchhat_t *
+witchhat_new(void)
+{
+    witchhat_t *ret;
+
+    ret = (witchhat_t *)malloc(sizeof(witchhat_t));
+
+    witchhat_init(ret);
+
+    return ret;
+}
+
 void
 witchhat_init(witchhat_t *self)
 {
@@ -55,6 +67,23 @@ witchhat_init(witchhat_t *self)
     
     atomic_store(&self->store_current, store);
     atomic_store(&self->item_count, 0);
+
+    return;
+}
+
+void
+witchhat_cleanup(witchhat_t *self)
+{
+    mmm_retire(atomic_load(&self->store_current));
+
+    return;
+}
+
+void
+witchhat_delete(witchhat_t *self)
+{
+    witchhat_cleanup(self);
+    free(self);
 
     return;
 }
@@ -137,15 +166,6 @@ witchhat_remove(witchhat_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-void
-witchhat_delete(witchhat_t *self)
-{
-    mmm_retire(atomic_load(&self->store_current));
-    free(self);
-
-    return;
 }
 
 uint64_t

@@ -39,5 +39,8 @@
 #include <hatrack/duncecap.h>
 #include <hatrack/refhat.h>
 
+#include <hatrack/dict.h>
+#include <hatrack/set.h>
+
 #include <hatrack/hash.h>
 #endif

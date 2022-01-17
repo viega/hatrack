@@ -37,16 +37,6 @@ hatrack_dict_new(uint32_t key_type)
 }
 
 void
-hatrack_dict_delete(hatrack_dict_t *self)
-{
-    hatrack_dict_cleanup(self);
-
-    free(self);
-
-    return;
-}
-
-void
 hatrack_dict_init(hatrack_dict_t *self, uint32_t key_type)
 {
     witchhat_init(&self->witchhat_instance);
@@ -84,7 +74,7 @@ hatrack_dict_cleanup(hatrack_dict_t *self)
     witchhat_record_t  record;
 
     if (self->free_handler) {
-        store = self->witchhat_instance.store_current;
+        store = atomic_load(&self->witchhat_instance.store_current);
 
         for (i = 0; i <= store->last_slot; i++) {
             bucket = &store->buckets[i];
@@ -105,6 +95,16 @@ hatrack_dict_cleanup(hatrack_dict_t *self)
     }
 
     mmm_retire(atomic_load(&self->witchhat_instance.store_current));
+
+    return;
+}
+
+void
+hatrack_dict_delete(hatrack_dict_t *self)
+{
+    hatrack_dict_cleanup(self);
+
+    free(self);
 
     return;
 }

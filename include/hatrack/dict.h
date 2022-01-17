@@ -34,7 +34,7 @@ enum
     HATRACK_DICT_KEY_TYPE_OBJ_REAL,
     HATRACK_DICT_KEY_TYPE_OBJ_CSTR,
     HATRACK_DICT_KEY_TYPE_OBJ_PTR,
-    HATRACK_DICT_KEY_TYPE_OBJ_CUSTOM,
+    HATRACK_DICT_KEY_TYPE_OBJ_CUSTOM
 };
 
 enum
@@ -71,27 +71,28 @@ typedef struct {
     uint32_t               key_type;
 } hatrack_dict_t;
 
-hatrack_dict_t *hatrack_dict_new(uint32_t);
-void            hatrack_dict_delete(hatrack_dict_t *);
-void            hatrack_dict_init(hatrack_dict_t *, uint32_t);
+// clang-format off
+hatrack_dict_t *hatrack_dict_new    (uint32_t);
+void            hatrack_dict_init   (hatrack_dict_t *, uint32_t);
 void            hatrack_dict_cleanup(hatrack_dict_t *);
+void            hatrack_dict_delete (hatrack_dict_t *);
 
-void hatrack_dict_set_hash_offset(hatrack_dict_t *, int32_t);
+void hatrack_dict_set_hash_offset (hatrack_dict_t *, int32_t);
 void hatrack_dict_set_cache_offset(hatrack_dict_t *, int32_t);
-void hatrack_dict_set_custom_hash(hatrack_dict_t *, hatrack_hash_function_t);
+void hatrack_dict_set_custom_hash (hatrack_dict_t *, hatrack_hash_function_t);
 void hatrack_dict_set_free_handler(hatrack_dict_t *, hatrack_free_handler_t);
 
-void *hatrack_dict_get(hatrack_dict_t *, void *, bool *);
-void  hatrack_dict_put(hatrack_dict_t *, void *, void *);
+void *hatrack_dict_get    (hatrack_dict_t *, void *, bool *);
+void  hatrack_dict_put    (hatrack_dict_t *, void *, void *);
 bool  hatrack_dict_replace(hatrack_dict_t *, void *, void *);
-bool  hatrack_dict_add(hatrack_dict_t *, void *, void *);
-bool  hatrack_dict_remove(hatrack_dict_t *, void *);
+bool  hatrack_dict_add    (hatrack_dict_t *, void *, void *);
+bool  hatrack_dict_remove (hatrack_dict_t *, void *);
 
-hatrack_dict_key_t   *hatrack_dict_keys(hatrack_dict_t *, uint64_t *);
-hatrack_dict_value_t *hatrack_dict_values(hatrack_dict_t *, uint64_t *);
-hatrack_dict_item_t  *hatrack_dict_items(hatrack_dict_t *, uint64_t *);
-hatrack_dict_key_t   *hatrack_dict_keys_sort(hatrack_dict_t *, uint64_t *);
+hatrack_dict_key_t   *hatrack_dict_keys       (hatrack_dict_t *, uint64_t *);
+hatrack_dict_value_t *hatrack_dict_values     (hatrack_dict_t *, uint64_t *);
+hatrack_dict_item_t  *hatrack_dict_items      (hatrack_dict_t *, uint64_t *);
+hatrack_dict_key_t   *hatrack_dict_keys_sort  (hatrack_dict_t *, uint64_t *);
 hatrack_dict_value_t *hatrack_dict_values_sort(hatrack_dict_t *, uint64_t *);
-hatrack_dict_item_t  *hatrack_dict_items_sort(hatrack_dict_t *, uint64_t *);
+hatrack_dict_item_t  *hatrack_dict_items_sort (hatrack_dict_t *, uint64_t *);
 
 #endif

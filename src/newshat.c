@@ -48,6 +48,23 @@ static newshat_store_t *newshat_store_migrate(newshat_store_t *, newshat_t *);
 
 // clang-format on
 
+/* newshat_new()
+ *
+ * Allocates a new newshat object with the system malloc, and
+ * initializes it.
+ */
+newshat_t *
+newshat_new(void)
+{
+    newshat_t *ret;
+
+    ret = (newshat_t *)malloc(sizeof(newshat_t));
+
+    newshat_init(ret);
+
+    return ret;
+}
+
 /* newshat_init()
  *
  * It's expected that newshat instances will be created via the
@@ -73,6 +90,55 @@ newshat_init(newshat_t *self)
 
     return;
 }
+
+/* newshat_cleanup()
+ *
+ * This function is meant to be called when the table should clean up
+ * its own internal state before deallocation. When you do so, it's
+ * your responsibility to make sure that no threads are going to use
+ * the object anymore.
+ *
+ * the delete function below is similar, except that it also calls
+ * free() on the actual top-level object as well, under the assumption
+ * it was created with the default malloc implementation.
+ */
+void
+newshat_cleanup(newshat_t *self)
+{
+    mmm_retire(self->store_current);
+
+    if (pthread_mutex_destroy(&self->migrate_mutex)) {
+        abort();
+    }
+
+    return;
+}
+
+/* newshat_delete()
+ *
+ * Deletes a newshat object. Generally, you should be confident that
+ * all threads except the one from which you're calling this have
+ * stopped using the table (generally meaning they no longer hold a
+ * reference to the store).
+ *
+ * Note that this function assumes the newshat object was allocated
+ * via the default malloc. If it wasn't, don't call this directly, but
+ * do note that the stores were created via mmm_alloc(), and the most
+ * recent store will need to be retired via mmm_retire. And the
+ * migration mutex needs to be destroyed, as well.
+ *
+ * The mmm_retire() call will handle destroying any per-bucket
+ * mutexes, once there are no readers in the store.
+ */
+void
+newshat_delete(newshat_t *self)
+{
+    newshat_cleanup(self);
+    free(self);
+
+    return;
+}
+
 /* newshat_get(), _put(), _replace(), _add(), _remove()
  *
  * These functions need to safely acquire a reference to the current
@@ -184,37 +250,6 @@ newshat_remove(newshat_t *self, hatrack_hash_t hv, bool *found)
     mmm_end_op();
 
     return ret;
-}
-
-/*
- * newshat_delete()
- *
- * Deletes a newshat object. Generally, you should be confident that
- * all threads except the one from which you're calling this have
- * stopped using the table (generally meaning they no longer hold a
- * reference to the store).
- *
- * Note that this function assumes the newshat object was allocated
- * via the default malloc. If it wasn't, don't call this directly, but
- * do note that the stores were created via mmm_alloc(), and the most
- * recent store will need to be retired via mmm_retire. And the
- * migration mutex needs to be destroyed, as well.
- *
- * The mmm_retire() call will handle destroying any per-bucket
- * mutexes, once there are no readers in the store.
- */
-void
-newshat_delete(newshat_t *self)
-{
-    mmm_retire(self->store_current);
-
-    if (pthread_mutex_destroy(&self->migrate_mutex)) {
-        abort();
-    }
-
-    free(self);
-
-    return;
 }
 
 /* newshat_len()
