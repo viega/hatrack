@@ -91,7 +91,7 @@ bool            woolhat_add    (woolhat_t *, hatrack_hash_t, void *);
 void           *woolhat_remove (woolhat_t *, hatrack_hash_t, bool *);
 uint64_t        woolhat_len    (woolhat_t *);
 
-hatrack_view_t     *woolhat_view      (woolhat_t *, uint64_t *, bool);
-hatrack_set_view_t *woolhat_view_epoch(woolhat_t *, uint64_t *, uint64_t);
+hatrack_view_t     *woolhat_view       (woolhat_t *, uint64_t *, bool);
+hatrack_set_view_t *woolhat_view_epoch (woolhat_t *, uint64_t *, uint64_t);
 
 #endif
