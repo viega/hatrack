@@ -351,8 +351,8 @@ hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
     uint32_t              i;
 
     view      = witchhat_view(&self->witchhat_instance, num, false);
-    alloc_len = sizeof(hatrack_dict_key_t) * *num;
-    ret       = (hatrack_dict_key_t *)malloc(alloc_len);
+    alloc_len = sizeof(hatrack_dict_value_t) * *num;
+    ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
     for (i = 0; i < *num; i++) {
         item   = (hatrack_dict_item_t *)view[i].item;
@@ -374,8 +374,8 @@ hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
     uint32_t             i;
 
     view      = witchhat_view(&self->witchhat_instance, num, false);
-    alloc_len = sizeof(hatrack_dict_key_t) * *num;
-    ret       = (hatrack_dict_item_t *)calloc(1, alloc_len);
+    alloc_len = sizeof(hatrack_dict_item_t) * *num;
+    ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 
     for (i = 0; i < *num; i++) {
         item         = (hatrack_dict_item_t *)view[i].item;
@@ -421,8 +421,8 @@ hatrack_dict_values_sort(hatrack_dict_t *self, uint64_t *num)
     uint32_t              i;
 
     view      = witchhat_view(&self->witchhat_instance, num, true);
-    alloc_len = sizeof(hatrack_dict_key_t) * *num;
-    ret       = (hatrack_dict_key_t *)malloc(alloc_len);
+    alloc_len = sizeof(hatrack_dict_value_t) * *num;
+    ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
     for (i = 0; i < *num; i++) {
         item   = (hatrack_dict_item_t *)view[i].item;
@@ -444,8 +444,8 @@ hatrack_dict_items_sort(hatrack_dict_t *self, uint64_t *num)
     uint32_t             i;
 
     view      = witchhat_view(&self->witchhat_instance, num, true);
-    alloc_len = sizeof(hatrack_dict_key_t) * *num;
-    ret       = (hatrack_dict_item_t *)calloc(1, alloc_len);
+    alloc_len = sizeof(hatrack_dict_item_t) * *num;
+    ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 
     for (i = 0; i < *num; i++) {
         item         = (hatrack_dict_item_t *)view[i].item;
