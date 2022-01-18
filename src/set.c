@@ -224,6 +224,14 @@ hatrack_set_items_sort(hatrack_set_t *self, uint64_t *num)
     return hatrack_set_items_base(self, num, true);
 }
 
+/* hatrack_set_is_eq(A, B)
+ *
+ * Compares two sets for equality at a moment in time, by comparing
+ * first the number of items in the set, and then (if equal), by
+ * comparing the individual items.
+ *
+ * We compare hash values to test for equality.
+ */
 bool
 hatrack_set_is_eq(hatrack_set_t *set1, hatrack_set_t *set2)
 {
@@ -270,6 +278,13 @@ finished:
     return ret;
 }
 
+/* hatrack_set_is_superset(A, B, proper)
+ *
+ * Returns true if set A is a superset of set B.
+ *
+ * If proper is true, this will return false when sets are equal;
+ * otherwise, it will return true.
+ */
 bool
 hatrack_set_is_superset(hatrack_set_t *set1, hatrack_set_t *set2, bool proper)
 {
@@ -339,12 +354,26 @@ finished:
     return ret;
 }
 
+/* hatrack_set_is_subset(A, B, proper)
+ *
+ * Returns true if set A is a subset of set B.
+ *
+ * If proper is true, this will return false when sets are equal;
+ * otherwise, it will return true.
+ */
 bool
 hatrack_set_is_subset(hatrack_set_t *set1, hatrack_set_t *set2, bool proper)
 {
     return hatrack_set_is_superset(set2, set1, proper);
 }
 
+/* hatrack_set_is_disjoint(A, B)
+ *
+ * Returns true if, at the moment of call (as defined by our epoch),
+ * the two sets do not share any items.
+ *
+ * If one of the sets is empty, this will always return true.
+ */
 bool
 hatrack_set_is_disjoint(hatrack_set_t *set1, hatrack_set_t *set2)
 {
@@ -394,6 +423,11 @@ finished:
     return ret;
 }
 
+/* hatrack_set_difference(A, B)
+ *
+ * Returns a new set that consists of A - B, at the moment in time
+ * of the call (as defined by the epoch).
+ */
 hatrack_set_t *
 hatrack_set_difference(hatrack_set_t *set1, hatrack_set_t *set2)
 {
@@ -440,6 +474,12 @@ hatrack_set_difference(hatrack_set_t *set1, hatrack_set_t *set2)
 
     return ret;
 }
+
+/* hatrack_set_union(A, B)
+ *
+ * Returns a new set that consists of all the items from both sets, at
+ * the moment in time of the call (as defined by the epoch).
+ */
 
 hatrack_set_t *
 hatrack_set_union(hatrack_set_t *set1, hatrack_set_t *set2)
@@ -500,7 +540,12 @@ hatrack_set_union(hatrack_set_t *set1, hatrack_set_t *set2)
     return ret;
 }
 
-/* This does NOT currently preserve insertion ordering the way that
+/* hatrack_set_intersection(A, B)
+ *
+ * Returns a new set that consists of only the items that exist in
+ * both sets at the time of the call (as defined by the epoch).
+ *
+ * This does NOT currently preserve insertion ordering the way that
  * hatrack_set_union() does. It could, if we first mark what gets
  * copied and what doesn't, then re-sort based on original epoch.
  *
@@ -569,7 +614,12 @@ hatrack_set_intersection(hatrack_set_t *set1, hatrack_set_t *set2)
     return ret;
 }
 
-/* Like intersection, this does not currently preserve intersection
+/* hatrack_set_disjunction(A, B)
+ *
+ * Returns a new set that contains items in set A that did not exist
+ * in set B, PLUS the items in set B that did not exist in set A.
+ *
+ * Like intersection, this does not currently preserve intersection
  * order.
  *
  * The algorithm here is to sort by hash value, then go through in
@@ -634,6 +684,7 @@ hatrack_set_get_hash_value(hatrack_set_t *self, void *key)
 {
     hatrack_hash_t hv;
     int32_t        offset;
+    uint8_t       *loc_to_hash;
 
     switch (self->item_type) {
     case HATRACK_DICT_KEY_TYPE_OBJ_CUSTOM:
@@ -665,18 +716,24 @@ hatrack_set_get_hash_value(hatrack_set_t *self, void *key)
         }
     }
 
+    loc_to_hash = (uint8_t *)key;
+
+    if (self->hash_info.offsets.hash_offset) {
+        loc_to_hash += self->hash_info.offsets.hash_offset;
+    }
+
     switch (self->item_type) {
     case HATRACK_DICT_KEY_TYPE_OBJ_INT:
-        hv = hash_int((uint64_t)key);
+        hv = hash_int((uint64_t)loc_to_hash);
         break;
     case HATRACK_DICT_KEY_TYPE_OBJ_REAL:
-        hv = hash_double(*(double *)key);
+        hv = hash_double(*(double *)loc_to_hash);
         break;
     case HATRACK_DICT_KEY_TYPE_OBJ_CSTR:
-        hv = hash_cstr((char *)key);
+        hv = hash_cstr((char *)loc_to_hash);
         break;
     case HATRACK_DICT_KEY_TYPE_OBJ_PTR:
-        hv = hash_pointer(key);
+        hv = hash_pointer(loc_to_hash);
         break;
     default:
         abort();

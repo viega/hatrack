@@ -463,6 +463,7 @@ hatrack_dict_get_hash_value(hatrack_dict_t *self, void *key)
 {
     hatrack_hash_t hv;
     int32_t        offset;
+    uint8_t       *loc_to_hash;
 
     switch (self->key_type) {
     case HATRACK_DICT_KEY_TYPE_OBJ_CUSTOM:
@@ -494,18 +495,24 @@ hatrack_dict_get_hash_value(hatrack_dict_t *self, void *key)
         }
     }
 
+    loc_to_hash = (uint8_t *)key;
+    
+    if (self->hash_info.offsets.hash_offset) {
+	loc_to_hash += self->hash_info.offsets.hash_offset;
+    }
+
     switch (self->key_type) {
     case HATRACK_DICT_KEY_TYPE_OBJ_INT:
-        hv = hash_int((uint64_t)key);
+        hv = hash_int((uint64_t)loc_to_hash);
         break;
     case HATRACK_DICT_KEY_TYPE_OBJ_REAL:
-        hv = hash_double(*(double *)key);
+        hv = hash_double(*(double *)loc_to_hash);
         break;
     case HATRACK_DICT_KEY_TYPE_OBJ_CSTR:
-        hv = hash_cstr((char *)key);
+        hv = hash_cstr((char *)loc_to_hash);
         break;
     case HATRACK_DICT_KEY_TYPE_OBJ_PTR:
-        hv = hash_pointer(key);
+        hv = hash_pointer(loc_to_hash);
         break;
     default:
         abort();
