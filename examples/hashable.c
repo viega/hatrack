@@ -38,6 +38,8 @@
 
 #include <hatrack.h>
 
+#include <stdio.h>
+
 typedef struct {
     uint64_t       len; // Not including the null.
     hatrack_hash_t hv;
@@ -81,7 +83,7 @@ dict_example(int argc, char *argv[])
         if (!hatrack_dict_add(dict, s, (void *)i)) {
             fprintf(stderr,
                     "Detected duplicate argument at argv[%lld]: %s\n",
-                    i,
+                    (long long)i,
                     argv[i]);
         }
         else {
@@ -97,7 +99,7 @@ dict_example(int argc, char *argv[])
 
     for (i = 0; i < num; i++) {
         s = (ex_str_t *)items[i].key;
-        printf("%s (@ arg #%lld)\n", s->bytes, (uint64_t)items[i].value);
+        printf("%s (@ arg #%lld)\n", s->bytes, (long long)items[i].value);
         free(s);
     }
 
@@ -126,7 +128,7 @@ set_example(int argc, char *argv[])
         if (!hatrack_set_add(set, s)) {
             fprintf(stderr,
                     "Detected duplicate argument at argv[%lld]: %s\n",
-                    i,
+                    (long long)i,
                     argv[i]);
         }
         else {
