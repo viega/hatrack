@@ -75,10 +75,10 @@ hatrack_set_cleanup(hatrack_set_t *self)
     woolhat_history_t *bucket;
     hatrack_hash_t     hv;
     woolhat_record_t  *record;
-    hatrack_set_hook_t handler;
+    hatrack_mem_hook_t handler;
 
     if (self->free_handler) {
-        handler = (hatrack_set_hook_t)self->free_handler;
+        handler = (hatrack_mem_hook_t)self->free_handler;
         store   = atomic_load(&self->woolhat_instance.store_current);
 
         for (i = 0; i <= store->last_slot; i++) {
@@ -130,7 +130,7 @@ hatrack_set_set_cache_offset(hatrack_set_t *self, int32_t offset)
 }
 
 void
-hatrack_set_set_custom_hash(hatrack_set_t *self, hatrack_hash_function_t func)
+hatrack_set_set_custom_hash(hatrack_set_t *self, hatrack_hash_func_t func)
 {
     self->hash_info.custom_hash = func;
 
@@ -138,7 +138,7 @@ hatrack_set_set_custom_hash(hatrack_set_t *self, hatrack_hash_function_t func)
 }
 
 void
-hatrack_set_set_free_handler(hatrack_set_t *self, hatrack_set_hook_t func)
+hatrack_set_set_free_handler(hatrack_set_t *self, hatrack_mem_hook_t func)
 {
     self->free_handler = func;
 
@@ -149,7 +149,7 @@ hatrack_set_set_free_handler(hatrack_set_t *self, hatrack_set_hook_t func)
 }
 
 void
-hatrack_set_set_return_hook(hatrack_set_t *self, hatrack_set_hook_t func)
+hatrack_set_set_return_hook(hatrack_set_t *self, hatrack_mem_hook_t func)
 {
     self->pre_return_hook = func;
 
@@ -210,31 +210,32 @@ hatrack_set_items_base(hatrack_set_t *self, uint64_t *num, bool sort)
     uint64_t            epoch;
 
     epoch = mmm_start_linearized_op();
-    
+
     view = woolhat_view_epoch(&self->woolhat_instance, num, epoch);
     ret  = malloc(sizeof(void *) * *num);
 
     if (sort) {
-	qsort(view, *num, sizeof(hatrack_set_view_t),
-	      hatrack_set_epoch_sort_cmp);
+        qsort(view,
+              *num,
+              sizeof(hatrack_set_view_t),
+              hatrack_set_epoch_sort_cmp);
     }
-    
+
     if (self->pre_return_hook) {
-	for (i = 0; i < *num; i++) {
-	    ret[i] = view[i].item;
-	    
-	    (*self->pre_return_hook)(self, view[i].item);
-	}
+        for (i = 0; i < *num; i++) {
+            ret[i] = view[i].item;
+
+            (*self->pre_return_hook)(self, view[i].item);
+        }
     }
     else {
-	for (i = 0; i < *num; i++) {
-	    ret[i] = view[i].item;
-	}	
+        for (i = 0; i < *num; i++) {
+            ret[i] = view[i].item;
+        }
     }
 
     mmm_end_op();
 
-    
     free(view);
 
     return (void *)ret;
@@ -484,26 +485,28 @@ hatrack_set_difference(hatrack_set_t *set1, hatrack_set_t *set2)
     j = 0;
 
     while (true) {
-	if (i == num1 || j == num2) {
-	    break;
-	}
+        if (i == num1 || j == num2) {
+            break;
+        }
 
-	if (hatrack_hashes_eq(view1[i].hv, view2[i].hv)) {
-	    i++;
-	    j++;
-	    continue; // Not in result set.
-	}
+        if (hatrack_hashes_eq(view1[i].hv, view2[i].hv)) {
+            i++;
+            j++;
+            continue; // Not in result set.
+        }
 
-	// Next hash comes from the set on the rhs; we ignore it.
-	if (hatrack_hash_gt(view1[i].hv, view2[j].hv)) {
-	    j++;
-	    continue;  
-	}
+        // Next hash comes from the set on the rhs; we ignore it.
+        if (hatrack_hash_gt(view1[i].hv, view2[j].hv)) {
+            j++;
+            continue;
+        }
 
-	if (set1->pre_return_hook) {
-	    (*set1->pre_return_hook)(set1, view1[i].item);
-	}
-	woolhat_put(&ret->woolhat_instance, view1[i].hv, view1[i].item, NULL);
+        if (set1->pre_return_hook) {
+            (*set1->pre_return_hook)(set1, view1[i].item);
+        }
+
+        woolhat_put(&ret->woolhat_instance, view1[i].hv, view1[i].item, NULL);
+        i++;
     }
 
     mmm_end_op();
@@ -552,36 +555,36 @@ hatrack_set_union(hatrack_set_t *set1, hatrack_set_t *set2)
 
     while ((i < num1) && (j < num2)) {
         if (view1[i].sort_epoch < view2[j].sort_epoch) {
-	    if (set1->pre_return_hook) {
-		(*set1->pre_return_hook)(set1, view1[i].item);
-	    }
-	    
+            if (set1->pre_return_hook) {
+                (*set1->pre_return_hook)(set1, view1[i].item);
+            }
+
             woolhat_add(&ret->woolhat_instance, view1[i].hv, view1[i].item);
             i++;
         }
         else {
-	    if (set2->pre_return_hook) {
-		(*set2->pre_return_hook)(set2, view2[j].item);
-	    }
-	    
+            if (set2->pre_return_hook) {
+                (*set2->pre_return_hook)(set2, view2[j].item);
+            }
+
             woolhat_add(&ret->woolhat_instance, view2[j].hv, view2[j].item);
             j++;
         }
     }
 
     while (i < num1) {
-	if (set1->pre_return_hook) {
-	    (*set1->pre_return_hook)(set1, view1[i].item);
-	}
-	
+        if (set1->pre_return_hook) {
+            (*set1->pre_return_hook)(set1, view1[i].item);
+        }
+
         woolhat_add(&ret->woolhat_instance, view1[i].hv, view1[i].item);
         i++;
     }
 
     while (j < num2) {
-	if (set2->pre_return_hook) {
-	    (*set2->pre_return_hook)(set2, view2[j].item);	    
-	}
+        if (set2->pre_return_hook) {
+            (*set2->pre_return_hook)(set2, view2[j].item);
+        }
         woolhat_add(&ret->woolhat_instance, view2[j].hv, view2[j].item);
         j++;
     }
@@ -646,10 +649,10 @@ hatrack_set_intersection(hatrack_set_t *set1, hatrack_set_t *set2)
 
     while ((i < num1) && (j < num2)) {
         if (hatrack_hashes_eq(view1[i].hv, view2[j].hv)) {
-	    if(set1->pre_return_hook) {
-		(*set1->pre_return_hook)(set1, view1[i].item);
-	    }
-		
+            if (set1->pre_return_hook) {
+                (*set1->pre_return_hook)(set1, view1[i].item);
+            }
+
             woolhat_add(&ret->woolhat_instance, view1[i].hv, view1[i].item);
             i++;
             j++;
@@ -720,19 +723,19 @@ hatrack_set_disjunction(hatrack_set_t *set1, hatrack_set_t *set2)
         }
 
         if (hatrack_hash_gt(view1[i].hv, view2[j].hv)) {
-	    if(set2->pre_return_hook) {
-		(*set2->pre_return_hook)(set2, view2[j].item);
-	    }
-	    
+            if (set2->pre_return_hook) {
+                (*set2->pre_return_hook)(set2, view2[j].item);
+            }
+
             woolhat_add(&ret->woolhat_instance, view2[j].hv, view2[j].item);
             j++;
         }
 
         else {
-	    if(set1->pre_return_hook) {
-		(*set1->pre_return_hook)(set1, view1[i].item);
-	    }
-	    
+            if (set1->pre_return_hook) {
+                (*set1->pre_return_hook)(set1, view1[i].item);
+            }
+
             woolhat_add(&ret->woolhat_instance, view1[i].hv, view1[i].item);
             i++;
         }
@@ -815,9 +818,9 @@ hatrack_set_get_hash_value(hatrack_set_t *self, void *key)
 static void
 hatrack_set_record_eject(woolhat_record_t *record, hatrack_set_t *set)
 {
-    hatrack_set_hook_t handler;
+    hatrack_mem_hook_t handler;
 
-    handler = (hatrack_set_hook_t)set->free_handler;
+    handler = (hatrack_mem_hook_t)set->free_handler;
 
     (*handler)(set, record->item);
 

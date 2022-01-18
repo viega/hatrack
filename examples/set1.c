@@ -42,9 +42,9 @@ typedef struct {
 static void
 print_set(char *prefix, hatrack_set_t *set)
 {
-    int64_t *view;
-    uint64_t i;
-    uint64_t num;
+    uint64_t *view;
+    uint64_t  i;
+    uint64_t  num;
 
     view = hatrack_set_items_sort(set, &num);
 
@@ -52,11 +52,9 @@ print_set(char *prefix, hatrack_set_t *set)
 
     for (i = 0; i < num; i++) {
         if (i) {
-            printf(", %lld", (long long)view[i]);
+            printf(", ");
         }
-        else {
-            printf("%lld", (long long)view[i]);
-        }
+        printf("%lld", (long long)view[i]);
     }
 
     printf(" }\n");
@@ -324,23 +322,14 @@ main(void)
 
     for (i = 0; i < 20; i++) {
         hatrack_set_put(s1, (void *)i);
-        if (!hatrack_set_contains(s1, (void *)i)) {
-            abort();
-        }
     }
 
     for (i = 0; i < 5; i++) {
         hatrack_set_put(s2, (void *)i);
-        if (!hatrack_set_contains(s2, (void *)i)) {
-            abort();
-        }
     }
 
     for (i = 10; i < 25; i++) {
         hatrack_set_put(s3, (void *)i);
-        if (!hatrack_set_contains(s3, (void *)i)) {
-            abort();
-        }
     }
 
     test_sets[0].set  = s1;

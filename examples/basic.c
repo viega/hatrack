@@ -117,7 +117,7 @@ main(int argc, char *argv[], char *envp[])
     envp_dict = hatrack_dict_new(HATRACK_DICT_KEY_TYPE_CSTR);
 
     hatrack_dict_set_free_handler(envp_dict,
-				  (hatrack_dict_hook_t)envp_free_handler);
+                                  (hatrack_mem_hook_t)envp_free_handler);
 
     for (i = 0; i < (uint64_t)argc; i++) {
         hatrack_dict_put(argv_dict, (void *)i, argv[i]);

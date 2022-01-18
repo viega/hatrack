@@ -44,6 +44,49 @@ typedef struct {
 } hatrack_hash_t;
 #endif
 
+/* hatrack_hash_func_t
+ *
+ * A generic type for function pointers to functions that hash for
+ * us. This is used in the higher-level dict and set implementations.
+ *
+ * Note that several implementations of hash functions (using XXH3)
+ * are in hash.h.
+ */
+typedef hatrack_hash_t (*hatrack_hash_func_t)(void *);
+
+/* hatrack_mem_hook_t
+ *
+ * Function pointer to a function of two arguments. This is used for
+ * memory management hooks in our higher-level dict and set
+ * implementations:
+ *
+ * 1) A hook that runs to notify when a user-level record has been
+ *    ejected from the hash table (either via over-write or
+ *    deletion). Here, it's guaranteed that the associated record is
+ *    no longer being accessed by other threads. 
+ *
+ *    However, it says nothing about threads using records read from
+ *    the hash table. Therefore, if you're using dynamic records, this
+ *    hook should probably be used to decrement a reference count.
+ *
+ * 2) A hook that runs to notify when a user-level record is about to
+ *    be returned.  This is primarily intended for clients to
+ *    increment a reference count on objects being returned BEFORE the
+ *    table would ever run the previous hook.
+ *
+ * The first argument will be a pointer to the data structure, and the
+ * second argument will be a pointer to the item in question. In
+ * dictionaries, if both a key and a value are getting returned
+ * (through a call to dict_items() for example), then the callback
+ * will get used once for the key, and once for the item.
+ *
+ * This type happens to have the same signature as a different memory
+ * management hook that MMM uses, which is indeed used in implementing
+ * these higher level hooks.  However, the meaning of the arguments is
+ * different, so we've kept them distinct types.
+ */
+typedef void (*hatrack_mem_hook_t)(void *, void *);
+
 /* hatrack_view_t
  *
  * All our calls to return a view of a hash table (generally for the

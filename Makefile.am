@@ -13,7 +13,7 @@ tests_test_CFLAGS = -Wall -Wextra -I./include/
 tests_test_LDADD = ./libhatrack.a
 
 examples_basic_SOURCES = examples/basic.c
-examples_basic_CFLAGS = -Wall -Wextra -I./include
+examples_basic_CFLAGS = -Wall -Wextra -Wno-unused-parameter -I./include
 examples_basic_LDADD = ./libhatrack.a
 
 examples_set1_SOURCES = examples/set1.c

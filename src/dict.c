@@ -129,7 +129,7 @@ hatrack_dict_set_cache_offset(hatrack_dict_t *self, int32_t offset)
 }
 
 void
-hatrack_dict_set_custom_hash(hatrack_dict_t *self, hatrack_hash_function_t func)
+hatrack_dict_set_custom_hash(hatrack_dict_t *self, hatrack_hash_func_t func)
 {
     self->hash_info.custom_hash = func;
 
@@ -137,7 +137,7 @@ hatrack_dict_set_custom_hash(hatrack_dict_t *self, hatrack_hash_function_t func)
 }
 
 void
-hatrack_dict_set_free_handler(hatrack_dict_t *self, hatrack_dict_hook_t func)
+hatrack_dict_set_free_handler(hatrack_dict_t *self, hatrack_mem_hook_t func)
 {
     self->free_handler = func;
 
@@ -145,9 +145,11 @@ hatrack_dict_set_free_handler(hatrack_dict_t *self, hatrack_dict_hook_t func)
 }
 
 void
-hatrack_dict_set_return_hook(hatrack_dict_t *self, hatrack_dict_hook_t func)
+hatrack_dict_set_return_hook(hatrack_dict_t *self, hatrack_mem_hook_t func)
 {
     self->pre_return_hook = func;
+
+    return;
 }
 
 void *
@@ -636,7 +638,7 @@ static void
 hatrack_dict_record_eject(hatrack_dict_item_t *record,
 			  hatrack_dict_t *dict)
 {
-    hatrack_dict_hook_t callback;
+    hatrack_mem_hook_t callback;
 
     callback = dict->free_handler;
     
