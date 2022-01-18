@@ -14,6 +14,7 @@
  * limitations under the License.
  *
  *  Name:           basic.c
+ *
  *  Description:    This example creates and uses two dictionaries.
  *
  *                  The first is a dictionary where the values are the
