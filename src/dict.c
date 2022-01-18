@@ -24,7 +24,7 @@
 // clang-format off
 static hatrack_hash_t hatrack_dict_get_hash_value(hatrack_dict_t *, void *);
 static void           hatrack_dict_record_eject  (hatrack_dict_item_t *,
-						  hatrack_free_handler_t);
+						  hatrack_dict_t *);
 
 hatrack_dict_t *
 hatrack_dict_new(uint32_t key_type)
@@ -62,6 +62,7 @@ hatrack_dict_init(hatrack_dict_t *self, uint32_t key_type)
     self->hash_info.offsets.hash_offset  = 0;
     self->hash_info.offsets.cache_offset = HATRACK_DICT_NO_CACHE;
     self->free_handler                   = NULL;
+    self->pre_return_hook                = NULL;
 
     return;
 }
@@ -92,7 +93,7 @@ hatrack_dict_cleanup(hatrack_dict_t *self)
                 continue;
             }
 
-            (*self->free_handler)((hatrack_dict_item_t *)record.item);
+            (*self->free_handler)(self, record.item);
         }
     }
 
@@ -128,7 +129,7 @@ hatrack_dict_set_cache_offset(hatrack_dict_t *self, int32_t offset)
 }
 
 void
-hatrack_dict_set_custom_hash(hatrack_dict_t *self, hatrack_hash_function_t func)
+hatrack_dict_set_custom_hash(hatrack_dict_t *self, hatrack_hash_func_t func)
 {
     self->hash_info.custom_hash = func;
 
@@ -136,9 +137,17 @@ hatrack_dict_set_custom_hash(hatrack_dict_t *self, hatrack_hash_function_t func)
 }
 
 void
-hatrack_dict_set_free_handler(hatrack_dict_t *self, hatrack_free_handler_t func)
+hatrack_dict_set_free_handler(hatrack_dict_t *self, hatrack_mem_hook_t func)
 {
     self->free_handler = func;
+
+    return;
+}
+
+void
+hatrack_dict_set_return_hook(hatrack_dict_t *self, hatrack_mem_hook_t func)
+{
+    self->pre_return_hook = func;
 
     return;
 }
@@ -148,15 +157,22 @@ hatrack_dict_get(hatrack_dict_t *self, void *key, bool *found)
 {
     hatrack_hash_t       hv;
     hatrack_dict_item_t *item;
+    witchhat_store_t    *store;
 
-    hv   = hatrack_dict_get_hash_value(self, key);
-    item = witchhat_get(&self->witchhat_instance, hv, found);
+    
+    hv = hatrack_dict_get_hash_value(self, key);
+
+    mmm_start_basic_op();
+
+    store = atomic_read(&self->witchhat_instance.store_current);
+    item  = witchhat_store_get(store, hv, found);
 
     if (!item) {
         if (found) {
             *found = false;
         }
 
+	mmm_end_op();
         return NULL;
     }
 
@@ -164,6 +180,12 @@ hatrack_dict_get(hatrack_dict_t *self, void *key, bool *found)
         *found = true;
     }
 
+    if (self->pre_return_hook) {
+	(*self->pre_return_hook)(self, item->value);
+    }
+    
+    mmm_end_op();
+    
     return item->value;
 }
 
@@ -203,7 +225,7 @@ hatrack_dict_put(hatrack_dict_t *self, void *key, void *value)
         if (self->free_handler) {
             mmm_add_cleanup_handler(old_item,
                                     (mmm_cleanup_func)hatrack_dict_record_eject,
-                                    self->free_handler);
+                                    self);
         }
 
         mmm_retire(old_item);
@@ -242,7 +264,7 @@ hatrack_dict_replace(hatrack_dict_t *self, void *key, void *value)
         if (self->free_handler) {
             mmm_add_cleanup_handler(old_item,
                                     (mmm_cleanup_func)hatrack_dict_record_eject,
-                                    self->free_handler);
+                                    self);
         }
 
         mmm_retire(old_item);
@@ -304,7 +326,7 @@ hatrack_dict_remove(hatrack_dict_t *self, void *key)
         if (self->free_handler) {
             mmm_add_cleanup_handler(old_item,
                                     (mmm_cleanup_func)hatrack_dict_record_eject,
-                                    self->free_handler);
+                                    self);
         }
 
         mmm_retire(old_item);
@@ -327,14 +349,28 @@ hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
     uint64_t             alloc_len;
     uint32_t             i;
 
-    view      = witchhat_view(&self->witchhat_instance, num, false);
+    mmm_start_basic_op();
+    
+    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, false);
     alloc_len = sizeof(hatrack_dict_key_t) * *num;
     ret       = (hatrack_dict_key_t *)malloc(alloc_len);
 
-    for (i = 0; i < *num; i++) {
-        item   = (hatrack_dict_item_t *)view[i].item;
-        ret[i] = item->key;
+    if (self->pre_return_hook) {
+	for (i = 0; i < *num; i++) {
+	    item   = (hatrack_dict_item_t *)view[i].item;
+	    ret[i] = item->key;
+	    
+	    (*self->pre_return_hook)(self, item->key);	
+	}	
     }
+    else {
+	for (i = 0; i < *num; i++) {
+	    item   = (hatrack_dict_item_t *)view[i].item;
+	    ret[i] = item->key;
+	}
+    }
+
+    mmm_end_op();
 
     free(view);
 
@@ -350,15 +386,28 @@ hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
     uint64_t              alloc_len;
     uint32_t              i;
 
-    view      = witchhat_view(&self->witchhat_instance, num, false);
+    mmm_start_basic_op();
+    
+    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, false);
     alloc_len = sizeof(hatrack_dict_value_t) * *num;
     ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
-    for (i = 0; i < *num; i++) {
-        item   = (hatrack_dict_item_t *)view[i].item;
-        ret[i] = item->value;
+    if (self->pre_return_hook) {
+	for (i = 0; i < *num; i++) {
+	    item   = (hatrack_dict_item_t *)view[i].item;
+	    ret[i] = item->value;
+	    
+	    (*self->pre_return_hook)(self, item->value);		    
+	}
+    } else {
+	for (i = 0; i < *num; i++) {
+	    item   = (hatrack_dict_item_t *)view[i].item;
+	    ret[i] = item->value;
+	}
     }
 
+    mmm_end_op();
+    
     free(view);
 
     return ret;
@@ -373,16 +422,32 @@ hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
     uint64_t             alloc_len;
     uint32_t             i;
 
-    view      = witchhat_view(&self->witchhat_instance, num, false);
+    mmm_start_basic_op();
+    
+    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, false);
     alloc_len = sizeof(hatrack_dict_item_t) * *num;
     ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 
-    for (i = 0; i < *num; i++) {
-        item         = (hatrack_dict_item_t *)view[i].item;
-        ret[i].key   = item->key;
-        ret[i].value = item->value;
+    if (self->pre_return_hook) {
+	for (i = 0; i < *num; i++) {
+	    item         = (hatrack_dict_item_t *)view[i].item;
+	    ret[i].key   = item->key;
+	    ret[i].value = item->value;
+
+	    (*self->pre_return_hook)(self, item->key);
+	    (*self->pre_return_hook)(self, item->value);	    
+	}
+    }
+    else {
+	for (i = 0; i < *num; i++) {
+	    item         = (hatrack_dict_item_t *)view[i].item;
+	    ret[i].key   = item->key;
+	    ret[i].value = item->value;
+	}
     }
 
+    mmm_end_op();
+    
     free(view);
 
     return ret;
@@ -397,14 +462,28 @@ hatrack_dict_keys_sort(hatrack_dict_t *self, uint64_t *num)
     uint64_t             alloc_len;
     uint32_t             i;
 
-    view      = witchhat_view(&self->witchhat_instance, num, true);
+    mmm_start_basic_op();
+    
+    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, true);
     alloc_len = sizeof(hatrack_dict_key_t) * *num;
     ret       = (hatrack_dict_key_t *)malloc(alloc_len);
 
-    for (i = 0; i < *num; i++) {
-        item   = (hatrack_dict_item_t *)view[i].item;
-        ret[i] = item->key;
+    if (self->pre_return_hook) {
+	for (i = 0; i < *num; i++) {
+	    item   = (hatrack_dict_item_t *)view[i].item;
+	    ret[i] = item->key;
+	    
+	    (*self->pre_return_hook)(self, item->key);	
+	}	
     }
+    else {
+	for (i = 0; i < *num; i++) {
+	    item   = (hatrack_dict_item_t *)view[i].item;
+	    ret[i] = item->key;
+	}
+    }
+
+    mmm_end_op();
 
     free(view);
 
@@ -420,15 +499,28 @@ hatrack_dict_values_sort(hatrack_dict_t *self, uint64_t *num)
     uint64_t              alloc_len;
     uint32_t              i;
 
-    view      = witchhat_view(&self->witchhat_instance, num, true);
+    mmm_start_basic_op();
+    
+    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, true);
     alloc_len = sizeof(hatrack_dict_value_t) * *num;
     ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
-    for (i = 0; i < *num; i++) {
-        item   = (hatrack_dict_item_t *)view[i].item;
-        ret[i] = item->value;
+    if (self->pre_return_hook) {
+	for (i = 0; i < *num; i++) {
+	    item   = (hatrack_dict_item_t *)view[i].item;
+	    ret[i] = item->value;
+	    
+	    (*self->pre_return_hook)(self, item->value);		    
+	}
+    } else {
+	for (i = 0; i < *num; i++) {
+	    item   = (hatrack_dict_item_t *)view[i].item;
+	    ret[i] = item->value;
+	}
     }
 
+    mmm_end_op();
+    
     free(view);
 
     return ret;
@@ -443,20 +535,37 @@ hatrack_dict_items_sort(hatrack_dict_t *self, uint64_t *num)
     uint64_t             alloc_len;
     uint32_t             i;
 
-    view      = witchhat_view(&self->witchhat_instance, num, true);
+    mmm_start_basic_op();
+    
+    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, true);
     alloc_len = sizeof(hatrack_dict_item_t) * *num;
     ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 
-    for (i = 0; i < *num; i++) {
-        item         = (hatrack_dict_item_t *)view[i].item;
-        ret[i].key   = item->key;
-        ret[i].value = item->value;
+    if (self->pre_return_hook) {
+	for (i = 0; i < *num; i++) {
+	    item         = (hatrack_dict_item_t *)view[i].item;
+	    ret[i].key   = item->key;
+	    ret[i].value = item->value;
+
+	    (*self->pre_return_hook)(self, item->key);
+	    (*self->pre_return_hook)(self, item->value);	    
+	}
+    }
+    else {
+	for (i = 0; i < *num; i++) {
+	    item         = (hatrack_dict_item_t *)view[i].item;
+	    ret[i].key   = item->key;
+	    ret[i].value = item->value;
+	}
     }
 
+    mmm_end_op();
+    
     free(view);
 
     return ret;
 }
+
 
 static hatrack_hash_t
 hatrack_dict_get_hash_value(hatrack_dict_t *self, void *key)
@@ -527,9 +636,13 @@ hatrack_dict_get_hash_value(hatrack_dict_t *self, void *key)
 
 static void
 hatrack_dict_record_eject(hatrack_dict_item_t *record,
-			  hatrack_free_handler_t callback)
+			  hatrack_dict_t *dict)
 {
-    (*callback)(record);
+    hatrack_mem_hook_t callback;
+
+    callback = dict->free_handler;
+    
+    (*callback)(dict, record);
 
     return;
 }

@@ -89,7 +89,7 @@ print_envp(hatrack_dict_t *argv, bool ordered)
 }
 
 static void
-envp_free_handler(hatrack_dict_item_t *item)
+envp_free_handler(hatrack_dict_t *unused, hatrack_dict_item_t *item)
 {
     fprintf(stderr,
             "Freeing: %s: %s\n",
@@ -116,7 +116,8 @@ main(int argc, char *argv[], char *envp[])
     argv_dict = hatrack_dict_new(HATRACK_DICT_KEY_TYPE_INT);
     envp_dict = hatrack_dict_new(HATRACK_DICT_KEY_TYPE_CSTR);
 
-    hatrack_dict_set_free_handler(envp_dict, envp_free_handler);
+    hatrack_dict_set_free_handler(envp_dict,
+                                  (hatrack_mem_hook_t)envp_free_handler);
 
     for (i = 0; i < (uint64_t)argc; i++) {
         hatrack_dict_put(argv_dict, (void *)i, argv[i]);
