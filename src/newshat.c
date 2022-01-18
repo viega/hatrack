@@ -31,7 +31,7 @@
 // Not static, because tophat needs to call it, but nonetheless, don't
 // stick it in our public prototypes.
        newshat_store_t *newshat_store_new    (uint64_t);
-static void             newshat_store_delete (newshat_store_t *);
+static void             newshat_store_delete (newshat_store_t *, void *);
 static void            *newshat_store_get    (newshat_store_t *, hatrack_hash_t,
 					      bool *);
 static void            *newshat_store_put    (newshat_store_t *, newshat_t *,
@@ -393,7 +393,7 @@ newshat_store_new(uint64_t size)
 // Only called via the memory management cleanup handler, to
 // deallocated mutexes.
 static void
-newshat_store_delete(newshat_store_t *self)
+newshat_store_delete(newshat_store_t *self, void *unused)
 {
     uint64_t i;
 

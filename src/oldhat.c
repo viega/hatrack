@@ -68,7 +68,7 @@
 
 // clang-format off
 static oldhat_store_t  *oldhat_store_new    (uint64_t);
-static void             oldhat_store_delete (oldhat_store_t *);
+static void             oldhat_store_delete (oldhat_store_t *, void *);
 static void            *oldhat_store_get    (oldhat_store_t *, hatrack_hash_t,
 					     bool *);
 static void            *oldhat_store_put    (oldhat_store_t *, oldhat_t *,
@@ -489,7 +489,7 @@ oldhat_store_new(uint64_t size)
  * function when it's confident it can delete the store.
  */
 static void
-oldhat_store_delete(oldhat_store_t *self)
+oldhat_store_delete(oldhat_store_t *self, void *unused)
 {
     uint64_t         i;
     oldhat_record_t *record;
