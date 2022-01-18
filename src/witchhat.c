@@ -38,8 +38,6 @@
 // clang-format off
 // Most of the store functions are needed by other modules, for better
 // or worse, so we lifted their prototypes into the header.
-static void              *witchhat_store_get    (witchhat_store_t *,
-						 hatrack_hash_t, bool *);
 static witchhat_store_t  *witchhat_store_migrate(witchhat_store_t *,
 						 witchhat_t *);
 static inline bool        witchhat_help_required(uint64_t);
@@ -175,7 +173,24 @@ witchhat_len(witchhat_t *self)
 }
 
 hatrack_view_t *
-witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
+witchhat_view(witchhat_t *self, uint64_t *num, bool start)
+{
+    hatrack_view_t *ret;
+    
+    mmm_start_basic_op();
+    
+    ret = witchhat_view_no_mmm(self, num, start);
+
+    mmm_end_op();
+
+    return ret;
+}
+
+/* Used by dict.c, which does mmm itself, so that it can give callers
+ * the opportunity to refcount items put into the output.
+ */
+hatrack_view_t *
+witchhat_view_no_mmm(witchhat_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t    *view;
     hatrack_view_t    *p;
@@ -185,8 +200,6 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
     uint64_t           num_items;
     uint64_t           alloc_len;
     witchhat_store_t  *store;
-
-    mmm_start_basic_op();
 
     store     = atomic_read(&self->store_current);
     alloc_len = sizeof(hatrack_view_t) * (store->last_slot + 1);
@@ -215,7 +228,6 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
 
     if (!num_items) {
         free(view);
-        mmm_end_op();
 	
         return NULL;
     }
@@ -226,8 +238,6 @@ witchhat_view(witchhat_t *self, uint64_t *num, bool sort)
 	qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
     }
 
-    mmm_end_op();
-    
     return view;
 }
 
@@ -246,7 +256,7 @@ witchhat_store_new(uint64_t size)
     return store;
 }
 
-static void *
+void *
 witchhat_store_get(witchhat_store_t *self,
                  hatrack_hash_t      hv1,
                  bool               *found)

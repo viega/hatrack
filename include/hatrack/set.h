@@ -33,7 +33,7 @@ typedef struct {
     void                  *free_handler;
 } hatrack_set_t;
 
-typedef void (*hatrack_set_free_handler_t)(hatrack_set_t *, void *);
+typedef void (*hatrack_set_hook_t)(hatrack_set_t *, void *);
 
 // clang-format off
 hatrack_set_t  *hatrack_set_new             (uint32_t);
@@ -45,7 +45,7 @@ void            hatrack_set_set_cache_offset(hatrack_set_t *, int32_t);
 void            hatrack_set_set_custom_hash (hatrack_set_t *,
 					     hatrack_hash_function_t);
 void            hatrack_set_set_free_handler(hatrack_set_t *,
-					     hatrack_set_free_handler_t);
+					     hatrack_set_hook_t);
 bool            hatrack_set_contains        (hatrack_set_t *, void *);
 bool            hatrack_set_put             (hatrack_set_t *, void *);
 bool            hatrack_set_add             (hatrack_set_t *, void *);

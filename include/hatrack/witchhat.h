@@ -89,6 +89,8 @@ void           *witchhat_remove (witchhat_t *, hatrack_hash_t, bool *);
 uint64_t        witchhat_len    (witchhat_t *);
 hatrack_view_t *witchhat_view   (witchhat_t *, uint64_t *, bool);
 
+// Needed for dict.c
+hatrack_view_t *witchhat_view_no_mmm(witchhat_t *, uint64_t *, bool);
 
 /* These need to be non-static because tophat and hatrack_dict both
  * need them, so that they can call in without a second call to
@@ -96,6 +98,8 @@ hatrack_view_t *witchhat_view   (witchhat_t *, uint64_t *, bool);
  * part of the public API.
  */
 witchhat_store_t *witchhat_store_new    (uint64_t);
+void             *witchhat_store_get    (witchhat_store_t *, hatrack_hash_t,
+					 bool *);
 void             *witchhat_store_put    (witchhat_store_t *, witchhat_t *,
 					 hatrack_hash_t, void *, bool *,
 					 uint64_t);
