@@ -18,3 +18,10 @@ include/hatrack/stamp-h1
 include/stamp-h1
 .deps
 .dirstamp
+*~
+*/*~
+*/*/*~
+examples/basic
+examples/hashable
+examples/set1
+#*
