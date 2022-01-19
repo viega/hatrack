@@ -574,6 +574,17 @@
 #define HATRACK_MAX_HATS 1024
 #endif
 
+/* HATRACK_SKIP_XXH_INLINING
+ *
+ * By default, we inline XXH-128.  Defining this will skip the inlining, and
+ * we will end up with a bunch of symbols in the binary.
+ */
+//#define HATRACK_SKIP_XXH_INLINING
+
+#ifndef HATRACK_SKIP_XXH_INLINING
+#define XXH_INLINE_ALL
+#endif
+
 #ifdef HAVE_C11_ENUMS
 #define enum64(x, ...)                                                         \
     typedef enum : uint64_t                                                    \

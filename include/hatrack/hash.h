@@ -28,8 +28,8 @@
 #ifndef __HATRACK_HASH_H__
 #define __HATRACK_HASH_H__
 
-#include <hatrack/xxhash.h>
 #include <hatrack/hatrack_common.h>
+#include <hatrack/xxhash.h>
 
 #include <string.h>
 
