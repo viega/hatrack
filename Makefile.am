@@ -20,7 +20,7 @@ examples_set1_CFLAGS = -Wall -Wextra -I./include
 examples_set1_LDADD = ./libhatrack.a
 
 examples_hashable_SOURCES = examples/hashable.c
-examples_hashable_CFLAGS = -Wall -Wextra -I./include
+examples_hashable_CFLAGS = -Wall -Wextra -Wno-unused-parameter -I./include
 examples_hashable_LDADD = ./libhatrack.a
 
 include_HEADERS = include/hatrack.h 

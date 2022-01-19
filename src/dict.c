@@ -62,7 +62,8 @@ hatrack_dict_init(hatrack_dict_t *self, uint32_t key_type)
     self->hash_info.offsets.hash_offset  = 0;
     self->hash_info.offsets.cache_offset = HATRACK_DICT_NO_CACHE;
     self->free_handler                   = NULL;
-    self->pre_return_hook                = NULL;
+    self->key_return_hook                = NULL;
+    self->val_return_hook                = NULL;    
 
     return;
 }
@@ -145,9 +146,17 @@ hatrack_dict_set_free_handler(hatrack_dict_t *self, hatrack_mem_hook_t func)
 }
 
 void
-hatrack_dict_set_return_hook(hatrack_dict_t *self, hatrack_mem_hook_t func)
+hatrack_dict_set_key_return_hook(hatrack_dict_t *self, hatrack_mem_hook_t func)
 {
-    self->pre_return_hook = func;
+    self->key_return_hook = func;
+
+    return;
+}
+
+void
+hatrack_dict_set_val_return_hook(hatrack_dict_t *self, hatrack_mem_hook_t func)
+{
+    self->val_return_hook = func;
 
     return;
 }
@@ -180,8 +189,8 @@ hatrack_dict_get(hatrack_dict_t *self, void *key, bool *found)
         *found = true;
     }
 
-    if (self->pre_return_hook) {
-	(*self->pre_return_hook)(self, item->value);
+    if (self->val_return_hook) {
+	(*self->val_return_hook)(self, item->value);
     }
     
     mmm_end_op();
@@ -355,12 +364,12 @@ hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
     alloc_len = sizeof(hatrack_dict_key_t) * *num;
     ret       = (hatrack_dict_key_t *)malloc(alloc_len);
 
-    if (self->pre_return_hook) {
+    if (self->key_return_hook) {
 	for (i = 0; i < *num; i++) {
 	    item   = (hatrack_dict_item_t *)view[i].item;
 	    ret[i] = item->key;
 	    
-	    (*self->pre_return_hook)(self, item->key);	
+	    (*self->key_return_hook)(self, item->key);	
 	}	
     }
     else {
@@ -392,12 +401,12 @@ hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
     alloc_len = sizeof(hatrack_dict_value_t) * *num;
     ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
-    if (self->pre_return_hook) {
+    if (self->val_return_hook) {
 	for (i = 0; i < *num; i++) {
 	    item   = (hatrack_dict_item_t *)view[i].item;
 	    ret[i] = item->value;
 	    
-	    (*self->pre_return_hook)(self, item->value);		    
+	    (*self->val_return_hook)(self, item->value);		    
 	}
     } else {
 	for (i = 0; i < *num; i++) {
@@ -428,21 +437,16 @@ hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
     alloc_len = sizeof(hatrack_dict_item_t) * *num;
     ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 
-    if (self->pre_return_hook) {
-	for (i = 0; i < *num; i++) {
-	    item         = (hatrack_dict_item_t *)view[i].item;
-	    ret[i].key   = item->key;
-	    ret[i].value = item->value;
-
-	    (*self->pre_return_hook)(self, item->key);
-	    (*self->pre_return_hook)(self, item->value);	    
+    for (i = 0; i < *num; i++) {
+	item         = (hatrack_dict_item_t *)view[i].item;
+	ret[i].key   = item->key;
+	ret[i].value = item->value;
+	
+	if (self->key_return_hook) {
+	    (*self->key_return_hook)(self, item->key);
 	}
-    }
-    else {
-	for (i = 0; i < *num; i++) {
-	    item         = (hatrack_dict_item_t *)view[i].item;
-	    ret[i].key   = item->key;
-	    ret[i].value = item->value;
+	if (self->val_return_hook) {
+	    (*self->val_return_hook)(self, item->value);
 	}
     }
 
@@ -468,12 +472,12 @@ hatrack_dict_keys_sort(hatrack_dict_t *self, uint64_t *num)
     alloc_len = sizeof(hatrack_dict_key_t) * *num;
     ret       = (hatrack_dict_key_t *)malloc(alloc_len);
 
-    if (self->pre_return_hook) {
+    if (self->key_return_hook) {
 	for (i = 0; i < *num; i++) {
 	    item   = (hatrack_dict_item_t *)view[i].item;
 	    ret[i] = item->key;
 	    
-	    (*self->pre_return_hook)(self, item->key);	
+	    (*self->key_return_hook)(self, item->key);	
 	}	
     }
     else {
@@ -505,12 +509,12 @@ hatrack_dict_values_sort(hatrack_dict_t *self, uint64_t *num)
     alloc_len = sizeof(hatrack_dict_value_t) * *num;
     ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
-    if (self->pre_return_hook) {
+    if (self->val_return_hook) {
 	for (i = 0; i < *num; i++) {
 	    item   = (hatrack_dict_item_t *)view[i].item;
 	    ret[i] = item->value;
 	    
-	    (*self->pre_return_hook)(self, item->value);		    
+	    (*self->val_return_hook)(self, item->value);		    
 	}
     } else {
 	for (i = 0; i < *num; i++) {
@@ -541,24 +545,19 @@ hatrack_dict_items_sort(hatrack_dict_t *self, uint64_t *num)
     alloc_len = sizeof(hatrack_dict_item_t) * *num;
     ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 
-    if (self->pre_return_hook) {
-	for (i = 0; i < *num; i++) {
-	    item         = (hatrack_dict_item_t *)view[i].item;
-	    ret[i].key   = item->key;
-	    ret[i].value = item->value;
+    for (i = 0; i < *num; i++) {
+	item         = (hatrack_dict_item_t *)view[i].item;
+	ret[i].key   = item->key;
+	ret[i].value = item->value;
 
-	    (*self->pre_return_hook)(self, item->key);
-	    (*self->pre_return_hook)(self, item->value);	    
+	if (self->key_return_hook) {
+	    (*self->key_return_hook)(self, item->key);
+	}
+	if (self->val_return_hook) {
+	    (*self->val_return_hook)(self, item->value);
 	}
     }
-    else {
-	for (i = 0; i < *num; i++) {
-	    item         = (hatrack_dict_item_t *)view[i].item;
-	    ret[i].key   = item->key;
-	    ret[i].value = item->value;
-	}
-    }
-
+    
     mmm_end_op();
     
     free(view);

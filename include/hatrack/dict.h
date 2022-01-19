@@ -68,7 +68,8 @@ struct hatrack_dict_st {
     witchhat_t            witchhat_instance;
     hatrack_hash_info_t   hash_info;
     hatrack_mem_hook_t    free_handler;
-    hatrack_mem_hook_t    pre_return_hook;
+    hatrack_mem_hook_t    key_return_hook;
+    hatrack_mem_hook_t    val_return_hook;    
     uint32_t              key_type;
 };
 
@@ -78,11 +79,12 @@ void            hatrack_dict_init   (hatrack_dict_t *, uint32_t);
 void            hatrack_dict_cleanup(hatrack_dict_t *);
 void            hatrack_dict_delete (hatrack_dict_t *);
 
-void hatrack_dict_set_hash_offset (hatrack_dict_t *, int32_t);
-void hatrack_dict_set_cache_offset(hatrack_dict_t *, int32_t);
-void hatrack_dict_set_custom_hash (hatrack_dict_t *, hatrack_hash_func_t);
-void hatrack_dict_set_free_handler(hatrack_dict_t *, hatrack_mem_hook_t);
-void hatrack_dict_set_return_hook (hatrack_dict_t *, hatrack_mem_hook_t);
+void hatrack_dict_set_hash_offset    (hatrack_dict_t *, int32_t);
+void hatrack_dict_set_cache_offset   (hatrack_dict_t *, int32_t);
+void hatrack_dict_set_custom_hash    (hatrack_dict_t *, hatrack_hash_func_t);
+void hatrack_dict_set_free_handler   (hatrack_dict_t *, hatrack_mem_hook_t);
+void hatrack_dict_set_key_return_hook(hatrack_dict_t *, hatrack_mem_hook_t);
+void hatrack_dict_set_val_return_hook(hatrack_dict_t *, hatrack_mem_hook_t);
 
 void *hatrack_dict_get    (hatrack_dict_t *, void *, bool *);
 void  hatrack_dict_put    (hatrack_dict_t *, void *, void *);

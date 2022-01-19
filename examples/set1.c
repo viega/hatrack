@@ -56,41 +56,41 @@ typedef struct {
 static void
 dec_output_int64_t(int64_t n, FILE *f)
 {
-  bool  neg;
-  char  num[MAX_DIGITS];
-  char *p;
-  char *end;
+    bool  neg;
+    char  num[MAX_DIGITS];
+    char *p;
+    char *end;
 
-  p   = num + MAX_DIGITS;
-  end = p;
+    p   = num + MAX_DIGITS;
+    end = p;
 
-  if (n < 0) {
-    neg = true;
-    n *= -1;
-  }
-  else {
-    neg = false;
-  }
-
-  while (n) {
-    *--p = '0' + (n % 10);
-    n    = n / 10;
-  }
-
-  if (p == end) {
-    *--p = '0';
-  }
-  else {
-    if (neg) {
-      *--p = '-';
+    if (n < 0) {
+        neg = true;
+        n *= -1;
     }
-  }
+    else {
+        neg = false;
+    }
 
-  while (p != end) {
-    fputc(*p++, f);
-  }
+    while (n) {
+        *--p = '0' + (n % 10);
+        n    = n / 10;
+    }
 
-  return;
+    if (p == end) {
+        *--p = '0';
+    }
+    else {
+        if (neg) {
+            *--p = '-';
+        }
+    }
+
+    while (p != end) {
+        fputc(*p++, f);
+    }
+
+    return;
 }
 
 #define dec_outf(n, f) dec_output_int64_t(n, f)
@@ -104,26 +104,26 @@ dec_output_int64_t(int64_t n, FILE *f)
 static void
 print_set(char *prefix, hatrack_set_t *set)
 {
-    int64_t           *view;
-    uint64_t           i;
-    uint64_t           num;
-    
+    int64_t *view;
+    uint64_t i;
+    uint64_t num;
+
     view = hatrack_set_items_sort(set, &num);
 
     if (!num) {
-      fprintf(stdout, "%s = { }\n" , prefix);
-      
-      return;
+        fprintf(stdout, "%s = { }\n", prefix);
+
+        return;
     }
 
     fprintf(stdout, "%s = {", prefix);
-    
-    for (i = 0; i < num; i++) {
-      if (i) {
-	fprintf(stdout, ", ");
-      }
 
-      dec_outf(view[i], stdout);
+    for (i = 0; i < num; i++) {
+        if (i) {
+            fprintf(stdout, ", ");
+        }
+
+        dec_outf(view[i], stdout);
     }
 
     fprintf(stdout, " }\n");
