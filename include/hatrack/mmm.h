@@ -532,12 +532,21 @@ mmm_start_linearized_op(void)
     return read_epoch;
 }
 
-/* This simply removes our reservation, indicating we are no longer
- * performing a data structure operation.
+/* This does two things:
+ *
+ * 1) Inserts a compiler barrier to make sure the rest of the operation
+ *    is ordered AFTER everything that came before it.
+ *
+ * 2) Removes our reservation, indicating we are no longer performing
+ *    a data structure operation.
+ *
+ * Note that the mmm_start* ops do not require a compiler fence,
+ * because they both use a memory fence.
  */
 static inline void
 mmm_end_op(void)
 {
+    atomic_signal_fence(memory_order_seq_cst);
     mmm_reservations[mmm_mytid] = HATRACK_EPOCH_UNRESERVED;
 
     return;
