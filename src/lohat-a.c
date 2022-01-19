@@ -26,6 +26,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 #ifdef SANE_FETCH_ADD_PTR_SEMANTICS
 #define fa_ptr_incr(t) (1)
 #else
@@ -1099,4 +1101,6 @@ lohat_a_insertion_sort(hatrack_view_t *view, uint64_t num_items)
 
     return;
 }
+#endif
+
 #endif

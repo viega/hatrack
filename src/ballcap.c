@@ -48,6 +48,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 // clang-format off
 
        ballcap_store_t *ballcap_store_new    (uint64_t);
@@ -884,3 +886,5 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
 
     return new_store;
 }
+
+#endif

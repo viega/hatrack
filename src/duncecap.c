@@ -31,6 +31,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 // clang-format off
 static duncecap_store_t *duncecap_store_new    (uint64_t);
 static void             *duncecap_store_get    (duncecap_store_t *,
@@ -824,3 +826,5 @@ duncecap_migrate(duncecap_t *self)
 
     return;
 }
+
+#endif

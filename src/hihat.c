@@ -26,6 +26,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 // clang-format off
 static hihat_store_t *hihat_store_new    (uint64_t);
 static void          *hihat_store_get    (hihat_store_t *, hatrack_hash_t,
@@ -1310,3 +1312,5 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
      */
     return top->store_current;
 }
+
+#endif

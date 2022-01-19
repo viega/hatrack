@@ -547,6 +547,20 @@
 #define HATRACK_RAND_SEED_SIZE 32
 #endif
 
+/* HATRACK_COMPILE_ALL_ALGORITHMS
+ *
+ * If this is defined, we will compile in all algorithms, not just the
+ * ones used to back hatrack_dict() and hatrack_set().
+ *
+ * This is used in the test harness, mainly for comparative /
+ * performance testing.
+ *
+ * Note that, without this on, we only compile in witchhat and
+ * woolhat.
+ */
+
+// #define HATRACK_COMPILE_ALL_ALGORITHMS
+
 /* HATRACK_MAX_HATS
  *
  * testhat has an interface to "register" algorithms, and then

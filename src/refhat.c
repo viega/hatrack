@@ -22,6 +22,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 static void refhat_migrate(refhat_t *);
 
 /* refhat_new()
@@ -572,3 +574,5 @@ refhat_migrate(refhat_t *self)
 
     return;
 }
+
+#endif

@@ -26,6 +26,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 // clang-format off
 
 // Not static, because tophat needs to call it, but nonetheless, don't
@@ -951,3 +953,5 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
 
     return new_store;
 }
+
+#endif
