@@ -24,10 +24,9 @@
 
 // Pulls in witchhat.
 #include <hatrack/dict.h>
+#include <hatrack/set.h>
 
-// Will soon replace with hatrack_set.h once done.
-#include <hatrack/woolhat.h>
-
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
 #include <hatrack/tophat.h>
 #include <hatrack/lohat-a.h>
 #include <hatrack/lohat.h>
@@ -38,9 +37,7 @@
 #include <hatrack/swimcap.h>
 #include <hatrack/duncecap.h>
 #include <hatrack/refhat.h>
-
-#include <hatrack/dict.h>
-#include <hatrack/set.h>
+#endif
 
 #include <hatrack/hash.h>
 #endif

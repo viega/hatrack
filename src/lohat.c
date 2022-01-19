@@ -27,6 +27,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 // clang-format off
 
 static lohat_store_t  *lohat_store_new    (uint64_t);
@@ -1182,3 +1184,5 @@ didnt_win:
      */
     return top->store_current;
 }
+
+#endif

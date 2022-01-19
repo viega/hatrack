@@ -28,6 +28,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 // clang-format off
 static void             tophat_init_base     (tophat_t *);
 static void		tophat_st_migrate    (tophat_st_ctx_t *);
@@ -1257,3 +1259,4 @@ tophat_migrate_to_woolhat(tophat_t *self)
     return (void *)new_table;
 }
 
+#endif

@@ -66,6 +66,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 // clang-format off
 static oldhat_store_t  *oldhat_store_new    (uint64_t);
 static void             oldhat_store_delete (oldhat_store_t *, void *);
@@ -1437,3 +1439,5 @@ next_mark_finished:
      */
     return top->store_current;
 }
+
+#endif
