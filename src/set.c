@@ -555,37 +555,36 @@ hatrack_set_union(hatrack_set_t *set1, hatrack_set_t *set2)
 
     while ((i < num1) && (j < num2)) {
         if (view1[i].sort_epoch < view2[j].sort_epoch) {
-            if (set1->pre_return_hook) {
-                (*set1->pre_return_hook)(set1, view1[i].item);
-            }
-
-            woolhat_add(&ret->woolhat_instance, view1[i].hv, view1[i].item);
+	    
+            if (woolhat_add(&ret->woolhat_instance, view1[i].hv, view1[i].item)
+		&& set1->pre_return_hook) {
+		(*set1->pre_return_hook)(set1, view1[i].item);
+	    }
             i++;
         }
         else {
-            if (set2->pre_return_hook) {
+            if (woolhat_add(&ret->woolhat_instance, view2[j].hv, view2[j].item)
+		&& set2->pre_return_hook) {
                 (*set2->pre_return_hook)(set2, view2[j].item);
             }
 
-            woolhat_add(&ret->woolhat_instance, view2[j].hv, view2[j].item);
             j++;
         }
     }
 
     while (i < num1) {
-        if (set1->pre_return_hook) {
-            (*set1->pre_return_hook)(set1, view1[i].item);
-        }
-
-        woolhat_add(&ret->woolhat_instance, view1[i].hv, view1[i].item);
+	if (woolhat_add(&ret->woolhat_instance, view1[i].hv, view1[i].item) 
+	    && set1->pre_return_hook) {
+	    (*set1->pre_return_hook)(set1, view1[i].item);
+	}
         i++;
     }
 
     while (j < num2) {
-        if (set2->pre_return_hook) {
+	if (woolhat_add(&ret->woolhat_instance, view2[j].hv, view2[j].item)
+	    && set2->pre_return_hook) {
             (*set2->pre_return_hook)(set2, view2[j].item);
         }
-        woolhat_add(&ret->woolhat_instance, view2[j].hv, view2[j].item);
         j++;
     }
 
