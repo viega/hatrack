@@ -102,4 +102,116 @@ testhat_view(testhat_t *self, uint64_t *num_items, bool sort)
     return (*self->vtable.view)(self->htable, num_items, sort);
 }
 
+typedef struct {
+    bool    run_func_tests;
+    bool    run_stress_tests;
+    bool    run_throughput_tests;
+    int64_t seed;
+    char   *hat_list[];
+} config_info_t;
+
+typedef struct {
+    uint32_t   tid;
+    char      *type;
+    testhat_t *dict;
+    uint32_t   range; // Specifies range of keys and values, 0 - range-1
+    uint32_t   iters; // Number of times to run the test;
+    uint32_t   extra;
+} test_info_t;
+
+typedef union {
+    struct {
+        uint32_t key;
+        uint32_t value;
+    } s;
+    uint64_t i;
+} test_item;
+
+typedef bool (*test_func_t)(test_info_t *);
+
+extern _Atomic test_func_t test_func;
+extern _Atomic uint64_t    mmm_nexttid;
+extern hatrack_hash_t      precomputed_hashes[HATRACK_TEST_MAX_KEYS];
+extern uint32_t            basic_sizes[];
+extern uint32_t            sort_sizes[];
+extern uint32_t            large_sizes[];
+extern uint32_t            shrug_sizes[];
+extern uint32_t            small_size[];
+extern uint32_t            one_thread[];
+extern uint32_t            mt_only_threads[];
+extern uint32_t            basic_threads[];
+extern uint32_t            del_rate[];
+extern uint32_t            write_rates[];
+
+// clang-format off
+void           test_init_rand       (void);
+void           test_thread_init_rand(void);
+uint32_t       test_rand            (void);
+config_info_t *parse_args           (int, char *[]);
+void           run_functional_tests (config_info_t *);
+void           run_stress_tests     (config_info_t *);
+void          *start_one_thread     (void *);
+
+static inline uint32_t
+test_get(testhat_t *self, uint32_t key)
+{
+    test_item item;
+
+    item.i = (uint64_t)testhat_get(self, precomputed_hashes[key], NULL);
+
+    return item.s.value;
+}
+
+static inline void
+test_put(testhat_t *self, uint32_t key, uint32_t value)
+{
+    test_item item;
+    
+    item.s.key   = key;
+    item.s.value = value;
+    
+    testhat_put(self, precomputed_hashes[key], (void *)item.i, NULL);
+    
+    return;
+}
+
+static inline void
+test_replace(testhat_t *self, uint32_t key, uint32_t value)
+{
+    test_item item;
+    
+    item.s.key   = key;
+    item.s.value = value;
+    
+    testhat_replace(self, precomputed_hashes[key], (void *)item.i, NULL);
+    
+    return;
+}
+
+static inline bool
+test_add(testhat_t *self, uint32_t key, uint32_t value)
+{
+    test_item item;
+    
+    item.s.key   = key;
+    item.s.value = value;
+    
+    return testhat_add(self, precomputed_hashes[key], (void *)item.i);
+}
+
+static inline void
+test_remove(testhat_t *self, uint32_t key)
+{
+    testhat_remove(self, precomputed_hashes[key], NULL);
+
+    return;
+}
+
+static inline hatrack_view_t *
+test_view(testhat_t *self, uint64_t *n, bool sort)
+{
+    return testhat_view(self, n, sort);
+}
+
+
 #endif
