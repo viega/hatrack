@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define NUM_CURRENT_HATS 16
+#define NUM_CURRENT_HATS 17
 
 #include <testhat.h>
 
@@ -35,7 +35,8 @@ static config_hat_info_t hat_info[NUM_CURRENT_HATS] = {
     { "tophat-fmx", OPT_DEFAULT }, 
     { "tophat-fwf", OPT_DEFAULT }, 
     { "tophat-cmx", OPT_DEFAULT }, 
-    { "tophat-cwf", OPT_DEFAULT } 
+    { "tophat-cwf", OPT_DEFAULT },
+    { "crown",      OPT_DEFAULT },
 };
 
 static char *prog_name;
