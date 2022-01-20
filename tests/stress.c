@@ -81,8 +81,9 @@ run_one_time_test(test_func_t func,
              + ((espec.tv_nsec - sspec.tv_nsec) / 1000000000.0);
 
     fprintf(stderr,
-            "%.4f sec, %d clocks, \t%0.4f c/i\n",
+            "%.4f sec, %llu ops/sec, %d clocks, \t%0.4f c/i\n",
             walltime,
+	    (unsigned long long)(iters / walltime),
             ticks,
             (double)(((double)ticks) / (double)iters));
 
