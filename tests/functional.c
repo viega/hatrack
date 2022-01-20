@@ -1,0 +1,466 @@
+#include "testhat.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static bool
+functionality_test(test_func_t func,
+                   uint32_t    iters,
+                   uint32_t    num_threads,
+                   uint32_t    range,
+                   char       *type,
+                   uint32_t    extra)
+{
+    pthread_t   threads[num_threads];
+    test_info_t info[num_threads];
+    uint32_t    i;
+    uint64_t    res;
+    testhat_t  *dict;
+
+    atomic_store(&test_func, NULL);
+    atomic_store(&mmm_nexttid, 0); // Reset thread ids.
+
+    dict = testhat_new(type);
+
+    for (i = 0; i < num_threads; i++) {
+        info[i].tid   = i;
+        info[i].range = range;
+        info[i].type  = type;
+        info[i].dict  = dict;
+        info[i].iters = iters / num_threads;
+        info[i].extra = extra;
+
+        pthread_create(&threads[i], NULL, start_one_thread, &info[i]);
+    }
+
+    atomic_store(&test_func, func);
+
+    for (i = 0; i < num_threads; i++) {
+        pthread_join(threads[i], (void *)&res);
+
+        if (!res) {
+#ifdef HATRACK_DEBUG
+            abort();
+#endif
+            testhat_delete(dict);
+
+            return false;
+        }
+    }
+
+    testhat_delete(dict);
+
+    return true;
+}
+
+
+static void
+run_one_func_test(test_func_t func,
+                  uint32_t    iters,
+                  char       *type,
+                  uint32_t    range,
+                  uint32_t    thread_count,
+                  uint32_t    extra)
+{
+    bool ret;
+
+    fprintf(stderr, "%10s:\t", type);
+    fflush(stderr);
+
+    ret = functionality_test(func, iters, thread_count, range, type, extra);
+
+    if (ret) {
+        fprintf(stderr, "pass\n");
+    }
+    else {
+        fprintf(stderr, "FAIL\n");
+    }
+
+    return;
+}
+
+static void
+run_func_test(char       *name,
+              test_func_t func,
+              uint32_t    iters,
+              char       *types[],
+              uint32_t   *ranges,
+              uint32_t   *tcounts,
+              uint32_t   *extra,
+	      bool        st_ok)
+{
+    uint32_t dict_ix;
+    uint32_t range_ix;
+    uint32_t tcount_ix;
+    uint32_t extra_ix;
+
+    fprintf(stderr, "[[ Test: %s ]]\n", name);
+    extra_ix = 0;
+
+    do {
+        tcount_ix = 0;
+        while (tcounts[tcount_ix]) {
+            range_ix = 0;
+            while (ranges[range_ix]) {
+                if (extra) {
+                    fprintf(stderr,
+                            "[%10s] -- Parameters: threads=%4d, "
+                            "iters=%7d, range=%6d, other=%4x\n",
+                            name,
+                            tcounts[tcount_ix],
+                            iters,
+                            ranges[range_ix],
+                            extra[extra_ix]);
+                    dict_ix = 0;
+                    while (types[dict_ix]) {
+			if (!strcmp(types[dict_ix], "refhat") &&
+			    tcounts[tcount_ix] != 1 &&
+			    !st_ok) {
+			    dict_ix++;
+			    continue;
+			}
+                        run_one_func_test(func,
+                                          iters,
+                                          types[dict_ix],
+                                          ranges[range_ix],
+                                          tcounts[tcount_ix],
+                                          extra[extra_ix]);
+
+                        dict_ix++;
+                    }
+                }
+                else {
+                    fprintf(stderr,
+                            "[%10s] -- Parameters: threads=%4d, "
+                            "iters=%7d, range=%6d\n",
+                            name,
+                            tcounts[tcount_ix],
+                            iters,
+                            ranges[range_ix]);
+                    dict_ix = 0;
+                    while (types[dict_ix]) {
+			if (!strcmp(types[dict_ix], "refhat") &&
+			    tcounts[tcount_ix] != 1 &&
+			    !st_ok) {
+			    dict_ix++;
+			    continue;
+			}
+                        run_one_func_test(func,
+                                          iters,
+                                          types[dict_ix],
+                                          ranges[range_ix],
+                                          tcounts[tcount_ix],
+                                          0);
+                        dict_ix++;
+                    }
+                }
+                range_ix++;
+            }
+            tcount_ix++;
+        }
+    } while (extra && extra[++extra_ix]);
+
+    return;
+}
+
+/* [ basic ]
+ * 1) Have one thread add all the key / value pairs (where key = value).
+ * 2) delete the top half.
+ * 3) Run get on all items, to make sure only the expected items
+ *    are there.
+ * Ignores the # of iterations, only the range.
+ */
+static bool
+test_basic(test_info_t *info)
+{
+    uint64_t i;
+
+    for (i = 0; i < info->range; i++) {
+        test_put(info->dict, i + 1, i + 1);
+    }
+
+    for (i = 0; i < (info->range / 2); i++) {
+        test_remove(info->dict, i + 1);
+    }
+
+    for (i = 0; i < (info->range / 2); i++) {
+        if (test_get(info->dict, i + 1)) {
+            fprintf(stderr, "didn't delete.\n");
+            return false;
+        }
+    }
+
+    for (; i < info->range; i++) {
+        if (test_get(info->dict, i + 1) != i + 1) {
+            fprintf(stderr,
+                    "%u != %llu\n",
+                    test_get(info->dict, i + 1),
+                    (unsigned long long)(i + 1));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/* [ ordering ]
+ *
+ * Add n items in numerical order, delete the first half, reinsert all
+ * the items, and then make sure the ordering is right in our
+ * iterator.
+ */
+static bool
+test_ordering(test_info_t *info)
+{
+    uint64_t        i;
+    uint64_t        n;
+    uint32_t        k;
+    uint32_t        v;
+    hatrack_view_t *view;
+
+    for (i = 0; i < info->range; i++) {
+        test_put(info->dict, i + 1, i + 1);
+    }
+
+    for (i = 0; i < (info->range / 2); i++) {
+        test_remove(info->dict, i + 1);
+    }
+
+    for (i = 0; i < info->range; i++) {
+        test_put(info->dict, i + 1, i + 1);
+    }
+
+    view = test_view(info->dict, &n, true);
+
+    if (n != info->range) {
+        free(view);
+        return false;
+    }
+
+    for (i = 0; i < n; i++) {
+        k = (uint32_t)(((uint64_t)view[i].item) >> 32);
+        v = (uint32_t)(((uint64_t)view[i].item) & 0xffffffff);
+        if (k != v) {
+            free(view);
+            return false;
+        }
+
+        if (((i + (info->range / 2) + 1) % info->range) != (k % info->range)) {
+            free(view);
+            return false;
+        }
+    }
+
+    free(view);
+
+    return true;
+}
+
+/* [ condput ]
+ *
+ * Add n items in numerical order, check them, try to condput on all
+ * of them, delete them, re-add them, and check one more time.
+ */
+
+static bool
+test_condput(test_info_t *info)
+{
+    uint64_t i;
+
+    for (i = 0; i < info->range; i++) {
+        test_add(info->dict, i + 1, i + 1);
+    }
+
+    for (i = 0; i < info->range; i++) {
+        if (test_get(info->dict, i + 1) != i + 1) {
+            fprintf(stderr,
+                    "Get != put (%d != %llu)\n",
+                    test_get(info->dict, i + 1),
+                    (unsigned long long)(i + 1));
+            return false;
+        }
+    }
+
+    for (i = 0; i < info->range; i++) {
+        if (test_add(info->dict, i + 1, i + 2)) {
+            fprintf(stderr, "Didn't return false when it should have.\n");
+            return false;
+        }
+        test_remove(info->dict, i + 1);
+    }
+
+    for (i = 0; i < info->range; i++) {
+        if (!test_add(info->dict, i + 1, i + 2)) {
+            fprintf(stderr, "Can't reput over a deleted item\n");
+            return false;
+        }
+    }
+
+    for (i = 0; i < info->range; i++) {
+        if (test_get(info->dict, i + 1) != i + 2) {
+            fprintf(stderr,
+                    "No consistency in final check (expected: "
+                    "%llu, got: %u)\n",
+                    (unsigned long long)(i + 2),
+                    test_get(info->dict, i + 1));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool
+test_replace_op(test_info_t *info)
+{
+    uint64_t i;
+
+    for (i = 0; i < 50; i++) {
+        test_put(info->dict, i + 1, i + 1);
+    }
+    for (i = 0; i < 100; i++) {
+        test_replace(info->dict, i + 1, i + 2);
+    }
+    for (i = 0; i < 50; i++) {
+        if (test_get(info->dict, i + 1) != i + 2) {
+            return false;
+        }
+    }
+
+    for (; i < 100; i++) {
+        if (test_get(info->dict, i + 1)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Validate this by looking at counters.
+static bool
+test_shrinking(test_info_t *info)
+{
+    uint64_t i;
+
+    for (i = 0; i < 380; i++) {
+        test_put(info->dict, i + 1, i + 1);
+    }
+
+    for (i = 0; i < 380; i++) {
+        test_remove(info->dict, i + 1);
+    }
+
+    for (i = 381; i < 500; i++) {
+        test_put(info->dict, i + 1, i + 1);
+    }
+
+    return true;
+}
+
+/* [ parallel ]
+ * [ ||-large ]
+ *
+ * Have each thread attempt to set every value in the range,
+ * then check to make sure the items are all correct.
+ */
+static bool
+test_parallel(test_info_t *info)
+{
+    uint64_t i, n;
+
+    for (i = 0; i < info->range; i++) {
+        test_put(info->dict, i, i);
+    }
+
+    for (i = 0; i < info->range; i++) {
+        n = test_get(info->dict, i);
+
+        if (n != i) {
+            printf("%llu != %llu\n",
+                   (unsigned long long)n,
+                   (unsigned long long)i);
+            printf("Is HATRACK_TEST_MAX_KEYS high enough?\n");
+
+            return false;
+        }
+    }
+
+    return true;
+}
+
+void
+run_functional_tests(config_info_t *config)
+{
+    char **hat_list;
+
+    hat_list = config->hat_list;
+    
+    run_func_test("basic",
+                  test_basic,
+                  1,
+		  hat_list,
+                  basic_sizes,
+                  one_thread,
+                  0,
+		  true);
+    counters_output_delta();        
+    run_func_test("ordering",
+                  test_ordering,
+                  1,
+		  hat_list,
+                  basic_sizes,
+                  one_thread,
+                  0,
+		  true);
+    counters_output_delta();        
+    run_func_test("shrinking",
+		  test_shrinking,
+		  1,
+		  hat_list,
+		  shrug_sizes,
+		  one_thread,
+		  0,
+		  true);
+    counters_output_delta();
+    run_func_test("replace",
+		  test_replace_op,
+		  1,
+		  hat_list,
+		  shrug_sizes,
+		  one_thread,
+		  0,
+		  true);
+    counters_output_delta();
+    run_func_test("condput",
+		  test_condput,
+		  1,
+		  hat_list,
+		  shrug_sizes,
+		  one_thread,
+		  0,
+		  true);
+    counters_output_delta();
+    run_func_test("parallel",
+                  test_parallel,
+                  10,
+		  hat_list,
+                  basic_sizes,
+                  mt_only_threads,
+                  0,
+		  false);
+    counters_output_delta();
+
+#ifdef HATRACK_RUN_LARGE_TESTS    
+    run_func_test("||-large",
+                  test_parallel,
+                  1,
+		  hat_list,
+                  large_sizes,
+                  basic_threads,
+                  0,
+		  false);
+#endif    
+    
+    return;
+}
+
