@@ -585,6 +585,30 @@
 #define XXH_INLINE_ALL
 #endif
 
+/* HATRACK_FULL_LINEAR_PROBES
+ *
+ * Crown currently can choose between two strategies to avoid a
+ * probing race condition.  Use this to change which strategy we use.
+ *
+ * The default is to skip but ensure we "help" other threads who have
+ * the same hash value as us, and have acquired buckets.
+ *
+ * I'd expect it to be faster, and it does seem to be the case.
+ */
+// #define HATRACK_FULL_LINEAR_PROBES
+
+/* HATRACK_SKIP_ON_MIGRATIONS
+ *
+ * If you do NOT define HATRACK_FULL_LINEAR_PROBES, then the put and
+ * add operations will use the bucket cache by default. However, the
+ * migration operation will NOT, because I am pretty sure that, on
+ * average, tables will be sparse enough on migration that the
+ * optimization won't help, and might even hurt.
+ */
+// #define HATRACK_SKIP_ON_MIGRATIONS
+
+
+
 #ifdef HAVE_C11_ENUMS
 #define enum64(x, ...)                                                         \
     typedef enum : uint64_t                                                    \

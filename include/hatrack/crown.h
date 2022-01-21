@@ -37,8 +37,24 @@
 
 #include <hatrack/hatrack_common.h>
 
-#define CROWN_NEIGHBORS      63
+#ifdef HATRACK_32_BIT_HOP_TABLE
+
+
+#define CROWN_HOME_BIT  0x80000000
+
+typedef uint32_t hop_t;
+
+#define CLZ(n) __builtin_clzl(n)
+
+#else
+
 #define CROWN_HOME_BIT  0x8000000000000000
+
+typedef uint64_t hop_t;
+    
+#define CLZ(n) __builtin_clzll(n)
+
+#endif
 
 typedef struct {
     void    *item;
@@ -53,7 +69,12 @@ enum64(crown_flag_t,
 typedef struct {
     _Atomic hatrack_hash_t hv;
     _Atomic crown_record_t record;
+    
+#ifdef HATRACK_32_BIT_HOP_TABLE
+    _Atomic uint32_t       neighbor_map;
+#else
     _Atomic uint64_t       neighbor_map;
+#endif
 } crown_bucket_t;
 
 typedef struct crown_store_st crown_store_t;
@@ -63,6 +84,7 @@ struct crown_store_st {
     alignas(8)
     uint64_t                 last_slot;
     uint64_t                 threshold;
+    _Atomic uint64_t         used_count;    
     _Atomic(crown_store_t *) store_next;
     alignas(16)
     crown_bucket_t           buckets[];
@@ -79,16 +101,16 @@ typedef struct {
 
 
 crown_t     *crown_new    (void);
-void            crown_init   (crown_t *);
-void            crown_cleanup(crown_t *);
-void            crown_delete (crown_t *);
-void           *crown_get    (crown_t *, hatrack_hash_t, bool *);
-void           *crown_put    (crown_t *, hatrack_hash_t, void *,
-				 bool *);
-void           *crown_replace(crown_t *, hatrack_hash_t, void *,
-				 bool *);
-bool            crown_add    (crown_t *, hatrack_hash_t, void *);
-void           *crown_remove (crown_t *, hatrack_hash_t, bool *);
+void         crown_init   (crown_t *);
+void         crown_cleanup(crown_t *);
+void         crown_delete (crown_t *);
+void        *crown_get    (crown_t *, hatrack_hash_t, bool *);
+void        *crown_put    (crown_t *, hatrack_hash_t, void *,
+			   bool *);
+void        *crown_replace(crown_t *, hatrack_hash_t, void *,
+			   bool *);
+bool         crown_add    (crown_t *, hatrack_hash_t, void *);
+void        *crown_remove (crown_t *, hatrack_hash_t, bool *);
 uint64_t        crown_len    (crown_t *);
 hatrack_view_t *crown_view   (crown_t *, uint64_t *, bool);
 
