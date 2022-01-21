@@ -22,14 +22,17 @@
 #ifndef __HATRACK_H__
 #define __HATRACK_H__
 
-// Pulls in witchhat.
+// Currently pulls in Crown.
 #include <hatrack/dict.h>
+
+// Currently pulls in Woolhat.
 #include <hatrack/set.h>
 
 #ifdef HATRACK_COMPILE_ALL_ALGORITHMS
 #include <hatrack/tophat.h>
 #include <hatrack/lohat-a.h>
 #include <hatrack/lohat.h>
+#include <hatrack/witchhat.h>
 #include <hatrack/hihat.h>
 #include <hatrack/oldhat.h>
 #include <hatrack/ballcap.h>

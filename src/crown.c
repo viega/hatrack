@@ -161,8 +161,6 @@
  */
 
 #include <hatrack.h>
-#include <crown.h>
-#define HATRACK_SKIP_ON_MIGRATIONS
 
 // clang-format off
 
@@ -1200,12 +1198,12 @@ crown_store_migrate(crown_store_t *self, crown_t *top)
             continue;
         }
 
-        hv  = atomic_read(&bucket->hv);
-        bix = hatrack_bucket_index(hv, new_store->last_slot);
+        hv         = atomic_read(&bucket->hv);
+        bix        = hatrack_bucket_index(hv, new_store->last_slot);
+	map_bucket = &new_store->buckets[bix];
 
 #ifdef HATRACK_SKIP_ON_MIGRATIONS
 	original_bix = bix;
-	map_bucket   = &new_store->buckets[bix];
 	map          = atomic_read(&map_bucket->neighbor_map);
 	j            = -1;
 
