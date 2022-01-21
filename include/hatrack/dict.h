@@ -22,7 +22,7 @@
 #ifndef __HATRACK_DICT_H__
 #define __HATRACK_DICT_H__
 
-#include <hatrack/witchhat.h>
+#include <hatrack/crown.h>
 
 enum
 {
@@ -65,7 +65,7 @@ typedef union {
 } hatrack_hash_info_t;
 
 struct hatrack_dict_st {
-    witchhat_t            witchhat_instance;
+    crown_t               crown_instance;
     hatrack_hash_info_t   hash_info;
     hatrack_mem_hook_t    free_handler;
     hatrack_mem_hook_t    key_return_hook;

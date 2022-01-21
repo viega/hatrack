@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  *  Name:           dict.c
- *  Description:    High-level dictionary based on witchhat.
+ *  Description:    High-level dictionary based on Crown.
  *
  *  Author:         John Viega, john@zork.org
  */
@@ -41,7 +41,7 @@ hatrack_dict_new(uint32_t key_type)
 void
 hatrack_dict_init(hatrack_dict_t *self, uint32_t key_type)
 {
-    witchhat_init(&self->witchhat_instance);
+    crown_init(&self->crown_instance);
 
     switch (key_type) {
     case HATRACK_DICT_KEY_TYPE_INT:
@@ -72,13 +72,13 @@ void
 hatrack_dict_cleanup(hatrack_dict_t *self)
 {
     uint64_t           i;
-    witchhat_store_t  *store;
-    witchhat_bucket_t *bucket;
+    crown_store_t  *store;
+    crown_bucket_t *bucket;
     hatrack_hash_t     hv;
-    witchhat_record_t  record;
+    crown_record_t  record;
 
     if (self->free_handler) {
-        store = atomic_load(&self->witchhat_instance.store_current);
+        store = atomic_load(&self->crown_instance.store_current);
 
         for (i = 0; i <= store->last_slot; i++) {
             bucket = &store->buckets[i];
@@ -98,7 +98,7 @@ hatrack_dict_cleanup(hatrack_dict_t *self)
         }
     }
 
-    mmm_retire(atomic_load(&self->witchhat_instance.store_current));
+    mmm_retire(atomic_load(&self->crown_instance.store_current));
 
     return;
 }
@@ -166,15 +166,15 @@ hatrack_dict_get(hatrack_dict_t *self, void *key, bool *found)
 {
     hatrack_hash_t       hv;
     hatrack_dict_item_t *item;
-    witchhat_store_t    *store;
+    crown_store_t    *store;
 
     
     hv = hatrack_dict_get_hash_value(self, key);
 
     mmm_start_basic_op();
 
-    store = atomic_read(&self->witchhat_instance.store_current);
-    item  = witchhat_store_get(store, hv, found);
+    store = atomic_read(&self->crown_instance.store_current);
+    item  = crown_store_get(store, hv, found);
 
     if (!item) {
         if (found) {
@@ -204,7 +204,7 @@ hatrack_dict_get(hatrack_dict_t *self, void *key, bool *found)
  * reservation, and also end our reservation before we want it.
  *
  * We could do two layers of MMM, but instead we just lift it out here,
- * and skip directly to the witchhat_store() calls.
+ * and skip directly to the crown_store() calls.
  */
 void
 hatrack_dict_put(hatrack_dict_t *self, void *key, void *value)
@@ -212,7 +212,7 @@ hatrack_dict_put(hatrack_dict_t *self, void *key, void *value)
     hatrack_hash_t       hv;
     hatrack_dict_item_t *new_item;
     hatrack_dict_item_t *old_item;
-    witchhat_store_t    *store;
+    crown_store_t    *store;
 
     hv = hatrack_dict_get_hash_value(self, key);
 
@@ -221,10 +221,10 @@ hatrack_dict_put(hatrack_dict_t *self, void *key, void *value)
     new_item        = mmm_alloc_committed(sizeof(hatrack_dict_item_t));
     new_item->key   = key;
     new_item->value = value;
-    store           = atomic_read(&self->witchhat_instance.store_current);
+    store           = atomic_read(&self->crown_instance.store_current);
 
-    old_item = witchhat_store_put(store,
-                                  &self->witchhat_instance,
+    old_item = crown_store_put(store,
+                                  &self->crown_instance,
                                   hv,
                                   new_item,
                                   NULL,
@@ -251,7 +251,7 @@ hatrack_dict_replace(hatrack_dict_t *self, void *key, void *value)
     hatrack_hash_t       hv;
     hatrack_dict_item_t *new_item;
     hatrack_dict_item_t *old_item;
-    witchhat_store_t    *store;
+    crown_store_t    *store;
 
     hv = hatrack_dict_get_hash_value(self, key);
 
@@ -260,10 +260,10 @@ hatrack_dict_replace(hatrack_dict_t *self, void *key, void *value)
     new_item        = mmm_alloc_committed(sizeof(hatrack_dict_item_t));
     new_item->key   = key;
     new_item->value = value;
-    store           = atomic_read(&self->witchhat_instance.store_current);
+    store           = atomic_read(&self->crown_instance.store_current);
 
-    old_item = witchhat_store_put(store,
-                                  &self->witchhat_instance,
+    old_item = crown_store_put(store,
+                                  &self->crown_instance,
                                   hv,
                                   new_item,
                                   NULL,
@@ -293,7 +293,7 @@ hatrack_dict_add(hatrack_dict_t *self, void *key, void *value)
 {
     hatrack_hash_t       hv;
     hatrack_dict_item_t *new_item;
-    witchhat_store_t    *store;
+    crown_store_t    *store;
 
     hv = hatrack_dict_get_hash_value(self, key);
 
@@ -302,9 +302,9 @@ hatrack_dict_add(hatrack_dict_t *self, void *key, void *value)
     new_item        = mmm_alloc_committed(sizeof(hatrack_dict_item_t));
     new_item->key   = key;
     new_item->value = value;
-    store           = atomic_read(&self->witchhat_instance.store_current);
+    store           = atomic_read(&self->crown_instance.store_current);
 
-    if (witchhat_store_add(store, &self->witchhat_instance, hv, new_item, 0)) {
+    if (crown_store_add(store, &self->crown_instance, hv, new_item, 0)) {
         mmm_end_op();
 
         return true;
@@ -321,15 +321,15 @@ hatrack_dict_remove(hatrack_dict_t *self, void *key)
 {
     hatrack_hash_t       hv;
     hatrack_dict_item_t *old_item;
-    witchhat_store_t    *store;
+    crown_store_t    *store;
 
     hv = hatrack_dict_get_hash_value(self, key);
 
     mmm_start_basic_op();
 
-    store = atomic_read(&self->witchhat_instance.store_current);
+    store = atomic_read(&self->crown_instance.store_current);
     old_item
-        = witchhat_store_remove(store, &self->witchhat_instance, hv, NULL, 0);
+        = crown_store_remove(store, &self->crown_instance, hv, NULL, 0);
 
     if (old_item) {
         if (self->free_handler) {
@@ -360,7 +360,7 @@ hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
 
     mmm_start_basic_op();
     
-    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, false);
+    view      = crown_view_no_mmm(&self->crown_instance, num, false);
     alloc_len = sizeof(hatrack_dict_key_t) * *num;
     ret       = (hatrack_dict_key_t *)malloc(alloc_len);
 
@@ -397,7 +397,7 @@ hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
 
     mmm_start_basic_op();
     
-    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, false);
+    view      = crown_view_no_mmm(&self->crown_instance, num, false);
     alloc_len = sizeof(hatrack_dict_value_t) * *num;
     ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
@@ -433,7 +433,7 @@ hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
 
     mmm_start_basic_op();
     
-    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, false);
+    view      = crown_view_no_mmm(&self->crown_instance, num, false);
     alloc_len = sizeof(hatrack_dict_item_t) * *num;
     ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 
@@ -468,7 +468,7 @@ hatrack_dict_keys_sort(hatrack_dict_t *self, uint64_t *num)
 
     mmm_start_basic_op();
     
-    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, true);
+    view      = crown_view_no_mmm(&self->crown_instance, num, true);
     alloc_len = sizeof(hatrack_dict_key_t) * *num;
     ret       = (hatrack_dict_key_t *)malloc(alloc_len);
 
@@ -505,7 +505,7 @@ hatrack_dict_values_sort(hatrack_dict_t *self, uint64_t *num)
 
     mmm_start_basic_op();
     
-    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, true);
+    view      = crown_view_no_mmm(&self->crown_instance, num, true);
     alloc_len = sizeof(hatrack_dict_value_t) * *num;
     ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
@@ -541,7 +541,7 @@ hatrack_dict_items_sort(hatrack_dict_t *self, uint64_t *num)
 
     mmm_start_basic_op();
     
-    view      = witchhat_view_no_mmm(&self->witchhat_instance, num, true);
+    view      = crown_view_no_mmm(&self->crown_instance, num, true);
     alloc_len = sizeof(hatrack_dict_item_t) * *num;
     ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 

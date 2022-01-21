@@ -43,6 +43,7 @@
 #include <hatrack/witchhat.h>
 #include <hatrack/woolhat.h>
 #include <hatrack/tophat.h>
+#include <hatrack/crown.h>
 
 typedef struct {
     hatrack_vtable_t vtable;
@@ -151,6 +152,10 @@ config_info_t *parse_args           (int, char *[]);
 void           run_functional_tests (config_info_t *);
 void           run_stress_tests     (config_info_t *);
 void          *start_one_thread     (void *);
+
+#ifdef HATRACK_DEBUG
+void           print_config         (config_info_t *);
+#endif
 
 static inline uint32_t
 test_get(testhat_t *self, uint32_t key)

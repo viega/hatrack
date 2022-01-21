@@ -35,6 +35,8 @@
 
 #include <hatrack.h>
 
+#ifdef HATRACK_COMPILE_ALL_ALGORITHMS
+
 // clang-format off
 // Most of the store functions are needed by other modules, for better
 // or worse, so we lifted their prototypes into the header.
@@ -946,3 +948,5 @@ static inline bool
 witchhat_need_to_help(witchhat_t *self) {
     return (bool)atomic_read(&self->help_needed);
 }
+
+#endif

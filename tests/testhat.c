@@ -294,6 +294,18 @@ hatrack_vtable_t tophat_cwf_vtable = {
     .view    = (hatrack_view_func)tophat_view
 };
 
+hatrack_vtable_t crown_vtable = {
+    .init    = (hatrack_init_func)crown_init,
+    .get     = (hatrack_get_func)crown_get,
+    .put     = (hatrack_put_func)crown_put,
+    .replace = (hatrack_replace_func)crown_replace,    
+    .add     = (hatrack_add_func)crown_add,
+    .remove  = (hatrack_remove_func)crown_remove,
+    .delete  = (hatrack_delete_func)crown_delete,
+    .len     = (hatrack_len_func)crown_len,
+    .view    = (hatrack_view_func)crown_view
+};
+
 // clang-format on
 
 static void
@@ -327,6 +339,7 @@ testhat_init_default_algorithms(void)
     testhat_register_algorithm("tophat-cwf",
                                &tophat_cwf_vtable,
                                sizeof(tophat_t));
+    testhat_register_algorithm("crown", &crown_vtable, sizeof(crown_t));
 
     return;
 }
