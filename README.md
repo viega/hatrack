@@ -1,8 +1,32 @@
 # Hatrack
 ## Hash tables for parallel programming
 
-This project consisists of fast hash tables suitable for parallel
-programming, including multiple lock-free, wait-free hashtables.
+This project provides several fast hash tables suitable for parallel
+programming.
+
+The primary interfaces consist of a high-level dictionary and set,
+that are based on our most efficient lower-level algorithms. These
+higher-level interfaces deal with a lot of practical challenges, some
+of which have never been addressed.
+
+Some key features of these interfaces include:
+
+1. Full linearizability: you can do fully consistent set operations
+   and iteratirs/views.
+   
+2. Good support for user-level memory management needs. Even if your
+   contents are dynamically allocated, we make sure you have the
+   opportunity to do things like freeing or reference counting,
+   without fear of race conditions.
+
+3. Performance and scalability-- these tables are not just fast and
+   lock free, they are wait free, and do well in multi-processor
+   environments. The core operations are O(1) operations with low
+   fixed overhead.
+
+4. The ability to keep tables "ordered" by insertion time.
+
+5. Tables both grow and shrink, when necessary.
 
 If you're interested in understanding the different algorithms, see
 the `README.md` in the `src/` directory.
@@ -68,6 +92,7 @@ objects do (this is due to sets requiring fully consistent views; see
 the `README.md` file in the `src` directory for more information).
 
 ## Getting Started
+
 Once you've built, you can just link against the library, and go. See
 the `examples` directory.
 
