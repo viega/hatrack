@@ -110,23 +110,48 @@ duncecap_new(void)
     return ret;
 }
 
+duncecap_t *
+duncecap_new_size(char size)
+{
+    duncecap_t *ret;
+
+    ret = (duncecap_t *)malloc(sizeof(duncecap_t));
+
+    duncecap_init_size(ret, size);
+
+    return ret;
+}
+
 /* duncecap_init()
  *
  * It's expected that duncecap instances will be created via the
  * default malloc.  This function cannot rely on zero-initialization
  * of its own object.
- *
- * For the definition of HATRACK_MIN_SIZE, this is computed in
- * config.h, since we require hash table buckets to always be sized to
- * a power of two. To set the size, you instead set the preprocessor
- * variable HATRACK_MIN_SIZE_LOG.
  */
 void
 duncecap_init(duncecap_t *self)
 {
-    duncecap_store_t *store;
+    duncecap_init_size(self, HATRACK_MIN_SIZE_LOG);
 
-    store               = duncecap_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+void
+duncecap_init_size(duncecap_t *self, char size)
+{
+    duncecap_store_t *store;
+    uint64_t          len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len                 = 1 << size;
+    store               = duncecap_store_new(len);
     self->store_current = store;
     self->item_count    = 0;
     self->next_epoch    = 1;

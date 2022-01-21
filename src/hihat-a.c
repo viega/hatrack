@@ -67,12 +67,43 @@ hihat_a_new(void)
     return ret;
 }
 
+hihat_t *
+hihat_a_new_size(char size)
+{
+    hihat_t *ret;
+
+    ret = (hihat_t *)malloc(sizeof(hihat_t));
+
+    hihat_a_init_size(ret, size);
+
+    return ret;
+}
+
 void
 hihat_a_init(hihat_t *self)
 {
-    hihat_store_t *store;
+    hihat_a_init_size(self, HATRACK_MIN_SIZE_LOG);
+    
+    return;
+}
 
-    store            = hihat_a_store_new(HATRACK_MIN_SIZE);
+// size is a base 2 log.
+void
+hihat_a_init_size(hihat_t *self, char size)
+{
+    hihat_store_t *store;
+    uint64_t       len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+    
+    len              = 1 << size;
+    store            = hihat_a_store_new(len);
     self->next_epoch = 1;
     
     atomic_store(&self->store_current, store);

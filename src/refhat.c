@@ -51,26 +51,37 @@ refhat_new(void)
  * own object, though it does zero-initialize the buckets it allocates
  * (also with the default memory allocator).
  *
- * For the definition of HATRACK_MIN_SIZE, this is computed in
- * config.h, since we require hash table buckets to always be sized to
- * a power of two. To set the size, you instead set the preprocessor
- * variable HATRACK_MIN_SIZE_LOG.
- *
  * Note that next_epoch starts out as 1, because a 0 value indicates
  * deletion.
  */
 void
 refhat_init(refhat_t *self)
 {
-    uint64_t size;
+    refhat_init_size(self, HATRACK_MIN_SIZE_LOG);
 
-    size             = HATRACK_MIN_SIZE;
-    self->last_slot  = size - 1;
-    self->threshold  = hatrack_compute_table_threshold(size);
+    return;
+}
+
+void
+refhat_init_size(refhat_t *self, char size)
+{
+    uint64_t len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len              = 1 << size;
+    self->last_slot  = len - 1;
+    self->threshold  = hatrack_compute_table_threshold(len);
     self->used_count = 0;
     self->item_count = 0;
     self->next_epoch = 1;
-    self->buckets    = (refhat_bucket_t *)calloc(size, sizeof(refhat_bucket_t));
+    self->buckets    = (refhat_bucket_t *)calloc(len, sizeof(refhat_bucket_t));
 
     return;
 }

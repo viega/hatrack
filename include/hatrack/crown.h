@@ -100,19 +100,19 @@ typedef struct {
 } crown_t;
 
 
-crown_t     *crown_new    (void);
-void         crown_init   (crown_t *);
-void         crown_cleanup(crown_t *);
-void         crown_delete (crown_t *);
-void        *crown_get    (crown_t *, hatrack_hash_t, bool *);
-void        *crown_put    (crown_t *, hatrack_hash_t, void *,
-			   bool *);
-void        *crown_replace(crown_t *, hatrack_hash_t, void *,
-			   bool *);
-bool         crown_add    (crown_t *, hatrack_hash_t, void *);
-void        *crown_remove (crown_t *, hatrack_hash_t, bool *);
-uint64_t        crown_len    (crown_t *);
-hatrack_view_t *crown_view   (crown_t *, uint64_t *, bool);
+crown_t        *crown_new      (void);
+crown_t        *crown_new_size (char);
+void            crown_init     (crown_t *);
+void            crown_init_size(crown_t *, char);
+void            crown_cleanup  (crown_t *);
+void            crown_delete   (crown_t *);
+void           *crown_get      (crown_t *, hatrack_hash_t, bool *);
+void           *crown_put      (crown_t *, hatrack_hash_t, void *, bool *);
+void           *crown_replace  (crown_t *, hatrack_hash_t, void *, bool *);
+bool            crown_add      (crown_t *, hatrack_hash_t, void *);
+void           *crown_remove   (crown_t *, hatrack_hash_t, bool *);
+uint64_t        crown_len      (crown_t *);
+hatrack_view_t *crown_view     (crown_t *, uint64_t *, bool);
 
 // Needed for dict.c
 hatrack_view_t *crown_view_no_mmm(crown_t *, uint64_t *, bool);

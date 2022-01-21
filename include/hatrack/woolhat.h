@@ -79,19 +79,22 @@ typedef struct {
 } hatrack_set_view_t;
 
 woolhat_t      *woolhat_new             (void);
+woolhat_t      *woolhat_new_size        (char);
 void            woolhat_init            (woolhat_t *);
+void            woolhat_init_size       (woolhat_t *, char);
 void            woolhat_cleanup         (woolhat_t *);
 void            woolhat_delete          (woolhat_t *);
 void            woolhat_set_cleanup_func(woolhat_t *, mmm_cleanup_func, void *);
+void           *woolhat_get             (woolhat_t *, hatrack_hash_t, bool *);
+void           *woolhat_put             (woolhat_t *, hatrack_hash_t, void *,
+					 bool *);
+void           *woolhat_replace         (woolhat_t *, hatrack_hash_t, void *,
+					 bool *);
+bool            woolhat_add             (woolhat_t *, hatrack_hash_t, void *);
+void           *woolhat_remove          (woolhat_t *, hatrack_hash_t, bool *);
+uint64_t        woolhat_len             (woolhat_t *);
 
-void           *woolhat_get    (woolhat_t *, hatrack_hash_t, bool *);
-void           *woolhat_put    (woolhat_t *, hatrack_hash_t, void *, bool *);
-void           *woolhat_replace(woolhat_t *, hatrack_hash_t, void *, bool *);
-bool            woolhat_add    (woolhat_t *, hatrack_hash_t, void *);
-void           *woolhat_remove (woolhat_t *, hatrack_hash_t, bool *);
-uint64_t        woolhat_len    (woolhat_t *);
-
-hatrack_view_t     *woolhat_view       (woolhat_t *, uint64_t *, bool);
-hatrack_set_view_t *woolhat_view_epoch (woolhat_t *, uint64_t *, uint64_t);
+hatrack_view_t     *woolhat_view        (woolhat_t *, uint64_t *, bool);
+hatrack_set_view_t *woolhat_view_epoch  (woolhat_t *, uint64_t *, uint64_t);
 
 #endif

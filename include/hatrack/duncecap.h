@@ -261,16 +261,20 @@ duncecap_reader_exit(duncecap_store_t *store)
  * be consistent across runs, something fast and practical like XXH3.
  */
 // clang-format off
-duncecap_t     *duncecap_new    (void);
-void            duncecap_init   (duncecap_t *);
-void            duncecap_cleanup(duncecap_t *);
-void            duncecap_delete (duncecap_t *);
-void           *duncecap_get    (duncecap_t *, hatrack_hash_t, bool *);
-void           *duncecap_put    (duncecap_t *, hatrack_hash_t, void *, bool *);
-void           *duncecap_replace(duncecap_t *, hatrack_hash_t, void *, bool *);
-bool            duncecap_add    (duncecap_t *, hatrack_hash_t, void *);
-void           *duncecap_remove (duncecap_t *, hatrack_hash_t, bool *);
-uint64_t        duncecap_len    (duncecap_t *);
-hatrack_view_t *duncecap_view   (duncecap_t *, uint64_t *, bool);
+duncecap_t     *duncecap_new      (void);
+duncecap_t     *duncecap_new_size (char);
+void            duncecap_init     (duncecap_t *);
+void            duncecap_init_size(duncecap_t *, char);
+void            duncecap_cleanup  (duncecap_t *);
+void            duncecap_delete   (duncecap_t *);
+void           *duncecap_get      (duncecap_t *, hatrack_hash_t, bool *);
+void           *duncecap_put      (duncecap_t *, hatrack_hash_t, void *,
+				   bool *);
+void           *duncecap_replace  (duncecap_t *, hatrack_hash_t, void *,
+				   bool *);
+bool            duncecap_add      (duncecap_t *, hatrack_hash_t, void *);
+void           *duncecap_remove   (duncecap_t *, hatrack_hash_t, bool *);
+uint64_t        duncecap_len      (duncecap_t *);
+hatrack_view_t *duncecap_view     (duncecap_t *, uint64_t *, bool);
 
 #endif

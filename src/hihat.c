@@ -58,19 +58,42 @@ hihat_new(void)
     return ret;
 }
 
-/* hihat_init()
- *
- * For the definition of HATRACK_MIN_SIZE, this is computed in
- * config.h, since we require hash table buckets to always be sized to
- * a power of two. To set the size, you instead set the preprocessor
- * variable HATRACK_MIN_SIZE_LOG.
- */
+hihat_t *
+hihat_new(char size)
+{
+    hihat_t *ret;
+
+    ret = (hihat_t *)malloc(sizeof(hihat_t));
+
+    hihat_init_size(ret, size);
+
+    return ret;
+}
+
 void
 hihat_init(hihat_t *self)
 {
-    hihat_store_t *store;
+    hihat_init(self, HATRACK_MIN_SIZE_LOG);
 
-    store            = hihat_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+void
+hihat_init_size(hihat_t *self, char size)
+{
+    hihat_store_t *store;
+    uint64_t       len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+    
+    len              = 1 << size;
+    store            = hihat_store_new(len);
     self->next_epoch = 1; // 0 is reserved for empty buckets.
     
     atomic_store(&self->store_current, store);

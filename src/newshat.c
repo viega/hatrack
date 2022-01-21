@@ -67,23 +67,48 @@ newshat_new(void)
     return ret;
 }
 
-/* newshat_init()
- *
- * It's expected that newshat instances will be created via the
- * default malloc.  This function cannot rely on zero-initialization
- * of its own object.
- *
- * For the definition of HATRACK_MIN_SIZE, this is computed in
- * config.h, since we require hash table buckets to always be sized to
- * a power of two. To set the size, you instead set the preprocessor
- * variable HATRACK_MIN_SIZE_LOG.
- */
+newshat_t *
+newshat_new_size(char size)
+{
+    newshat_t *ret;
+
+    ret = (newshat_t *)malloc(sizeof(newshat_t));
+
+    newshat_init_size(ret, size);
+
+    return ret;
+}
+
 void
 newshat_init(newshat_t *self)
 {
-    newshat_store_t *store;
+    newshat_init_size(HATRACK_MIN_SIZE_LOG);
 
-    store               = newshat_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+/* newshat_init_size()
+ *
+ * It's expected that newshat instances will be created via the
+ * default malloc, or stack-allocated.  This function cannot rely on
+ * zero-initialization of its own object.
+ */
+void
+newshat_init_size(newshat_t *self, char size)
+{
+    newshat_store_t *store;
+    uint64_t         len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len                 = 1 << size;
+    store               = newshat_store_new(len);
     self->item_count    = 0;
     self->next_epoch    = 1; // 0 is reserved for empty buckets.
     self->store_current = store;

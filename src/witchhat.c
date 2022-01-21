@@ -57,12 +57,42 @@ witchhat_new(void)
     return ret;
 }
 
+witchhat_t *
+witchhat_new_size(char size)
+{
+    witchhat_t *ret;
+
+    ret = (witchhat_t *)malloc(sizeof(witchhat_t));
+
+    witchhat_init_size(ret, size);
+
+    return ret;
+}
+
 void
 witchhat_init(witchhat_t *self)
 {
-    witchhat_store_t *store;
+    witchhat_init_size(self, HATRACK_MIN_SIZE_LOG);
 
-    store            = witchhat_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+void
+witchhat_init_size(witchhat_t *self, char size)
+{
+    witchhat_store_t *store;
+    uint64_t          len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len              = 1 << size;
+    store            = witchhat_store_new(len);
     self->next_epoch = 1;
     
     atomic_store(&self->store_current, store);

@@ -77,9 +77,27 @@ lohat_a_new(void)
 void
 lohat_a_init(lohat_a_t *self)
 {
-    lohat_a_store_t *store;
+    lohat_a_init_size(self, HATRACK_MIN_SIZE_LOG);
 
-    store = lohat_a_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+void
+lohat_a_init_size(lohat_a_t *self, char size)
+{
+    lohat_a_store_t *store;
+    uint64_t         len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len   = 1 << size;
+    store = lohat_a_store_new(len);
 
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);

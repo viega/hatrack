@@ -65,12 +65,42 @@ woolhat_new(void)
     return ret;
 }
 
+woolhat_t *
+woolhat_new_size(char size)
+{
+    woolhat_t *ret;
+
+    ret = (woolhat_t *)malloc(sizeof(woolhat_t));
+
+    woolhat_init_size(ret, size);
+
+    return ret;
+}
+
 void
 woolhat_init(woolhat_t *self)
 {
-    woolhat_store_t *store;
+    woolhat_init_size(self, HATRACK_MIN_SIZE_LOG);
 
-    store = woolhat_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+void
+woolhat_init_size(woolhat_t *self, char size)
+{
+    woolhat_store_t *store;
+    uint64_t         len;
+
+    if (size > ((ssize_t)sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len   = 1 << size;
+    store = woolhat_store_new(len);
 
     atomic_store(&self->help_needed, 0);
     atomic_store(&self->item_count, 0);

@@ -166,12 +166,42 @@ oldhat_new(void)
     return ret;
 }
 
+oldhat_t *
+oldhat_new_size(char size)
+{
+    oldhat_t *ret;
+
+    ret = (oldhat_t *)malloc(sizeof(oldhat_t));
+
+    oldhat_init_size(ret, size);
+
+    return ret;
+}
+
 void
 oldhat_init(oldhat_t *self)
 {
-    oldhat_store_t *store;
+    oldhat_init_size(self, HATRACK_MIN_SIZE_LOG);
 
-    store = oldhat_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+void
+oldhat_init_size(oldhat_t *self, char size)
+{
+    oldhat_store_t *store;
+    uint64_t        len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len   = 1 << size;
+    store = oldhat_store_new(len);
 
     atomic_store(&self->store_current, store);
     atomic_store(&self->item_count, 0);

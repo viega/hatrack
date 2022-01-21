@@ -70,7 +70,7 @@ static ballcap_store_t *ballcap_store_migrate(ballcap_store_t *, ballcap_t *);
 ballcap_t *
 ballcap_new(void)
 {
-    ballcap_t *ret;
+   ballcap_t *ret;
 
     ret = (ballcap_t *)malloc(sizeof(ballcap_t));
 
@@ -79,12 +79,42 @@ ballcap_new(void)
     return ret;
 }
 
+ballcap_t *
+ballcap_new_size(char size)
+{
+   ballcap_t *ret;
+
+    ret = (ballcap_t *)malloc(sizeof(ballcap_t));
+
+    ballcap_init_size(ret, size);
+
+    return ret;
+}
+
 void
 ballcap_init(ballcap_t *self)
 {
-    ballcap_store_t *store;
+    woolhat_init(self, HATRACK_MIN_SIZE_LOG);
 
-    store               = ballcap_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+void
+ballcap_init_size(ballcap_t *self, char size)
+{
+    ballcap_store_t *store;
+    uint64_t         len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len                 = 1 << size;
+    store               = ballcap_store_new(len);
     self->item_count    = 0;
     self->next_epoch    = 1;
     self->store_current = store;

@@ -216,16 +216,18 @@ typedef struct {
  * choose a 3-universal keyed hash function, or if hash values need to
  * be consistent across runs, something fast and practical like XXH3.
  */
-swimcap_t      *swimcap_new    (void);
-void            swimcap_init   (swimcap_t *);
-void            swimcap_cleanup(swimcap_t *);
-void            swimcap_delete (swimcap_t *);
-void           *swimcap_get    (swimcap_t *, hatrack_hash_t, bool *);
-void           *swimcap_put    (swimcap_t *, hatrack_hash_t, void *, bool *);
-void           *swimcap_replace(swimcap_t *, hatrack_hash_t, void *, bool *);
-bool            swimcap_add    (swimcap_t *, hatrack_hash_t, void *);
-void           *swimcap_remove (swimcap_t *, hatrack_hash_t, bool *);
-uint64_t        swimcap_len    (swimcap_t *);
-hatrack_view_t *swimcap_view   (swimcap_t *, uint64_t *, bool);
+swimcap_t      *swimcap_new      (void);
+swimcap_t      *swimcap_new_size (char);
+void            swimcap_init     (swimcap_t *);
+void            swimcap_init_size(swimcap_t *, char);
+void            swimcap_cleanup  (swimcap_t *);
+void            swimcap_delete   (swimcap_t *);
+void           *swimcap_get      (swimcap_t *, hatrack_hash_t, bool *);
+void           *swimcap_put      (swimcap_t *, hatrack_hash_t, void *, bool *);
+void           *swimcap_replace  (swimcap_t *, hatrack_hash_t, void *, bool *);
+bool            swimcap_add      (swimcap_t *, hatrack_hash_t, void *);
+void           *swimcap_remove   (swimcap_t *, hatrack_hash_t, bool *);
+uint64_t        swimcap_len      (swimcap_t *);
+hatrack_view_t *swimcap_view     (swimcap_t *, uint64_t *, bool);
 
 #endif

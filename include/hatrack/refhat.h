@@ -119,17 +119,19 @@ typedef struct {
  * choose a 3-universal keyed hash function, or if hash values need to
  * be consistent across runs, something fast and practical like XXH3.
  */
-refhat_t       *refhat_new    (void);
-void            refhat_init   (refhat_t *);
-void            refhat_cleanup(refhat_t *);
-void            refhat_delete (refhat_t *);
-void           *refhat_get    (refhat_t *, hatrack_hash_t, bool *);
-void           *refhat_put    (refhat_t *, hatrack_hash_t, void *, bool *);
-void           *refhat_replace(refhat_t *, hatrack_hash_t, void *, bool *);
-bool            refhat_add    (refhat_t *, hatrack_hash_t, void *);
-void           *refhat_remove (refhat_t *, hatrack_hash_t, bool *);
-uint64_t        refhat_len    (refhat_t *);
-hatrack_view_t *refhat_view   (refhat_t *, uint64_t *, bool);
+refhat_t       *refhat_new      (void);
+refhat_t       *refhat_new_size (char);
+void            refhat_init     (refhat_t *);
+void            refhat_init_size(refhat_t *, char);
+void            refhat_cleanup  (refhat_t *);
+void            refhat_delete   (refhat_t *);
+void           *refhat_get      (refhat_t *, hatrack_hash_t, bool *);
+void           *refhat_put      (refhat_t *, hatrack_hash_t, void *, bool *);
+void           *refhat_replace  (refhat_t *, hatrack_hash_t, void *, bool *);
+bool            refhat_add      (refhat_t *, hatrack_hash_t, void *);
+void           *refhat_remove   (refhat_t *, hatrack_hash_t, bool *);
+uint64_t        refhat_len      (refhat_t *);
+hatrack_view_t *refhat_view     (refhat_t *, uint64_t *, bool);
 
 //clang-format on
 

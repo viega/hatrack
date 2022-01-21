@@ -182,12 +182,42 @@ crown_new(void)
     return ret;
 }
 
+crown_t *
+crown_new_size(char size)
+{
+    crown_t *ret;
+
+    ret = (crown_t *)malloc(sizeof(crown_t));
+
+    crown_init_size(ret, size);
+
+    return ret;
+}
+
 void
 crown_init(crown_t *self)
 {
-    crown_store_t *store;
+    crown_init_size(self, HATRACK_MIN_SIZE_LOG);
 
-    store            = crown_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+void
+crown_init_size(crown_t *self, char size)
+{
+    crown_store_t *store;
+    uint64_t       len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len              = 1 << size;
+    store            = crown_store_new(len);
     self->next_epoch = 1;
     
     atomic_store(&self->store_current, store);

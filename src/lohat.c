@@ -58,14 +58,44 @@ lohat_new(void)
     return ret;
 }
 
-// While mmm zeros out the memory it allocates, the system allocator may
-// not, so explicitly zero out item_count to be cautious.
+lohat_t *
+lohat_new_size(char size)
+{
+    lohat_t *ret;
+
+    ret = (lohat_t *)malloc(sizeof(lohat_t));
+
+    lohat_init_size(ret, size);
+
+    return ret;
+}
+
 void
 lohat_init(lohat_t *self)
 {
-    lohat_store_t *store;
+    lohat_init_size(HATRACK_MIN_SIZE_LOG);
 
-    store = lohat_store_new(HATRACK_MIN_SIZE);
+    return;
+}
+
+// While mmm zeros out the memory it allocates, the system allocator may
+// not, so explicitly zero out item_count to be cautious.
+void
+lohat_init_size(lohat_t *self, char size)
+{
+    lohat_store_t *store;
+    uint64_t         len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len   = 1 << size;
+    store = lohat_store_new(len);
 
     atomic_store(&self->item_count, 0);
     atomic_store(&self->store_current, store);

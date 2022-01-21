@@ -568,17 +568,19 @@ typedef struct lohat_st {
  */
 
 // clang-format off
-lohat_t        *lohat_new    (void);
-void            lohat_init   (lohat_t *);
-void            lohat_cleanup(lohat_t *);
-void            lohat_delete (lohat_t *);
-void           *lohat_get    (lohat_t *, hatrack_hash_t, bool *);
-void           *lohat_put    (lohat_t *, hatrack_hash_t, void *, bool *);
-void           *lohat_replace(lohat_t *, hatrack_hash_t, void *, bool *);
-bool            lohat_add    (lohat_t *, hatrack_hash_t, void *);
-void           *lohat_remove (lohat_t *, hatrack_hash_t, bool *);
-uint64_t        lohat_len    (lohat_t *);
-hatrack_view_t *lohat_view   (lohat_t *, uint64_t *, bool);
+lohat_t        *lohat_new      (void);
+lohat_t        *lohat_new_size (char);
+void            lohat_init     (lohat_t *);
+void            lohat_init_size(lohat_t *, char);
+void            lohat_cleanup  (lohat_t *);
+void            lohat_delete   (lohat_t *);
+void           *lohat_get      (lohat_t *, hatrack_hash_t, bool *);
+void           *lohat_put      (lohat_t *, hatrack_hash_t, void *, bool *);
+void           *lohat_replace  (lohat_t *, hatrack_hash_t, void *, bool *);
+bool            lohat_add      (lohat_t *, hatrack_hash_t, void *);
+void           *lohat_remove   (lohat_t *, hatrack_hash_t, bool *);
+uint64_t        lohat_len      (lohat_t *);
+hatrack_view_t *lohat_view     (lohat_t *, uint64_t *, bool);
 
 // clang-format on
 

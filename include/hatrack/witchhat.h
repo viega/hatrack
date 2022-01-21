@@ -75,27 +75,31 @@ typedef struct {
 } witchhat_t;
 
 
-witchhat_t     *witchhat_new    (void);
-void            witchhat_init   (witchhat_t *);
-void            witchhat_cleanup(witchhat_t *);
-void            witchhat_delete (witchhat_t *);
-void           *witchhat_get    (witchhat_t *, hatrack_hash_t, bool *);
-void           *witchhat_put    (witchhat_t *, hatrack_hash_t, void *,
-				 bool *);
-void           *witchhat_replace(witchhat_t *, hatrack_hash_t, void *,
-				 bool *);
-bool            witchhat_add    (witchhat_t *, hatrack_hash_t, void *);
-void           *witchhat_remove (witchhat_t *, hatrack_hash_t, bool *);
-uint64_t        witchhat_len    (witchhat_t *);
-hatrack_view_t *witchhat_view   (witchhat_t *, uint64_t *, bool);
-
-// Needed for dict.c
+witchhat_t     *witchhat_new        (void);
+witchhat_t     *witchhat_new_size   (char);
+void            witchhat_init       (witchhat_t *);
+void            witchhat_init_size  (witchhat_t *, char);
+void            witchhat_cleanup    (witchhat_t *);
+void            witchhat_delete     (witchhat_t *);
+void           *witchhat_get        (witchhat_t *, hatrack_hash_t, bool *);
+void           *witchhat_put        (witchhat_t *, hatrack_hash_t, void *,
+				     bool *);
+void           *witchhat_replace    (witchhat_t *, hatrack_hash_t, void *,
+				     bool *);
+bool            witchhat_add        (witchhat_t *, hatrack_hash_t, void *);
+void           *witchhat_remove     (witchhat_t *, hatrack_hash_t, bool *);
+uint64_t        witchhat_len        (witchhat_t *);
+hatrack_view_t *witchhat_view       (witchhat_t *, uint64_t *, bool);
 hatrack_view_t *witchhat_view_no_mmm(witchhat_t *, uint64_t *, bool);
 
 /* These need to be non-static because tophat and hatrack_dict both
  * need them, so that they can call in without a second call to
  * MMM. But, they should be considered "friend" functions, and not
  * part of the public API.
+ *
+ * Actually, hatrack_dict no longer uses Witchhat, it uses Crown, but
+ * I'm going to explicitly leave these here, instead of going back to
+ * making them static.
  */
 witchhat_store_t *witchhat_store_new    (uint64_t);
 void             *witchhat_store_get    (witchhat_store_t *, hatrack_hash_t,

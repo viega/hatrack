@@ -31,7 +31,7 @@
 #ifdef HATRACK_COMPILE_ALL_ALGORITHMS
 
 // clang-format off
-static void             tophat_init_base     (tophat_t *);
+static void             tophat_init_base     (tophat_t *, char);
 static void		tophat_st_migrate    (tophat_st_ctx_t *);
 
 // The migration algorithms can be selected dynamically, but
@@ -120,6 +120,54 @@ tophat_new_cst_wf(void)
     return ret;
 }
 
+tophat_t *
+tophat_new_fast_mx_size(char size)
+{
+    tophat_t *ret;
+
+    ret = (tophat_t *)malloc(sizeof(tophat_t));
+
+    tophat_init_fast_mx_size(ret, size);
+
+    return ret;
+}
+
+tophat_t *
+tophat_new_fast_wf_size(char size)
+{
+    tophat_t *ret;
+
+    ret = (tophat_t *)malloc(sizeof(tophat_t));
+
+    tophat_init_fast_wf_size(ret, size);
+
+    return ret;
+}
+
+tophat_t *
+tophat_new_cst_mx_size(char size)
+{
+    tophat_t *ret;
+
+    ret = (tophat_t *)malloc(sizeof(tophat_t));
+
+    tophat_init_cst_mx_size(ret, size);
+
+    return ret;
+}
+
+tophat_t *
+tophat_new_cst_wf_size(char size)
+{
+    tophat_t *ret;
+
+    ret = (tophat_t *)malloc(sizeof(tophat_t));
+
+    tophat_init_cst_wf(ret, size);
+
+    return ret;
+}
+
 /* If we've migrated to a multi-threaded table, then the
  * single-threaded implementation is already cleaned up, except for
  * deallocating the mutex.
@@ -160,7 +208,39 @@ tophat_delete(tophat_t *self)
 void
 tophat_init_fast_mx(tophat_t *self)
 {
-    tophat_init_base(self);
+    tophat_init_fast_mx_size(self, HATRACK_MIN_SIZE_LOG);
+    
+    return;
+}
+
+void
+tophat_init_fast_wf(tophat_t *self)
+{
+    tophat_init_fast_wf_size(self, HATRACK_MIN_SIZE_LOG);
+
+    return;
+}
+
+void
+tophat_init_cst_mx(tophat_t *self)
+{
+    tophat_init_cst_mx_size(self, HATRACK_MIN_SIZE_LOG);
+
+    return;
+}
+
+void
+tophat_init_cst_wf(tophat_t *self)
+{
+    tophat_init_cst_wf_size(self, HATRACK_MIN_SIZE_LOG);
+
+    return;
+}
+
+void
+tophat_init_fast_mx_size(tophat_t *self, char size)
+{
+    tophat_init_base(self, size);
     
     self->dst_type          = TOPHAT_T_FAST_LOCKING;
     self->mt_vtable.init    = (hatrack_init_func)newshat_init;
@@ -177,9 +257,9 @@ tophat_init_fast_mx(tophat_t *self)
 }
 
 void
-tophat_init_fast_wf(tophat_t *self)
+tophat_init_fast_wf_size(tophat_t *self, char size)
 {
-    tophat_init_base(self);
+    tophat_init_base(self, size);
     
     self->dst_type          = TOPHAT_T_FAST_WAIT_FREE;
     self->mt_vtable.init    = (hatrack_init_func)witchhat_init;
@@ -196,9 +276,9 @@ tophat_init_fast_wf(tophat_t *self)
 }
 
 void
-tophat_init_cst_mx(tophat_t *self)
+tophat_init_cst_mx_size(tophat_t *self, char size)
 {
-    tophat_init_base(self);
+    tophat_init_base(self, size);
     
     self->dst_type          = TOPHAT_T_CONSISTENT_LOCKING;
     self->mt_vtable.init    = (hatrack_init_func)ballcap_init;
@@ -215,9 +295,9 @@ tophat_init_cst_mx(tophat_t *self)
 }
 
 void
-tophat_init_cst_wf(tophat_t *self)
+tophat_init_cst_wf_size(tophat_t *self, char size)
 {
-    tophat_init_base(self);
+    tophat_init_base(self, size);
     
     self->dst_type          = TOPHAT_T_CONSISTENT_WAIT_FREE;
     self->mt_vtable.init    = (hatrack_init_func)woolhat_init;
@@ -873,20 +953,28 @@ tophat_view(tophat_t *self, uint64_t *num, bool sort)
  * allocate the single-threaded implementation.
  */
 static void
-tophat_init_base(tophat_t *self)
+tophat_init_base(tophat_t *self, char size)
 {
-    uint64_t            size;
+    uint64_t            table_len;
     uint64_t            alloc_len;
     tophat_st_ctx_t    *table;
-    
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    table_len         = 1 << size;
     alloc_len         = sizeof(tophat_st_ctx_t);
     table             = (tophat_st_ctx_t *)mmm_alloc_committed(alloc_len);
     self->st_table    = table;
     self->mt_table    = NULL;
-    size              = HATRACK_MIN_SIZE; 
-    alloc_len         = sizeof(tophat_st_bucket_t) * size;
-    table->last_slot  = size - 1;
-    table->threshold  = hatrack_compute_table_threshold(size);
+    alloc_len         = sizeof(tophat_st_bucket_t) * table_len;
+    table->last_slot  = table_len - 1;
+    table->threshold  = hatrack_compute_table_threshold(table_len);
     table->next_epoch = 1; // 0 is reserved for deleted.
     table->buckets    = (tophat_st_bucket_t *)mmm_alloc_committed(alloc_len);
 

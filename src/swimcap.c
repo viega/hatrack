@@ -79,17 +79,30 @@ swimcap_new(void)
  * It's expected that swimcap instances will be created via the
  * default malloc.  This function cannot rely on zero-initialization
  * of its own object.
- *
- * For the definition of HATRACK_MIN_SIZE, this is computed in
- * config.h, since we require hash table buckets to always be sized to
- * a power of two. To set the size, you instead set the preprocessor
- * variable HATRACK_MIN_SIZE_LOG.
  */
 void
 swimcap_init(swimcap_t *self)
 {
-    swimcap_store_t *store;
+    swimcap_init(self, HATRACK_MIN_SIZE_LOG);
 
+    return;
+}
+
+void
+swimcap_init_size(swimcap_t *self, char size)
+{
+    swimcap_store_t *store;
+    uint64_t         len;
+
+    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+	abort();
+    }
+
+    if (size < HATRACK_MIN_SIZE_LOG) {
+	abort();
+    }
+
+    len                 = 1 << size;
     store               = swimcap_store_new(HATRACK_MIN_SIZE);
     self->item_count    = 0;
     self->next_epoch    = 1; // 0 is reserved for empty buckets.
