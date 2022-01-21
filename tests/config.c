@@ -41,8 +41,48 @@ static config_hat_info_t hat_info[NUM_CURRENT_HATS] = {
 
 static char *prog_name;
 
+// Really this will be 78, but we're going to indent by two characters.
+#define MAX_WIDTH 76
+
+void
+output_algorithm_list(void)
+{
+    int col_width;
+    int i;
+    int len;
+    int cols_per_row;
+
+    col_width = 0;
+    
+    // Scan through the list to find the maximum width.
+    for (i = 0; i < NUM_CURRENT_HATS; i++) {
+	len = strlen(hat_info[i].name);
+	if (len > col_width) {
+	    col_width = len;
+	}
+    }
+    // Add 1 to the column width for a leading space.
+    col_width++;
+
+    // How many columns fit to this width?
+    cols_per_row = MAX_WIDTH / col_width;
+
+    for (i = 0; i < NUM_CURRENT_HATS; i++) {
+	if (!(i % cols_per_row)) {
+	    fprintf(stderr, "\n  ");
+	}
+	len = strlen(hat_info[i].name);
+	fprintf(stderr, "%s", hat_info[i].name);
+	while (len < col_width) {
+	    fputc(' ', stderr);
+	    len++;
+	}
+    }
+    fprintf(stderr, "\n");
+}
+
 _Noreturn static void
-usage()
+usage(void)
 {
     fprintf(stderr, "Usage: %s: [options]*\n", prog_name);
     fprintf(stderr, "\nOptions:\n");
@@ -66,11 +106,8 @@ usage()
     fprintf(stderr, "--other-tables flag to be explicit\nabout it.\n\n");
     fprintf(stderr, "If you supply an RNG seed, it is interpreted as a 64-bit");
     fprintf(stderr, " hex value, but\ndo NOT put on a trailing 0x.\n\n");
-    fprintf(stderr, "Currently supported algorithms:\n");
-    fprintf(stderr, "  refhat      duncecap    swimcap     newshat     ");
-    fprintf(stderr, "hihat       hihat-a     \n  witchhat    oldhat      ");
-    fprintf(stderr, "ballcap     lohat       lohat-a     woolhat\n");
-    fprintf(stderr, "  tophat-fmx  tophat-fwf  tophat-cmx  tophat-cwf\n");
+    fprintf(stderr, "Currently supported algorithms:");
+    output_algorithm_list();
     exit(1);
 }
 
