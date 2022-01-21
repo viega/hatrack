@@ -81,11 +81,12 @@ fail if some other thread was sucessful at the same operation, but
 it's possible to have enough activity that individual threads get
 starved.  Wait freedom removes that restriction; all threads are
 guaranteed to make progress independent of the others.  Of our
-algorithms, *witchhat* and *woolhat* are fully wait free.  Actually,
-all our hash tables except for duncecap have fully wait free read (get)
-operations.  And our lock free variants are mostly wait-free, except
-under exceptional conditions-- the work to convert them to full
-wait-freedom is small, and has no practical performance impact.
+algorithms, *witchhat*, *woolhat* and *crown* are fully wait free.
+Actually, all our hash tables except for *duncecap* have fully wait
+free read (get) operations.  And our lock free variants are mostly
+wait-free, except under exceptional conditions-- the work to convert
+them to full wait-freedom is small, and has no practical performance
+impact.
 
 ### Parallelizability
 
@@ -111,7 +112,7 @@ generally wait on a lock, while one thread performs the resizing.
 
 3) All other hash tables allow for multiple concurrent readers and
 writers, at all times, including the *hihats*, the *lohats*, *oldhat*,
-*witchhat* and *woolhat*.
+*witchhat*, *woolhat* and *crown*.
 
 ### Order Insertion Preservation and consistent views
 
@@ -143,7 +144,7 @@ Note that, in our tables that do not provide consistent views, we can
 still provide *approximate* insertion ordering.
 
 1) Tables without consistent views (and thus would not be good for set
-operations): *swimcap, newshat, hihat, oldhat, witchhat*.
+operations): *swimcap, newshat, hihat, oldhat, witchhat, crown*.
 
 2) Tables with consistent views: *ballcap, lohat, lohat-a, woolhat*.
 
@@ -182,14 +183,14 @@ I'll produce some developer documentation on using the API soon. Right
 now, the source code is documented; start by looking at refhat to
 understand the basic API structure.
 
-For general purpose use, witchhat is your best bet (at least when you
-have a 128-bit CAS operation; I've not yet tested it on legacy
-systems). It runs close enough in speed to refhat that I wouldn't
-hesitate to use it as a general-purpose table, even in the case of a
-single thread.
+For general purpose use, *crown* is your best bet. It runs close
+enough in speed to *refhat* that I wouldn't hesitate to use it as a
+general-purpose table, even in the case of a single thread.
 
 If you care about sequential consistency (for instance, for set
-operations), woolhat is the best option.
+operations), *woolhat* is currently the best option (though I'm likely
+to soon create a version that applies the same optimizations to
+*woolhat* that *crown* applied to *witchhat*).
 
 Note that woolhat should still be more than fast enough for most
 general-purpose use, but because it requires more dynamic memory
@@ -270,7 +271,7 @@ Here is an overview of the tables in their 'logical' order:
 
 11) **woolhat**  A fully wait-free version of lohat.
 
-12) **tophat** A proof of concept illustrating how language
+12) **tophat**  A proof of concept illustrating how language
                 implementations can maximize performance until a
                 second thread starts, by waiting until that time to
                 migrate the table to a different implementation (the
@@ -281,7 +282,11 @@ Here is an overview of the tables in their 'logical' order:
                 when multi-threaded order preservation and consistency
                 are unimportant).
 
-In general, looking at refhat will give you a good idea of the overall
+13) **crown** A fully wait-free hash table, without fully consistent
+                views.  It applies a caching optimization to probing
+                that has a significant impact.
+
+In general, looking at *refhat* will give you a good idea of the overall
 structure of all these tables, including what the top-level API for
 each table will look like.
 
@@ -291,8 +296,13 @@ of exposition, as does Lohat, since it's the first one that adds in
 full linearization of operations table-wide.
 
 But, in terms of ones I'd actually pick up and use, I recommend
-woolhat (if you need the linearization) and witchhat (if you don't,
+*woolhat* (if you need the linearization) and *crown* (if you don't,
 and are looking to maximize efficiency).
+
+Of course, that's if you want to start with the lower-level
+tables. Our higher-level Dictionary and Set implementations are backed
+by the most efficient algorithms, and help solve other important
+problems, such as user-level memory management issues.
 
 ## Status of this work
 
@@ -303,12 +313,7 @@ have a lot of work remaining:
    add proper handling for signals, thread deaths, and thread
    exits.
 
-2) I've been doing my primary development and testing on an OS X
-   laptop. I have kept things compatable with Linux, but need to go
-   back, ensure that all still works in both environments, and set up
-   automated testing as I make future commits.
-
-3) I'm going to write a long document describing the algorithms, that
+2) I'm going to write a long document describing the algorithms, that
    will be available in the doc/ directory.
 
    I have half a mind to turn that into a full-fledged doctoral
@@ -316,20 +321,9 @@ have a lot of work remaining:
    (though I'm not sure I want to spend my next year plus tweaking and
    testing hash tables).
    
-5) I'm going to provide two high-level interfaces Dict and Set, that
-   are suitable for direct inclusion into projects, and allow you to
-   dynamically select the properties you need in a hash table.
-
-   Though, I probably will do that strictly as part of this project;
-   this project is a bikeshed from a bikeshed project, which I call
-   bikeshed... basically which is a library of C programming nicities.
-   Witchhat and Woolhat will probably get copied into that project.
-
-6) While I currently have a basic testbed and performance testing rig,
-   I intend to do a lot to improve this (including a lot of
-   functionality testing that hasn't happened yet). Though, I want to
-   use the niceties I've been building myself in 'bikeshed', so these
-   projects may get even more intertwined somehow.
+3) While I currently have a basic testbed and performance testing rig,
+   I intend to do more to improve this (including some functionality
+   testing that hasn't happened yet). 
 
 
 Also, I seem to still messing around with some implementation details,
@@ -346,13 +340,3 @@ more work when threads go back to look at the bucket again.
 Generally, on first glance that's seemed to have helped, but on one
 algorithm, it was seeming to hurt. I haven't given it enough attention
 yet, so different algorithms may or may not do this.
-
-Finally, there are minor cosmetic differences that I might never
-bother to resolve, often resulting from too LITTLE cut and paste
-(perhaps). For instance, both implementations might have a test that
-is identical, and currently algorithm A will do 'if (x)' where
-algorithm b does 'if (!x)'.
-
-Sorry about that. A part of me wants to keep polishing and tweaking
-forever (or least before letting ANYONE see), but I also want to get
-this out there for feedback from some friends!
