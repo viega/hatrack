@@ -381,14 +381,14 @@ static void
 testhat_init_default_algorithms(void)
 {
     algorithm_register("refhat", &refhat_vtable, sizeof(refhat_t), 16, false);
-    algorithm_register("oldhat", &oldhat_vtable, sizeof(oldhat_t), 16, true);
-    algorithm_register("swimcap", &swimcap_vtable, sizeof(swimcap_t), 16, true);
     algorithm_register("duncecap", &dcap_vtable, sizeof(duncecap_t), 16, true);
+    algorithm_register("swimcap", &swimcap_vtable, sizeof(swimcap_t), 16, true);
     algorithm_register("newshat", &newshat_vtable, sizeof(newshat_t), 16, true);
     algorithm_register("ballcap", &ballcap_vtable, sizeof(ballcap_t), 16, true);
     algorithm_register("hihat", &hihat_vtable, sizeof(hihat_t), 16, true);
     algorithm_register("hihat-a", &hihat_a_vtable, sizeof(hihat_t), 16, true);
     algorithm_register("crown", &crown_vtable, sizeof(crown_t), 16, true);
+    algorithm_register("oldhat", &oldhat_vtable, sizeof(oldhat_t), 16, true);
     algorithm_register("lohat", &lohat_vtable, sizeof(lohat_t), 16, true);
     algorithm_register("lohat-a", &lohat_a_vtable, sizeof(lohat_a_t), 16, true);
     algorithm_register("witchhat", &witch_vtable, sizeof(witchhat_t), 16, true);

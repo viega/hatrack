@@ -18,6 +18,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#define WIN_COL_IOCTL TIOCGWINSZ
+typedef struct winsize wininfo_t;
+#define get_cols(x) x.ws_col
+
 /* For our rng option, if we select rand, we call rand() up to three
  * times per operation:
  *
@@ -120,15 +124,15 @@ output_test_information(benchmark_t *config)
     struct utsname sys_info;
     long           num_cores;
     char           buf[COL_WIDTH + 1];
-    struct ttysize terminfo;
+    wininfo_t      terminfo;
     int            num_cols;
     int            i;
 
     uname(&sys_info);
-    ioctl(0, TIOCGSIZE, &terminfo);
+    ioctl(0, WIN_COL_IOCTL, &terminfo);
 
     num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    num_cols  = terminfo.ts_cols / (COL_WIDTH + COL_PAD);
+    num_cols  = get_cols(terminfo) / (COL_WIDTH + COL_PAD);
 
     if (!num_cols) {
         num_cols = 1;
