@@ -94,7 +94,7 @@ ballcap_new_size(char size)
 void
 ballcap_init(ballcap_t *self)
 {
-    woolhat_init(self, HATRACK_MIN_SIZE_LOG);
+    ballcap_init_size(self, HATRACK_MIN_SIZE_LOG);
 
     return;
 }
@@ -115,8 +115,7 @@ ballcap_init_size(ballcap_t *self, char size)
 
     len                 = 1 << size;
     store               = ballcap_store_new(len);
-    self->item_count    = 0;
-    self->next_epoch    = 1;
+    self->item_count    = ATOMIC_VAR_INIT(0);
     self->store_current = store;
 
     pthread_mutex_init(&self->migrate_mutex, NULL);
@@ -246,7 +245,7 @@ ballcap_store_delete(ballcap_store_t *self, void *unused)
 uint64_t
 ballcap_len(ballcap_t *self)
 {
-    return self->item_count;
+    return atomic_read(&self->item_count);
 }
 
 hatrack_view_t *
@@ -403,7 +402,12 @@ ballcap_store_get(ballcap_store_t *self, hatrack_hash_t hv, bool *found)
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    if (found) {
+	*found = false;
+    }
+
+    return NULL;
 }
 
 static void *
@@ -461,7 +465,7 @@ check_bucket_again:
                     *found = false;
                 }
 
-                top->item_count++;
+                atomic_fetch_add(&top->item_count, 1);
             }
             else {
                 ret = old_record->item;
@@ -514,7 +518,7 @@ check_bucket_again:
                 goto check_bucket_again;
             }
 
-            if (self->used_count == self->threshold) {
+            if (atomic_read(&self->used_count) >= self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
@@ -525,8 +529,8 @@ check_bucket_again:
                 return ballcap_store_put(self, top, hv, item, found);
             }
 
-            self->used_count++;
-            top->item_count++;
+	    atomic_fetch_add(&self->used_count, 1);
+            atomic_fetch_add(&top->item_count, 1);
 
             cur->hv = hv;
             ret     = NULL;
@@ -547,7 +551,9 @@ check_bucket_again:
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    self = ballcap_store_migrate(self, top);
+    return ballcap_store_put(self, top, hv, item, found);
 }
 
 static void *
@@ -605,6 +611,9 @@ ballcap_store_replace(ballcap_store_t *self,
                     *found = false;
                 }
 
+		if (pthread_mutex_unlock(&cur->mutex)) {
+		    abort();
+		}
                 return NULL;
             }
 
@@ -637,7 +646,12 @@ ballcap_store_replace(ballcap_store_t *self,
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    if (found) {
+	*found = false;
+    }
+
+    return NULL;
 }
 
 bool
@@ -704,17 +718,17 @@ check_bucket_again:
                 goto check_bucket_again;
             }
 
-            if (self->used_count == self->threshold) {
+            if (atomic_read(&self->used_count) >= self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
 
-                self = ballcap_store_migrate(self, top);
-                return ballcap_store_add(self, top, hv, item);
+                ballcap_store_migrate(self, top);
+                return ballcap_store_add(top->store_current, top, hv, item);
             }
 
-            self->used_count++;
-            top->item_count++;
+	    atomic_fetch_add(&self->used_count, 1);
+            atomic_fetch_add(&top->item_count, 1);
 
             cur->hv = hv;
 
@@ -740,7 +754,9 @@ fill_record:
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    ballcap_store_migrate(self, top);
+    return ballcap_store_add(top->store_current, top, hv, item);
 }
 
 void *
@@ -805,7 +821,7 @@ ballcap_store_remove(ballcap_store_t *self,
             mmm_commit_write(record);
             mmm_retire(record->next);
 
-            --top->item_count;
+            atomic_fetch_sub(&top->item_count, 1);
 
             if (found) {
                 *found = true;
@@ -819,7 +835,12 @@ ballcap_store_remove(ballcap_store_t *self,
         }
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    if (found) {
+	*found = false;
+    }
+
+    return NULL;
 }
 
 static ballcap_store_t *
@@ -878,7 +899,7 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
         }
 
         if (cur->record->deleted) {
-            mmm_retire(cur->record);
+            mmm_retire_fast(cur->record);
             continue;
         }
 
@@ -897,7 +918,8 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
         }
     }
 
-    new_store->used_count = top->item_count;
+    atomic_store(&new_store->used_count, items_to_migrate);
+    atomic_store(&top->item_count, items_to_migrate);
     top->store_current    = new_store;
 
     for (n = 0; n <= cur_last_slot; n++) {
@@ -908,7 +930,7 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
         }
     }
 
-    mmm_retire(store);
+    mmm_retire_fast(store);
 
     if (pthread_mutex_unlock(&top->migrate_mutex)) {
         abort();

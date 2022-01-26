@@ -163,7 +163,7 @@ tophat_new_cst_wf_size(char size)
 
     ret = (tophat_t *)malloc(sizeof(tophat_t));
 
-    tophat_init_cst_wf(ret, size);
+    tophat_init_cst_wf_size(ret, size);
 
     return ret;
 }
@@ -1257,7 +1257,6 @@ tophat_migrate_to_ballcap(tophat_t *self)
 
     new_table->store_current->used_count = ctx->item_count;
     new_table->item_count                = ctx->item_count;
-    new_table->next_epoch                = ctx->next_epoch;
     
     pthread_mutex_init(&new_table->migrate_mutex, NULL);
 

@@ -59,7 +59,7 @@ hihat_new(void)
 }
 
 hihat_t *
-hihat_new(char size)
+hihat_new_size(char size)
 {
     hihat_t *ret;
 
@@ -73,7 +73,7 @@ hihat_new(char size)
 void
 hihat_init(hihat_t *self)
 {
-    hihat_init(self, HATRACK_MIN_SIZE_LOG);
+    hihat_init_size(self, HATRACK_MIN_SIZE_LOG);
 
     return;
 }

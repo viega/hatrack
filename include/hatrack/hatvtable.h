@@ -38,22 +38,21 @@
 
 // clang-format off
 typedef void            (*hatrack_init_func)   (void *);
-typedef void *          (*hatrack_get_func)    (void *, hatrack_hash_t,
+typedef void            (*hatrack_init_sz_func)(void *, char);
+typedef void *          (*hatrack_get_func)    (void *, hatrack_hash_t, bool *);
+typedef void *          (*hatrack_put_func)    (void *, hatrack_hash_t, void *,
 						bool *);
-typedef void *          (*hatrack_put_func)    (void *, hatrack_hash_t,
-						void *, bool *);
-typedef void *          (*hatrack_replace_func)(void *, hatrack_hash_t,
-						void *, bool *);
-typedef bool            (*hatrack_add_func)    (void *, hatrack_hash_t,
-						void *);
-typedef void *          (*hatrack_remove_func) (void *, hatrack_hash_t,
+typedef void *          (*hatrack_replace_func)(void *, hatrack_hash_t, void *,
 						bool *);
+typedef bool            (*hatrack_add_func)    (void *, hatrack_hash_t,	void *);
+typedef void *          (*hatrack_remove_func) (void *, hatrack_hash_t,	bool *);
 typedef void            (*hatrack_delete_func) (void *);
 typedef uint64_t        (*hatrack_len_func)    (void *);
 typedef hatrack_view_t *(*hatrack_view_func)   (void *, uint64_t *, bool);
 
 typedef struct {
     hatrack_init_func    init;
+    hatrack_init_sz_func init_sz;    
     hatrack_get_func     get;
     hatrack_put_func     put;
     hatrack_replace_func replace;

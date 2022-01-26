@@ -30,7 +30,6 @@
  *                  the things that are different about witchhat.
  *
  *  Author:         John Viega, john@zork.org
- *
  */
 
 #include <hatrack.h>

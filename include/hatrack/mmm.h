@@ -729,4 +729,20 @@ mmm_copy_create_epoch(void *dst, void *src)
     mmm_set_create_epoch(dst, mmm_get_create_epoch(src));
 }
 
+extern __thread mmm_header_t *mmm_retire_list;
+
+// Use this in migration functions to avoid unnecessary scanning of the
+// retire list, when we know the epoch won't have changed.
+static inline void
+mmm_retire_fast(void *ptr)
+{
+    mmm_header_t *cell;
+
+    cell               = mmm_get_header(ptr);
+    cell->retire_epoch = atomic_load(&mmm_epoch);
+    cell->next         = mmm_retire_list;
+    mmm_retire_list    = cell;
+
+    return;
+}
 #endif

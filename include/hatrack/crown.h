@@ -14,20 +14,12 @@
  * limitations under the License.
  *
  *  Name:           crown.h
- *  Description:    Waiting I Trully Cannot Handle
+ *  Description:    Crown Really Overcomplicates Witchhat Now
  *
- *                  This is a lock-free, and wait freehash table,
- *                  without consistency / full ordering.
+ *                  Crown is a slight modification of witchhat-- it
+ *                  changes the probing strategy for buckets.
  *
- *                  Note that crown is based on hihat1, with a
- *                  helping mechanism in place to ensure wait freedom.
- *                  There are only a few places in hihat1 where we
- *                  need such a mechanism, so we will only comment on
- *                  those places.
- *
- *                  Refer to hihat.h and hihat.c for more detail on
- *                  the core algorithm, as here, we only comment on
- *                  the things that are different about crown.
+ *                  Refer to crown.c for implementation notes.
  *
  *  Author: John Viega, john@zork.org
  */
@@ -100,21 +92,19 @@ typedef struct {
 } crown_t;
 
 
-crown_t        *crown_new      (void);
-crown_t        *crown_new_size (char);
-void            crown_init     (crown_t *);
-void            crown_init_size(crown_t *, char);
-void            crown_cleanup  (crown_t *);
-void            crown_delete   (crown_t *);
-void           *crown_get      (crown_t *, hatrack_hash_t, bool *);
-void           *crown_put      (crown_t *, hatrack_hash_t, void *, bool *);
-void           *crown_replace  (crown_t *, hatrack_hash_t, void *, bool *);
-bool            crown_add      (crown_t *, hatrack_hash_t, void *);
-void           *crown_remove   (crown_t *, hatrack_hash_t, bool *);
-uint64_t        crown_len      (crown_t *);
-hatrack_view_t *crown_view     (crown_t *, uint64_t *, bool);
-
-// Needed for dict.c
+crown_t        *crown_new        (void);
+crown_t        *crown_new_size   (char);
+void            crown_init       (crown_t *);
+void            crown_init_size  (crown_t *, char);
+void            crown_cleanup    (crown_t *);
+void            crown_delete     (crown_t *);
+void           *crown_get        (crown_t *, hatrack_hash_t, bool *);
+void           *crown_put        (crown_t *, hatrack_hash_t, void *, bool *);
+void           *crown_replace    (crown_t *, hatrack_hash_t, void *, bool *);
+bool            crown_add        (crown_t *, hatrack_hash_t, void *);
+void           *crown_remove     (crown_t *, hatrack_hash_t, bool *);
+uint64_t        crown_len        (crown_t *);
+hatrack_view_t *crown_view       (crown_t *, uint64_t *, bool);
 hatrack_view_t *crown_view_no_mmm(crown_t *, uint64_t *, bool);
 
 /* These need to be non-static because tophat and hatrack_dict both
@@ -122,18 +112,15 @@ hatrack_view_t *crown_view_no_mmm(crown_t *, uint64_t *, bool);
  * MMM. But, they should be considered "friend" functions, and not
  * part of the public API.
  */
-crown_store_t *crown_store_new    (uint64_t);
-void             *crown_store_get    (crown_store_t *, hatrack_hash_t,
-					 bool *);
+crown_store_t    *crown_store_new    (uint64_t);
+void             *crown_store_get    (crown_store_t *, hatrack_hash_t, bool *);
 void             *crown_store_put    (crown_store_t *, crown_t *,
-					 hatrack_hash_t, void *, bool *,
-					 uint64_t);
+				      hatrack_hash_t, void *, bool *, uint64_t);
 void             *crown_store_replace(crown_store_t *, crown_t *,
-					 hatrack_hash_t, void *, bool *,
-					 uint64_t);
+				      hatrack_hash_t, void *, bool *, uint64_t);
 bool              crown_store_add    (crown_store_t *, crown_t *,
-					 hatrack_hash_t, void *, uint64_t);
+				      hatrack_hash_t, void *, uint64_t);
 void             *crown_store_remove (crown_store_t *, crown_t *,
-					 hatrack_hash_t, bool *, uint64_t);
+				      hatrack_hash_t, bool *, uint64_t);
 
 #endif

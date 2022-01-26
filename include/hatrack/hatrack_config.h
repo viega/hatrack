@@ -347,7 +347,7 @@
  */
 
 #ifndef HATRACK_RETRY_THRESHOLD
-#define HATRACK_RETRY_THRESHOLD 6
+#define HATRACK_RETRY_THRESHOLD 7
 #endif
 
 /* HATRACK_COUNTERS
@@ -486,26 +486,12 @@
  */
 // #define TOPHAT_USE_LOCKING_ALGORITHMS
 
-/* HATRACK_TEST_MAX_KEYS
+/* HATRACK_SEED_SIZE
  *
- * Used by our test harness; this is used to allocate a static array
- * that's filled with precomputed hash keys. It effectively limits the
- * range you can pass into a test case, so be careful, as we do NOT
- * check this.
+ * How many bytes to seed our random number generator with??
  */
-
-#ifndef HATRACK_TEST_MAX_KEYS
-#define HATRACK_TEST_MAX_KEYS 1000000
-#endif
-
-/* HATRACK_DEFAULT_ITERS
- *
- * Controls how many iterations the test harness does, for most tests.
- * This is janky, and will eventually go away when I get around to
- * building out a better test harness.
- */
-#ifndef HATRACK_DEFAULT_ITERS
-#define HATRACK_DEFAULT_ITERS 1000000
+#ifndef HATRACK_SEED_SIZE
+#define HATRACK_SEED_SIZE 32
 #endif
 
 /* HATRACK_RAND_SEED_SIZE
@@ -534,7 +520,12 @@
  * byte of the thread's pthread id (just to get some variance in the
  * number streams; multiple threads can definitely end up with
  * identical streams of numbers).  We read the seed once, at
- * initialization time, from /dev/urandom.
+ * initialization time.  Generally, this is from /dev/urandom, unless
+ * you are looking to do "repeatable" tests, which only make sense in
+ * the context of a single thread.  In such a case, the seed will be
+ * 128-bits, and zero-padded beyond that.
+ *
+ * Therefore, HATRACK_RAND_SEED_SIZE needs to be at least 16.
  *
  * This variable controls that.
  *
@@ -545,6 +536,10 @@
  */
 #ifndef HATRACK_RAND_SEED_SIZE
 #define HATRACK_RAND_SEED_SIZE 32
+#endif
+
+#if HATRACK_RAND_SEED_SIZE < 16
+#error "Invalid seed size"
 #endif
 
 /* HATRACK_COMPILE_ALL_ALGORITHMS

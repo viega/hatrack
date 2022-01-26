@@ -14,10 +14,9 @@
  * limitations under the License.
  *
  *  Name:           test.c
- *  Description:    Test cases, and code to support tests.
  *
- *                  This is currently messy; I would love to
- *                  find the time to put some real work into this.
+ *  Description:    Main file for test case running, along with
+ *                  the function that pre-computes hash keys.
  *
  *
  *  Author:         John Viega, john@zork.org
@@ -31,64 +30,35 @@
 #include <time.h>
 #include <stdio.h>
 
+hatrack_hash_t *precomputed_hashes = NULL;
+static uint64_t num_hashes         = 0;
 
-hatrack_hash_t      precomputed_hashes[HATRACK_TEST_MAX_KEYS];
-_Atomic test_func_t test_func;
-
-static void
-test_precompute_hashes(void)
+// This is obviously meant to be run single-threaded.
+void
+precompute_hashes(uint64_t max_range)
 {
-    uint64_t i;
+    size_t alloc_size;
 
-    for (i = 0; i < HATRACK_TEST_MAX_KEYS; i++) {
-        precomputed_hashes[i] = hash_int(i);
+    if (num_hashes > max_range) {
+        return;
+    }
+
+    alloc_size = sizeof(hatrack_hash_t) * max_range;
+
+    if (!precomputed_hashes) {
+        precomputed_hashes = (hatrack_hash_t *)malloc(alloc_size);
+    }
+    else {
+        precomputed_hashes
+            = (hatrack_hash_t *)realloc(precomputed_hashes, alloc_size);
+    }
+
+    for (; num_hashes < max_range; num_hashes++) {
+        precomputed_hashes[num_hashes] = hash_int(num_hashes);
     }
 
     return;
 }
-
-static void
-test_init(void)
-{
-    mmm_register_thread();
-    test_precompute_hashes();
-    test_init_rand();
-
-    return;
-}
-
-void *
-start_one_thread(void *info)
-{
-    test_func_t func;
-    bool        ret;
-
-    mmm_register_thread();
-
-    while (!(func = atomic_load(&test_func)))
-        ;
-
-    ret = (*test_func)(info);
-
-    mmm_clean_up_before_exit();
-
-    return (void *)ret;
-}
-
-
-// clang-format off
-uint32_t            basic_sizes[]     = {10, 100, 1000, 10000, 0};
-uint32_t            sort_sizes[]      = {10, 128, 256, 512, 1024, 2048, 4096,
-                                         8192, 100000, 0};
-uint32_t            large_sizes[]     = {100000, 1000000, 0};
-uint32_t            shrug_sizes[]     = {1, 0};
-uint32_t            small_size[]      = {10, 0};
-uint32_t            one_thread[]      = {1, 0};
-uint32_t            mt_only_threads[] = {2, 4, 8, 20, 100, 0};
-uint32_t            basic_threads[]   = {1, 2, 4, 8, 20, 100, 0};
-uint32_t            del_rate[]        = {100, 10, 3, 0};
-uint32_t            write_rates[]     = {0x010a, 0x050a, 0x0a0a, 0};
-//  clang-format on
 
 int
 main(int argc, char *argv[])
@@ -100,19 +70,23 @@ main(int argc, char *argv[])
 #ifdef HATRACK_DEBUG
     print_config(config);
 #endif
-    
-    test_init();
+
+    mmm_register_thread();
+
+    if (config->run_custom_test) {
+        run_performance_test(&config->custom);
+    }
 
     if (config->run_func_tests) {
-	run_functional_tests(config);
+        run_functional_tests(config);
     }
 
-    if (config->run_stress_tests) {
-	run_stress_tests(config);
+    if (config->run_default_tests) {
+        run_default_tests(config);
     }
-    
+
     counters_output_alltime();
-    
+
     printf("Press <enter> to exit.\n");
     getc(stdin);
 

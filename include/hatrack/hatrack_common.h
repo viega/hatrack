@@ -330,6 +330,20 @@ hatrack_pflag_clear(void *ptr, uint64_t flags)
     return (void *)(((uint64_t)ptr) & ~flags);
 }
 
-int hatrack_quicksort_cmp(const void *, const void *);
+static inline uint64_t
+hatrack_round_up_to_power_of_2(uint64_t n)
+{
+    // n & (n - 1) only returns 0 when n is a power of two.
+    // If n's already a power of 2, we're done.
+    if (!(n & (n - 1))) {
+	return n;
+    }
 
+    // CLZ returns the number of zeros before the leading one.
+    // The next power of two will have one fewer leading zero,
+    // and that will be the only bit set.
+    return 0x8000000000000000 >> (__builtin_clzll(n) - 1);
+}
+
+int  hatrack_quicksort_cmp(const void *, const void *);
 #endif

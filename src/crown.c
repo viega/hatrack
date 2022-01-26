@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- *  Name:           crown.h
- *  Description:    Crown Reliably Owns Witchhat... Nice!
+ *  Name:           crown.c
+ *  Description:    Crown Really Overcomplicates Witchhat Now
  *
  *                  Crown is a slight modification of witchhat-- it
  *                  changes the probing strategy for buckets.

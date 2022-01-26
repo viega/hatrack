@@ -72,6 +72,17 @@ swimcap_new(void)
     return ret;
 }
 
+swimcap_t *
+swimcap_new_size(char size) {
+    swimcap_t *ret;
+
+    ret = (swimcap_t *)malloc(sizeof(swimcap_t));
+
+    swimcap_init_size(ret, size);
+
+    return ret;
+}
+
 /* swimcap_init()
  *
  * This is identical to duncecap_init().
@@ -83,7 +94,7 @@ swimcap_new(void)
 void
 swimcap_init(swimcap_t *self)
 {
-    swimcap_init(self, HATRACK_MIN_SIZE_LOG);
+    swimcap_init_size(self, HATRACK_MIN_SIZE_LOG);
 
     return;
 }
@@ -103,7 +114,7 @@ swimcap_init_size(swimcap_t *self, char size)
     }
 
     len                 = 1 << size;
-    store               = swimcap_store_new(HATRACK_MIN_SIZE);
+    store               = swimcap_store_new(len);
     self->item_count    = 0;
     self->next_epoch    = 1; // 0 is reserved for empty buckets.
     self->store_current = store;

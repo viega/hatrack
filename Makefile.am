@@ -8,7 +8,7 @@ libhatrack_a_SOURCES = src/mmm.c src/debug.c src/xxhash.c src/counters.c src/hat
 
 lib_LIBRARIES = libhatrack.a
 
-tests_test_SOURCES = ${libhatrack_a_SOURCES} tests/test.c tests/testhat.c tests/rand.c tests/config.c tests/functional.c tests/stress.c
+tests_test_SOURCES = ${libhatrack_a_SOURCES} tests/test.c tests/testhat.c tests/rand.c tests/config.c tests/functional.c tests/default.c tests/performance.c
 tests_test_CFLAGS = -DHATRACK_COMPILE_ALL_ALGORITHMS -Wall -Wextra -Wno-atomic-alignment -Wno-unused-parameter -I./include/
 
 examples_basic_SOURCES = examples/basic.c

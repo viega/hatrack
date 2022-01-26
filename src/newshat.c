@@ -82,7 +82,7 @@ newshat_new_size(char size)
 void
 newshat_init(newshat_t *self)
 {
-    newshat_init_size(HATRACK_MIN_SIZE_LOG);
+    newshat_init_size(self, HATRACK_MIN_SIZE_LOG);
 
     return;
 }
@@ -109,8 +109,8 @@ newshat_init_size(newshat_t *self, char size)
 
     len                 = 1 << size;
     store               = newshat_store_new(len);
-    self->item_count    = 0;
-    self->next_epoch    = 1; // 0 is reserved for empty buckets.
+    self->item_count    = ATOMIC_VAR_INIT(0);
+    self->next_epoch    = ATOMIC_VAR_INIT(1); // 0 is for empty buckets.
     self->store_current = store;
 
     pthread_mutex_init(&self->migrate_mutex, NULL);
@@ -290,7 +290,7 @@ newshat_remove(newshat_t *self, hatrack_hash_t hv, bool *found)
 uint64_t
 newshat_len(newshat_t *self)
 {
-    return self->item_count;
+    return atomic_read(&self->item_count);
 }
 
 /* newshat_view()
@@ -477,7 +477,12 @@ newshat_store_get(newshat_store_t *self, hatrack_hash_t hv, bool *found)
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    if (found) {
+	*found = false;
+    }
+
+    return NULL;
 }
 
 static void *
@@ -530,10 +535,10 @@ newshat_store_put(newshat_store_t *self,
 
             if (!record.epoch) {
                 record.item  = item;
-                record.epoch = top->next_epoch++; // For sort ordering.
+                record.epoch = atomic_fetch_add(&top->next_epoch, 1);
 
                 atomic_store(&cur->record, record);
-                top->item_count++;
+                atomic_fetch_add(&top->item_count, 1);
 
                 if (found) {
                     *found = false;
@@ -564,7 +569,7 @@ newshat_store_put(newshat_store_t *self,
         }
 
         if (hatrack_bucket_unreserved(cur->hv)) {
-            if (self->used_count == self->threshold) {
+            if (atomic_read(&self->used_count) >= self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
@@ -574,12 +579,12 @@ newshat_store_put(newshat_store_t *self,
                 return newshat_store_put(self, top, hv, item, found);
             }
 
-            self->used_count++;
-            top->item_count++;
+            atomic_fetch_add(&self->used_count, 1);
+            atomic_fetch_add(&top->item_count, 1);
 
             cur->hv      = hv;
             record.item  = item;
-            record.epoch = top->next_epoch++;
+            record.epoch = atomic_fetch_add(&top->next_epoch, 1);
 
             atomic_store(&cur->record, record);
 
@@ -599,7 +604,10 @@ newshat_store_put(newshat_store_t *self,
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+    
+    self = newshat_store_migrate(self, top);
+
+    return newshat_store_put(self, top, hv, item, found);
 }
 
 static void *
@@ -684,7 +692,12 @@ newshat_store_replace(newshat_store_t *self,
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    if (found) {
+	*found = false;
+    }
+
+    return NULL;
 }
 
 bool
@@ -724,10 +737,10 @@ newshat_store_add(newshat_store_t *self,
 
             if (!record.epoch) {
                 record.item  = item;
-                record.epoch = top->next_epoch++;
+                record.epoch = atomic_fetch_add(&top->next_epoch, 1);
 
                 atomic_store(&cur->record, record);
-                top->item_count++;
+                atomic_fetch_add(&top->item_count, 1);
 
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
@@ -744,7 +757,7 @@ newshat_store_add(newshat_store_t *self,
         }
 
         if (hatrack_bucket_unreserved(cur->hv)) {
-            if (self->used_count == self->threshold) {
+            if (atomic_read(&self->used_count) >= self->threshold) {
                 if (pthread_mutex_unlock(&cur->mutex)) {
                     abort();
                 }
@@ -754,12 +767,12 @@ newshat_store_add(newshat_store_t *self,
                 return newshat_store_add(self, top, hv, item);
             }
 
-            self->used_count++;
-            top->item_count++;
+            atomic_fetch_add(&self->used_count, 1);
+            atomic_fetch_add(&top->item_count, 1);
 
             cur->hv      = hv;
             record.item  = item;
-            record.epoch = top->next_epoch++;
+            record.epoch = atomic_fetch_add(&top->next_epoch, 1);
 
             atomic_store(&cur->record, record);
 
@@ -775,7 +788,10 @@ newshat_store_add(newshat_store_t *self,
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    self = newshat_store_migrate(self, top);
+
+    return newshat_store_add(self, top, hv, item);
 }
 
 void *
@@ -835,7 +851,7 @@ newshat_store_remove(newshat_store_t *self,
             record.epoch = 0; // No epoch, empty bucket.
 
             atomic_store(&cur->record, record);
-            --top->item_count;
+            atomic_fetch_sub(&top->item_count, 1);
 
             if (found) {
                 *found = true;
@@ -850,7 +866,11 @@ newshat_store_remove(newshat_store_t *self,
 
         bix = (bix + 1) & last_slot;
     }
-    __builtin_unreachable();
+
+    if (found) {
+	*found = false;
+    }
+    return NULL;
 }
 
 static newshat_store_t *
@@ -947,7 +967,8 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
      * buckets in the new store, unlock all the buckets in this store,
      * then go and free up the new store.  But we don't do that here.
      */
-    new_store->used_count = top->item_count;
+    atomic_store(&new_store->used_count, items_to_migrate);
+    atomic_store(&top->item_count, items_to_migrate);
     top->store_current    = new_store;
 
     /* The old store cannot be deleted immediately, as it might have

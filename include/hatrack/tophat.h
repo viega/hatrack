@@ -218,14 +218,23 @@ typedef struct {
  * _mx   = Mutex variant
  * _wf   = Wait-Free variant
  */
-tophat_t       *tophat_new_fast_mx (void);
-tophat_t       *tophat_new_fast_wf (void);
-tophat_t       *tophat_new_cst_mx  (void);
-tophat_t       *tophat_new_cst_wf  (void);
-void            tophat_init_fast_mx(tophat_t *);
-void            tophat_init_fast_wf(tophat_t *);
-void            tophat_init_cst_mx (tophat_t *);
-void            tophat_init_cst_wf (tophat_t *);
+tophat_t       *tophat_new_fast_mx      (void);
+tophat_t       *tophat_new_fast_wf      (void);
+tophat_t       *tophat_new_cst_mx       (void);
+tophat_t       *tophat_new_cst_wf       (void);
+tophat_t       *tophat_new_fast_mx_size (char);
+tophat_t       *tophat_new_fast_wf_size (char);
+tophat_t       *tophat_new_cst_mx_size  (char);
+tophat_t       *tophat_new_cst_wf_size  (char);
+void            tophat_init_fast_mx     (tophat_t *);
+void            tophat_init_fast_wf     (tophat_t *);
+void            tophat_init_cst_mx      (tophat_t *);
+void            tophat_init_cst_wf      (tophat_t *);
+void            tophat_init_fast_mx_size(tophat_t *, char);
+void            tophat_init_fast_wf_size(tophat_t *, char);
+void            tophat_init_cst_mx_size (tophat_t *, char);
+void            tophat_init_cst_wf_size (tophat_t *, char);
+
 void            tophat_cleanup     (tophat_t *);
 void            tophat_delete      (tophat_t *);
 void           *tophat_get         (tophat_t *, hatrack_hash_t, bool *);

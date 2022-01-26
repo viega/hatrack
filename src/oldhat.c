@@ -783,7 +783,7 @@ found_bucket:
      * deletion records, item_count does not).
      */
     if (CAS(&self->buckets[bix], &record, candidate)) {
-        mmm_retire(record);
+        mmm_retire_fast(record);
         if (!record->used) {
             if (found) {
                 *found = false;
@@ -1270,7 +1270,7 @@ oldhat_store_migrate(oldhat_store_t *self, oldhat_t *top)
          * retire the old record, if any.
          */
         if (record) {
-            mmm_retire(record);
+            mmm_retire_fast(record);
         }
 	
         candidate_record = (oldhat_record_t *)mmm_alloc_committed(record_sz);
@@ -1412,7 +1412,7 @@ next_migration:
          * retire the old record, which there will definitely be, this
          * time.
          */
-        mmm_retire(record);
+        mmm_retire_fast(record);
 	
         candidate_record = (oldhat_record_t *)mmm_alloc_committed(record_sz);
 
@@ -1458,7 +1458,7 @@ next_mark_finished:
      * the store are done with it.
      */
     if (CAS(&top->store_current, &self, new_store)) {
-        mmm_retire(self);
+        mmm_retire_fast(self);
     }
 
     /* Instead of returning new_store here, we accept that we might

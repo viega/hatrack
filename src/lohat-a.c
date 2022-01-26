@@ -36,8 +36,6 @@
 
 // clang-format off
 static lohat_a_store_t *lohat_a_store_new          (uint64_t);
-static void             lohat_a_retire_store       (lohat_a_store_t *);
-static void             lohat_a_retire_unused_store(lohat_a_store_t *);
 static void            *lohat_a_store_get          (lohat_a_store_t *,
 						    hatrack_hash_t, bool *);
 static void            *lohat_a_store_put          (lohat_a_store_t *,
@@ -129,7 +127,8 @@ lohat_a_cleanup(lohat_a_t *self)
         p++;
     }
 
-    lohat_a_retire_store(store);
+    mmm_retire(store->hist_buckets);
+    mmm_retire(store);
 
     return;
 }
@@ -368,24 +367,6 @@ lohat_a_store_new(uint64_t size)
     store->hist_end     = store->hist_buckets + threshold;
 
     return store;
-}
-
-static void
-lohat_a_retire_store(lohat_a_store_t *self)
-{
-    mmm_retire(self->hist_buckets);
-    mmm_retire(self);
-
-    return;
-}
-
-static void
-lohat_a_retire_unused_store(lohat_a_store_t *self)
-{
-    mmm_retire_unused(self->hist_buckets);
-    mmm_retire_unused(self);
-
-    return;
 }
 
 static void *
@@ -960,7 +941,7 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
         if (head && hatrack_pflag_test(candidate, LOHAT_F_MOVED)) {
             // Then it was a delete record; retire it.
             mmm_help_commit(head);
-            mmm_retire(head);
+            mmm_retire_fast(head);
             continue;
         }
 
@@ -984,7 +965,8 @@ didnt_win:
                   &new_store,
                   candidate_store,
                   LOHATa_CTR_NEW_STORE)) {
-            lohat_a_retire_unused_store(candidate_store);
+	    mmm_retire_unused(candidate_store->hist_buckets);
+	    mmm_retire_unused(candidate_store);
         }
         else {
             new_store = candidate_store;
@@ -1096,7 +1078,8 @@ didnt_win:
     LCAS(&new_store->hist_next, &expected_ptr, target, LOHATa_CTR_F_HIST);
 
     if (LCAS(&top->store_current, &self, new_store, LOHATa_CTR_STORE_INSTALL)) {
-        lohat_a_retire_store(self);
+	mmm_retire_fast(self->hist_buckets);
+	mmm_retire_fast(self);
     }
 
     return top->store_current;

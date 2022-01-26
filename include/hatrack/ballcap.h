@@ -97,13 +97,12 @@ typedef struct {
 typedef struct {
     uint64_t             last_slot;
     uint64_t             threshold;
-    uint64_t             used_count;
+    _Atomic uint64_t     used_count;
     ballcap_bucket_t     buckets[];
 } ballcap_store_t;
 
 typedef struct {
-    uint64_t             item_count;
-    uint64_t             next_epoch;
+    _Atomic uint64_t     item_count;
     ballcap_store_t     *store_current;
     pthread_mutex_t      migrate_mutex;
 } ballcap_t;

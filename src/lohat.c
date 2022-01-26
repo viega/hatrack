@@ -73,7 +73,7 @@ lohat_new_size(char size)
 void
 lohat_init(lohat_t *self)
 {
-    lohat_init_size(HATRACK_MIN_SIZE_LOG);
+    lohat_init_size(self, HATRACK_MIN_SIZE_LOG);
 
     return;
 }
@@ -1062,7 +1062,7 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
 
         if (head && hatrack_pflag_test(candidate, LOHAT_F_MOVED)) {
             mmm_help_commit(head);
-            mmm_retire(head);
+            mmm_retire_fast(head);
             continue;
         }
 
@@ -1203,7 +1203,7 @@ didnt_win:
      * the store are done with it.
      */
     if (LCAS(&top->store_current, &self, new_store, LOHAT_CTR_STORE_INSTALL)) {
-        mmm_retire(self);
+        mmm_retire_fast(self);
     }
 
     /* Instead of returning new_store here, we accept that we might

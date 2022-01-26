@@ -149,7 +149,7 @@ typedef struct {
 typedef struct {
     uint64_t             last_slot;
     uint64_t             threshold;
-    uint64_t             used_count;
+    _Atomic uint64_t     used_count;
     newshat_bucket_t     buckets[];
 } newshat_store_t;
 
@@ -184,8 +184,8 @@ typedef struct {
  */
 typedef struct {
     newshat_store_t     *store_current;
-    uint64_t             item_count;
-    uint64_t             next_epoch;
+    _Atomic uint64_t     item_count;
+    _Atomic uint64_t     next_epoch;
     pthread_mutex_t      migrate_mutex;
 } newshat_t;
 
@@ -201,7 +201,7 @@ typedef struct {
 newshat_t      *newshat_new      (void);
 newshat_t      *newshat_new_size (char);
 void            newshat_init     (newshat_t *);
-void            newshat_init_size(newshat_t *);
+void            newshat_init_size(newshat_t *, char);
 void            newshat_cleanup  (newshat_t *);
 void            newshat_delete   (newshat_t *);
 void           *newshat_get      (newshat_t *, hatrack_hash_t, bool *);
