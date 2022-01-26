@@ -35,6 +35,7 @@
 #include <hatrack/witchhat.h>
 #include <hatrack/hihat.h>
 #include <hatrack/oldhat.h>
+#include <hatrack/tiara.h>
 #include <hatrack/ballcap.h>
 #include <hatrack/newshat.h>
 #include <hatrack/swimcap.h>
