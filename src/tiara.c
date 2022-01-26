@@ -33,16 +33,14 @@
 
 // clang-format off
 static tiara_store_t *tiara_store_new    (uint64_t);
-static void          *tiara_store_get    (tiara_store_t *, hatrack_hash_t,
-					  bool *);
-static void          *tiara_store_put    (tiara_store_t *, tiara_t *,
-					  hatrack_hash_t, void *, bool *);
-static void          *tiara_store_replace(tiara_store_t *, tiara_t *,
-					  hatrack_hash_t, void *, bool *);
-static bool           tiara_store_add    (tiara_store_t *, tiara_t *,
-					  hatrack_hash_t, void *);
-static void          *tiara_store_remove (tiara_store_t *, tiara_t *,
-					  hatrack_hash_t, bool *);
+static void          *tiara_store_get    (tiara_store_t *, uint64_t);
+static void          *tiara_store_put    (tiara_store_t *, tiara_t *, uint64_t,
+					  void *);
+static void          *tiara_store_replace(tiara_store_t *, tiara_t *, uint64_t,
+					  void *);
+static bool           tiara_store_add    (tiara_store_t *, tiara_t *, uint64_t,
+					  void *);
+static void          *tiara_store_remove (tiara_store_t *, tiara_t *, uint64_t);
 static tiara_store_t *tiara_store_migrate(tiara_store_t *, tiara_t *);
 
 tiara_t *
@@ -119,7 +117,7 @@ tiara_delete(tiara_t *self)
 }
 
 void *
-tiara_get(tiara_t *self, uint64_t hv, bool *found)
+tiara_get(tiara_t *self, uint64_t hv)
 {
     void          *ret;
     tiara_store_t *store;
@@ -127,7 +125,7 @@ tiara_get(tiara_t *self, uint64_t hv, bool *found)
     mmm_start_basic_op();
     
     store = atomic_read(&self->store_current);
-    ret   = tiara_store_get(store, hv, found);
+    ret   = tiara_store_get(store, hv);
     
     mmm_end_op();
 
@@ -135,7 +133,7 @@ tiara_get(tiara_t *self, uint64_t hv, bool *found)
 }
 
 void *
-tiara_put(tiara_t *self, uint64_t hv, void *item, bool *found)
+tiara_put(tiara_t *self, uint64_t hv, void *item)
 {
     void          *ret;
     tiara_store_t *store;
@@ -143,7 +141,7 @@ tiara_put(tiara_t *self, uint64_t hv, void *item, bool *found)
     mmm_start_basic_op();
     
     store = atomic_read(&self->store_current);
-    ret   = tiara_store_put(store, self, hv, item, found);
+    ret   = tiara_store_put(store, self, hv, item);
     
     mmm_end_op();
 
@@ -151,7 +149,7 @@ tiara_put(tiara_t *self, uint64_t hv, void *item, bool *found)
 }
 
 void *
-tiara_replace(tiara_t *self, uint64_t hv, void *item, bool *found)
+tiara_replace(tiara_t *self, uint64_t hv, void *item)
 {
     void          *ret;
     tiara_store_t *store;
@@ -159,7 +157,7 @@ tiara_replace(tiara_t *self, uint64_t hv, void *item, bool *found)
     mmm_start_basic_op();
     
     store = atomic_read(&self->store_current);
-    ret   = tiara_store_replace(store, self, hv, item, found);
+    ret   = tiara_store_replace(store, self, hv, item);
     
     mmm_end_op();
 
@@ -183,7 +181,7 @@ tiara_add(tiara_t *self, uint64_t hv, void *item)
 }
 
 void *
-tiara_remove(tiara_t *self, uint64_t hv, bool *found)
+tiara_remove(tiara_t *self, uint64_t hv)
 {
     void           *ret;
     tiara_store_t *store;
@@ -191,7 +189,7 @@ tiara_remove(tiara_t *self, uint64_t hv, bool *found)
     mmm_start_basic_op();
     
     store = atomic_read(&self->store_current);    
-    ret   = tiara_store_remove(store, self, hv, found);
+    ret   = tiara_store_remove(store, self, hv);
     
     mmm_end_op();
 
@@ -284,41 +282,28 @@ tiara_store_get(tiara_store_t *self, uint64_t hv)
         record = atomic_read(&self->buckets[bix]);
 
 	if (!record.hv) {
-	    if (found) {
-		*found = false;
-	    }
 	    return NULL;
 	}
 	
 
-	if (record.hv != hv1) {
+	if (record.hv != hv) {
             bix = (bix + 1) & self->last_slot;
             continue;
         }
 
 	if (!(hatrack_pflag_test(record.item, TIARA_F_DELETED))) {
-            if (found) {
-                *found = true;
-            }
-	    
             return hatrack_pflag_clear(record.item, TIARA_F_ALL);
         }
 	
         break;
     }
 
-    if (found) {
-        *found = false;
-    }
-    
     return NULL;
 }
 
 static void *
 tiara_store_put(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 {
-    void           *old_item;
-    bool            new_item;
     uint64_t        bix;
     uint64_t        i;
     tiara_record_t  record;
@@ -344,7 +329,7 @@ tiara_store_put(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 	    // got the same hash value as us.
 	}
 	
-	if (!record.hv == hv) {
+	if (!(record.hv == hv)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
@@ -378,8 +363,6 @@ tiara_store_put(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 static void *
 tiara_store_replace(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 {
-    void           *old_item;
-    bool            new_item;
     uint64_t        bix;
     uint64_t        i;
     tiara_record_t  record;
@@ -396,7 +379,7 @@ tiara_store_replace(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 	    return NULL;
 	}
 	
-	if (!record.hv == hv) {
+	if (!(record.hv == hv)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
@@ -429,8 +412,6 @@ tiara_store_replace(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 static bool
 tiara_store_add(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 {
-    void           *old_item;
-    bool            new_item;
     uint64_t        bix;
     uint64_t        i;
     tiara_record_t  record;
@@ -456,7 +437,7 @@ tiara_store_add(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 	    // got the same hash value as us.
 	}
 	
-	if (!record.hv == hv) {
+	if (!(record.hv == hv)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
@@ -471,8 +452,6 @@ tiara_store_add(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 static void *
 tiara_store_remove(tiara_store_t *self, tiara_t *top, uint64_t hv)
 {
-    void           *old_item;
-    bool            new_item;
     uint64_t        bix;
     uint64_t        i;
     tiara_record_t  record;
@@ -480,7 +459,7 @@ tiara_store_remove(tiara_store_t *self, tiara_t *top, uint64_t hv)
 
     bix            = hv & self->last_slot;
     candidate.hv   = hv;
-    candidate.item = TIARA_F_DELETED;
+    candidate.item = (void *)TIARA_F_DELETED;
     
     for (i = 0; i <= self->last_slot; i++) {
 	record = atomic_load(&self->buckets[bix]);
@@ -489,7 +468,7 @@ tiara_store_remove(tiara_store_t *self, tiara_t *top, uint64_t hv)
 	    return NULL;
 	}
 	
-	if (!record.hv == hv) {
+	if (!(record.hv == hv)) {
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
@@ -501,22 +480,20 @@ tiara_store_remove(tiara_store_t *self, tiara_t *top, uint64_t hv)
     
  found_bucket:
     if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
-	migrate_and_retry:
-	    self = tiara_store_migrate(self, top);
-	    return tiara_store_put(self, top, hv, item);
-	}
+    migrate_and_retry:
+	self = tiara_store_migrate(self, top);
+	return tiara_store_remove(self, top, hv);
+    }
 
-	if (CAS(&self->buckets[bix], &record, candidate)) {
-	    return hatrack_pflag_clear(record.item, TIARA_F_ALL);
-	}
+    if (CAS(&self->buckets[bix], &record, candidate)) {
+	return hatrack_pflag_clear(record.item, TIARA_F_ALL);
+    }
 
-	if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
-	    goto migrate_and_retry;
-	}
+    if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
+	goto migrate_and_retry;
+    }
 	
-	return NULL;
-
-    return item;
+    return NULL;
 }
 
 static tiara_store_t *
@@ -527,7 +504,6 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
     uint64_t        new_size;
     tiara_record_t  record;
     tiara_record_t  candidate_record;
-    tiara_record_t  expected_record;
     uint64_t        i, j;
     uint64_t        bix;
     uint64_t        new_used;
@@ -552,7 +528,7 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
 	    }
 	    
 	    if (!record.hv ||
-		hatrack_plag_test(record.item, TIARA_F_DELETED)) {
+		hatrack_pflag_test(record.item, TIARA_F_DELETED)) {
 		candidate_record.item = (void *)TIARA_F_ALL;
 	    }
 	    else {
@@ -583,12 +559,12 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
     for (i = 0; i <= self->last_slot; i++) {
         candidate_record = atomic_read(&self->buckets[i]);
 
-        if (hatrack_pflag_test(candidate_record.item & TIARA_F_MOVED)) {
+        if (hatrack_pflag_test(candidate_record.item, TIARA_F_MOVED)) {
             continue;
         }
 
-	candidate_record.item = hatrack_pflags_clear(candidate_record.item,
-						     TIARA_F_ALL);
+	candidate_record.item = hatrack_pflag_clear(candidate_record.item,
+						    TIARA_F_ALL);
 
 
         bix = record.hv & new_store->last_slot;
@@ -601,7 +577,7 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
 		break;
 	    }
 		
-	    if (!hatrack_hashes_eq(expected_hv, hv)) {
+	    if (!(record.hv == candidate_record.hv)) {
 		bix = (bix + 1) & new_store->last_slot;
 		continue;
             }
@@ -609,11 +585,11 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
             break;
 	}
 
-	candidate_record.item = hatrack_pflags_set(candidate_record.item,
-						   TIARA_F_MOVING |
-						   TIARA_F_MOVED);
+	candidate_record.item = hatrack_pflag_set(candidate_record.item,
+						  TIARA_F_MOVING |
+						  TIARA_F_MOVED);
 	    
-	record.item = hatrack_plags_set(candidate_record.item,
+	record.item = hatrack_pflag_set(candidate_record.item,
 					TIARA_F_MOVING);
 
 	CAS(&self->buckets[i], &record, candidate_record);

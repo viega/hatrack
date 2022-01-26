@@ -38,6 +38,7 @@
 #include <hatrack/ballcap.h>
 #include <hatrack/hihat.h>
 #include <hatrack/oldhat.h>
+#include <hatrack/tiara.h>
 #include <hatrack/lohat.h>
 #include <hatrack/lohat-a.h>
 #include <hatrack/witchhat.h>

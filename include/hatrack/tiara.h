@@ -94,11 +94,11 @@ void            tiara_init     (tiara_t *);
 void            tiara_init_size(tiara_t *, char);
 void            tiara_cleanup  (tiara_t *);
 void            tiara_delete   (tiara_t *);
-void           *tiara_get      (tiara_t *, hatrack_hash_t, bool *);
-void           *tiara_put      (tiara_t *, hatrack_hash_t, void *, bool *);
-void           *tiara_replace  (tiara_t *, hatrack_hash_t, void *, bool *);
-bool            tiara_add      (tiara_t *, hatrack_hash_t, void *);
-void           *tiara_remove   (tiara_t *, hatrack_hash_t, bool *);
+void           *tiara_get      (tiara_t *, uint64_t);
+void           *tiara_put      (tiara_t *, uint64_t, void *);
+void           *tiara_replace  (tiara_t *, uint64_t, void *);
+bool            tiara_add      (tiara_t *, uint64_t, void *);
+void           *tiara_remove   (tiara_t *, uint64_t);
 uint64_t        tiara_len      (tiara_t *);
 hatrack_view_t *tiara_view     (tiara_t *, uint64_t *, bool);
 

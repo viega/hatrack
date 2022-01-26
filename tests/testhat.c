@@ -375,6 +375,19 @@ hatrack_vtable_t crown_vtable = {
     .view    = (hatrack_view_func)crown_view
 };
 
+hatrack_vtable_t tiara_vtable = {
+    .init    = (hatrack_init_func)tiara_init,
+    .init_sz = (hatrack_init_sz_func)tiara_init_size,    
+    .get     = (hatrack_get_func)tiara_get,
+    .put     = (hatrack_put_func)tiara_put,
+    .replace = (hatrack_replace_func)tiara_replace,    
+    .add     = (hatrack_add_func)tiara_add,
+    .remove  = (hatrack_remove_func)tiara_remove,
+    .delete  = (hatrack_delete_func)tiara_delete,
+    .len     = (hatrack_len_func)tiara_len,
+    .view    = (hatrack_view_func)tiara_view
+};
+
 // clang-format on
 
 static void
@@ -397,6 +410,6 @@ testhat_init_default_algorithms(void)
     algorithm_register("tophat-fwf", &thfwf_vtable, sizeof(tophat_t), 16, true);
     algorithm_register("tophat-cmx", &thcmx_vtable, sizeof(tophat_t), 16, true);
     algorithm_register("tophat-cwf", &thcwf_vtable, sizeof(tophat_t), 16, true);
-
+    algorithm_register("tiara", &tiara_vtable, sizeof(tiara_t), 8, true);
     return;
 }
