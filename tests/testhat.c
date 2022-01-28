@@ -37,7 +37,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static int32_t   next_table_type_id = 0;
+static int32_t    next_table_type_id = 0;
 static alg_info_t implementation_info[HATRACK_MAX_HATS];
 
 static void testhat_init_default_algorithms() __attribute__((constructor));
@@ -61,6 +61,7 @@ algorithm_register(char             *name,
     implementation_info[ret].vtable     = vtable;
     implementation_info[ret].size       = size;
     implementation_info[ret].threadsafe = threadsafe;
+    implementation_info[ret].hashbytes  = hashbytes;
 
     return ret;
 }

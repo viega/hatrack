@@ -226,7 +226,7 @@ tiara_view(tiara_t *self, uint64_t *num, bool ignored)
     while (cur < end) {
         record       = atomic_read(cur);
 
-	if (!record.hv || hatrack_pflag_test(record.item, TIARA_F_DELETED)) {
+	if (!hatrack_pflag_test(record.item, TIARA_F_USED)) {
 	    cur++;
 	    continue;
 	}
@@ -291,11 +291,8 @@ tiara_store_get(tiara_store_t *self, uint64_t hv)
             continue;
         }
 
-	if (!(hatrack_pflag_test(record.item, TIARA_F_DELETED))) {
-            return hatrack_pflag_clear(record.item, TIARA_F_ALL);
-        }
-	
-        break;
+	// If it's deleted, the clear will return null.
+	return hatrack_pflag_clear(record.item, TIARA_F_ALL);
     }
 
     return NULL;
@@ -310,14 +307,13 @@ tiara_store_put(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
     tiara_record_t  candidate;
 
     bix            = hv & self->last_slot;
-    candidate.hv   = hv;
-    candidate.item = item;
-    
+
     for (i = 0; i <= self->last_slot; i++) {
-	record = atomic_load(&self->buckets[bix]);
+	record         = atomic_load(&self->buckets[bix]);
+	candidate.hv   = hv;
+	candidate.item = hatrack_pflag_set(item, TIARA_F_USED);
 
 	if (!record.hv) {
-
 	    if (CAS(&self->buckets[bix], &record, candidate)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
 		    tiara_store_migrate(self, top);
@@ -334,30 +330,23 @@ tiara_store_put(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 	    continue;
 	}
 
-	goto found_bucket;
+	if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
+	    break;
+	}
+    
+	if (CAS(&self->buckets[bix], &record, candidate)) {
+	    return hatrack_pflag_clear(record.item, TIARA_F_ALL);
+	}
+    
+	if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
+	    break;
+	}
+    
+	return NULL;
     }
 
- migrate_and_retry:
-    
     self = tiara_store_migrate(self, top);
     return tiara_store_put(self, top, hv, item);
-    
- found_bucket:
-    if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
-	goto migrate_and_retry;
-    }
-    
-    if (CAS(&self->buckets[bix], &record, candidate)) {
-	return hatrack_pflag_clear(record.item, TIARA_F_ALL);
-    }
-    
-    if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
-	goto migrate_and_retry;
-    }
-    
-    return NULL;
-    
-    return item;
 }
 
 static void *
@@ -368,9 +357,7 @@ tiara_store_replace(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
     tiara_record_t  record;
     tiara_record_t  candidate;
 
-    bix            = hv & self->last_slot;
-    candidate.hv   = hv;
-    candidate.item = item;
+    bix = hv & self->last_slot;
     
     for (i = 0; i <= self->last_slot; i++) {
 	record = atomic_load(&self->buckets[bix]);
@@ -383,30 +370,28 @@ tiara_store_replace(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
 	    bix = (bix + 1) & self->last_slot;
 	    continue;
 	}
-
-	goto found_bucket;
-    }
-
-    return NULL;
-
- found_bucket:
-    if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
+	
+	if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
 	migrate_and_retry:
 	    self = tiara_store_migrate(self, top);
 	    return tiara_store_replace(self, top, hv, item);
 	}
-
+	
+	candidate.hv   = hv;
+	candidate.item = hatrack_pflag_set(item, TIARA_F_USED);
+	
 	if (CAS(&self->buckets[bix], &record, candidate)) {
 	    return hatrack_pflag_clear(record.item, TIARA_F_ALL);
 	}
-
+	
 	if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
 	    goto migrate_and_retry;
 	}
-	
-	return NULL;
 
-    return item;
+	return NULL;
+    }
+
+    return NULL;
 }
 
 static bool
@@ -418,19 +403,20 @@ tiara_store_add(tiara_store_t *self, tiara_t *top, uint64_t hv, void *item)
     tiara_record_t  candidate;
 
     bix            = hv & self->last_slot;
-    candidate.hv   = hv;
-    candidate.item = item;
     
     for (i = 0; i <= self->last_slot; i++) {
 	record = atomic_load(&self->buckets[bix]);
 
 	if (!record.hv) {
-
+	    
+	    candidate.hv   = hv;
+	    candidate.item = hatrack_pflag_set(item, TIARA_F_USED);
+	    
 	    if (CAS(&self->buckets[bix], &record, candidate)) {
 		if (atomic_fetch_add(&self->used_count, 1) >= self->threshold) {
 		    tiara_store_migrate(self, top);
-		    return true;
 		}
+		
 		return true;
 	    }
 	    // Someone beat us to the record. Fall through to see if it's
@@ -458,8 +444,6 @@ tiara_store_remove(tiara_store_t *self, tiara_t *top, uint64_t hv)
     tiara_record_t  candidate;
 
     bix            = hv & self->last_slot;
-    candidate.hv   = hv;
-    candidate.item = (void *)TIARA_F_DELETED;
     
     for (i = 0; i <= self->last_slot; i++) {
 	record = atomic_load(&self->buckets[bix]);
@@ -473,26 +457,26 @@ tiara_store_remove(tiara_store_t *self, tiara_t *top, uint64_t hv)
 	    continue;
 	}
 
-	goto found_bucket;
-    }
+	if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
+	migrate_and_retry:
+	    self = tiara_store_migrate(self, top);
+	    return tiara_store_remove(self, top, hv);
+	}
 
-    return NULL;
+	candidate.hv   = hv;
+	candidate.item = NULL;
     
- found_bucket:
-    if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
-    migrate_and_retry:
-	self = tiara_store_migrate(self, top);
-	return tiara_store_remove(self, top, hv);
-    }
+	if (CAS(&self->buckets[bix], &record, candidate)) {
+	    return hatrack_pflag_clear(record.item, TIARA_F_ALL);
+	}
 
-    if (CAS(&self->buckets[bix], &record, candidate)) {
-	return hatrack_pflag_clear(record.item, TIARA_F_ALL);
-    }
-
-    if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
-	goto migrate_and_retry;
-    }
+	if (hatrack_pflag_test(record.item, TIARA_F_MOVING)) {
+	    goto migrate_and_retry;
+	}
 	
+	break;
+    }
+
     return NULL;
 }
 
@@ -502,7 +486,10 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
     tiara_store_t  *new_store;
     tiara_store_t  *candidate_store;
     uint64_t        new_size;
+    tiara_bucket_t *bucket;
+    tiara_bucket_t *new_bucket;    
     tiara_record_t  record;
+    tiara_record_t  new_record;    
     tiara_record_t  candidate_record;
     uint64_t        i, j;
     uint64_t        bix;
@@ -516,10 +503,11 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
 	return new_store;
     }
     
-    new_used  = 0;
-
+    new_used = 0;
+    
     for (i = 0; i <= self->last_slot; i++) {
-        record                = atomic_read(&self->buckets[i]);
+	bucket                = &self->buckets[i];
+        record                = atomic_read(bucket);
 	candidate_record.hv   = record.hv;
 
 	do {
@@ -527,23 +515,23 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
 		break;
 	    }
 	    
-	    if (!record.hv ||
-		hatrack_pflag_test(record.item, TIARA_F_DELETED)) {
-		candidate_record.item = (void *)TIARA_F_ALL;
-	    }
-	    else {
+	    if (hatrack_pflag_test(record.item, TIARA_F_USED)) {
 		candidate_record.item = hatrack_pflag_set(record.item,
 							  TIARA_F_MOVING);
 	    }
-        } while (!CAS(&self->buckets[i], &record, candidate_record));
+	    else {
+		candidate_record.item =
+		    (void *)(TIARA_F_MOVING | TIARA_F_MOVED);
+	    }
+        } while (!CAS(bucket, &record, candidate_record));
 
-        if (!hatrack_pflag_test(record.item, TIARA_F_DELETED)) {
-            new_used++;
-        }
+	if (hatrack_pflag_test(record.item, TIARA_F_USED)) {
+	    new_used++;
+	}
     }
-
-    new_store = atomic_read(&self->store_next);
     
+    new_store = atomic_read(&self->store_next);
+
     if (!new_store) {
         new_size        = hatrack_new_size(self->last_slot, new_used);
         candidate_store = tiara_store_new(new_size);
@@ -557,42 +545,38 @@ tiara_store_migrate(tiara_store_t *self, tiara_t *top)
     }
 
     for (i = 0; i <= self->last_slot; i++) {
-        candidate_record = atomic_read(&self->buckets[i]);
+	bucket                = &self->buckets[i];
+        record                = atomic_read(bucket);
 
-        if (hatrack_pflag_test(candidate_record.item, TIARA_F_MOVED)) {
-            continue;
-        }
-
-	candidate_record.item = hatrack_pflag_clear(candidate_record.item,
-						    TIARA_F_ALL);
-
-
-        bix = record.hv & new_store->last_slot;
+	if (hatrack_pflag_test(record.item, TIARA_F_MOVED)) {
+	    continue;
+	}
 	
-        for (j = 0; j <= new_store->last_slot; j++) {
-            record = atomic_read(&new_store->buckets[bix]);
-	    
-	    if (!record.hv) {
-		CAS(&new_store->buckets[bix], &record, candidate_record);
-		break;
+	bix = record.hv & new_store->last_slot;
+
+	for (j = 0; j < new_store->last_slot; j++) {
+	    new_bucket = &new_store->buckets[bix];
+	    new_record = atomic_read(new_bucket);
+
+	    if (!new_record.hv) {
+		candidate_record.hv = record.hv;
+		candidate_record.item = hatrack_pflag_clear(record.item,
+							    TIARA_F_MOVING);
+		if (CAS(new_bucket, &new_record, candidate_record)) {
+		    break;
+		}
 	    }
-		
-	    if (!(record.hv == candidate_record.hv)) {
+
+	    if (!(new_record.hv == record.hv)) {
 		bix = (bix + 1) & new_store->last_slot;
 		continue;
-            }
-	    
-            break;
+	    }
+
+	    break;
 	}
 
-	candidate_record.item = hatrack_pflag_set(candidate_record.item,
-						  TIARA_F_MOVING |
-						  TIARA_F_MOVED);
-	    
-	record.item = hatrack_pflag_set(candidate_record.item,
-					TIARA_F_MOVING);
-
-	CAS(&self->buckets[i], &record, candidate_record);
+	candidate_record.item = hatrack_pflag_set(record.item, TIARA_F_MOVED);
+	CAS(bucket, &record, candidate_record);
     }
 
     expected_used = 0;

@@ -25,10 +25,10 @@ typedef struct {
 typedef bool (*test_func_t)(func_test_info_t *);
 
 // clang-format off
-uint32_t            one_thread[]      = {1, 0};
-uint32_t            mt_only_threads[] = {2, 4, 8, 20, 100, 0};
-uint32_t            basic_sizes[]     = {10, 100, 1000, 10000, 0};
-uint32_t            shrug_sizes[]     = {1, 0};
+uint32_t            one_thread[]       = {1, 0};
+uint32_t            multiple_threads[] = {2, 4, 8, 20, 100, 0};
+uint32_t            basic_sizes[]      = {10, 100, 1000, 10000, 0};
+uint32_t            shrug_sizes[]      = {1, 0};
 _Atomic test_func_t test_func;
 //  clang-format on
 
@@ -126,19 +126,25 @@ run_one_func_test(test_func_t func,
     return;
 }
 
+/* For the moment, skip any functional tests on items w/o 128-bit
+ * hash values.
+ *
+ * Similarly, don't rurn non-threadsafe algorithms, if there's more
+ * than one active thread.
+ */
 static void
 run_func_test(char       *name,
               test_func_t func,
               uint32_t    iters,
               char       *types[],
               uint32_t   *ranges,
-              uint32_t   *tcounts,
-	      bool        st_ok)
+              uint32_t   *tcounts)
 {
-    uint32_t dict_ix;
-    uint32_t range_ix;
-    uint32_t tcount_ix;
-
+    uint32_t    dict_ix;
+    uint32_t    range_ix;
+    uint32_t    tcount_ix;
+    alg_info_t *info;
+    
     fprintf(stderr, "[[ Test: %s ]]\n", name);
     tcount_ix = 0;
     while (tcounts[tcount_ix]) {
@@ -153,9 +159,12 @@ run_func_test(char       *name,
 		    ranges[range_ix]);
 	    dict_ix = 0;
 	    while (types[dict_ix]) {
-		if (!strcmp(types[dict_ix], "refhat") &&
-		    tcounts[tcount_ix] != 1 &&
-		    !st_ok) {
+		info = algorithm_info(types[dict_ix]);
+		if (info->hashbytes != 16) {
+		    dict_ix++;
+		    continue;
+		}
+		if (tcounts[tcount_ix] != 1 && !info->threadsafe) {
 		    dict_ix++;
 		    continue;
 		}
@@ -420,48 +429,42 @@ run_functional_tests(config_info_t *config)
                   1,
 		  hat_list,
 		  basic_sizes,
-                  one_thread,
-                  0);
+                  one_thread);
     counters_output_delta();        
     run_func_test("ordering",
                   test_ordering,
                   1,
 		  hat_list,
 		  basic_sizes,
-                  one_thread,
-                  0);
+                  one_thread);
     counters_output_delta();        
     run_func_test("shrinking",
 		  test_shrinking,
 		  1,
 		  hat_list,
 		  shrug_sizes,
-		  one_thread,
-		  0);
+		  one_thread);
     counters_output_delta();
     run_func_test("replace",
 		  test_replace_op,
 		  1,
 		  hat_list,
 		  shrug_sizes,
-		  one_thread,
-		  0);
+		  one_thread);
     counters_output_delta();
     run_func_test("condput",
 		  test_condput,
 		  1,
 		  hat_list,
 		  shrug_sizes,
-		  one_thread,
-		  0);
+		  one_thread);
     counters_output_delta();
     run_func_test("parallel",
                   test_parallel,
                   10,
 		  hat_list,
 		  basic_sizes,
-                  mt_only_threads,
-                  0);
+                  multiple_threads);
     counters_output_delta();
     
     return;

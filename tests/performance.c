@@ -321,23 +321,103 @@ shuffle_thread_run(void *v)
 }
 
 static void *
+shuffle_thread_run64(void *v)
+{
+    int64_t  i, j;
+    uint32_t next_key;
+    uint32_t thread_step;
+    uint32_t seed;
+    uint64_t num_items;
+    char     thread_mix[100];
+
+    seed        = (uint32_t)(uintptr_t)v;
+    next_key    = seed;
+    thread_step = seed;
+
+    memcpy(thread_mix, op_distribution, 100);
+    test_shuffle_array(thread_mix, 100, sizeof(char));
+    mmm_register_thread();
+    starting_gate_thread_ready(&starting_gate);
+
+    for (i = 0; i < thread_full_cycles; i++) {
+        j = 0;
+
+        for (j = 0; j < 100; j++) {
+            switch (thread_mix[j]) {
+            case OP_READ:
+                test_get64(table, next_key);
+                break;
+            case OP_PUT:
+                test_put64(table, next_key, 0xff);
+                break;
+            case OP_ADD:
+                test_add64(table, next_key, 0xff);
+                break;
+            case OP_REPLACE:
+                test_replace64(table, next_key, 0xff);
+                break;
+            case OP_REMOVE:
+                test_remove64(table, next_key);
+                break;
+            case OP_VIEW:
+                free(test_view64(table, &num_items, false));
+                break;
+            case OP_ORDERED_VIEW:
+                free(test_view64(table, &num_items, true));
+                break;
+            }
+            next_key = (next_key + thread_step) & key_mod_mask;
+        }
+    }
+
+    for (j = 0; j < remaining_ops; j++) {
+        switch (thread_mix[j]) {
+        case OP_READ:
+            test_get64(table, next_key);
+            break;
+        case OP_PUT:
+            test_put64(table, next_key, 0xff);
+            break;
+        case OP_ADD:
+            test_add64(table, next_key, 0xff);
+            break;
+        case OP_REPLACE:
+            test_replace64(table, next_key, 0xff);
+            break;
+        case OP_REMOVE:
+            test_remove64(table, next_key);
+            break;
+        case OP_VIEW:
+            free(test_view64(table, &num_items, false));
+            break;
+        case OP_ORDERED_VIEW:
+            free(test_view64(table, &num_items, true));
+            break;
+        }
+        next_key = (next_key + thread_step) & key_mod_mask;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    mmm_clean_up_before_exit();
+
+    return NULL;
+}
+
+static void *
 rand_thread_run(void *v)
 {
-    volatile uint32_t n;
-    int64_t           i;
-    uint64_t          num_items;
-    intptr_t          thread_total_ops;
+    uint32_t n;
+    int64_t  i;
+    uint64_t num_items;
+    intptr_t thread_total_ops;
 
     thread_total_ops = (uintptr_t)v;
     /* Grab the first number before the starting_gate to ensure that
-     * RNG initialization happens outside the operation timing.  The
-     * fence will prevent code motion, and declaring n volatile is
-     * extra assurance that the compiler does the right thing (though
-     * I believe it should on any platform w/o the volatile).
+     * RNG initialization happens outside the operation timing.
      */
     n                = test_rand() % 100;
+
     mmm_register_thread();
-    atomic_signal_fence(memory_order_seq_cst);
     starting_gate_thread_ready(&starting_gate);
 
     for (i = 0; i < thread_total_ops; i++) {
@@ -373,6 +453,53 @@ rand_thread_run(void *v)
     return NULL;
 }
 
+static void *
+rand_thread_run64(void *v)
+{
+    uint32_t n;
+    int64_t  i;
+    uint64_t num_items;
+    intptr_t thread_total_ops;
+
+    thread_total_ops = (uintptr_t)v;
+    n                = test_rand() % 100;
+
+    mmm_register_thread();
+    starting_gate_thread_ready(&starting_gate);
+
+    for (i = 0; i < thread_total_ops; i++) {
+        switch (op_distribution[n]) {
+        case OP_READ:
+            test_get64(table, (test_rand() & key_mod_mask));
+            break;
+        case OP_PUT:
+            test_put64(table, test_rand() & key_mod_mask, test_rand());
+            break;
+        case OP_ADD:
+            test_add64(table, test_rand() & key_mod_mask, test_rand());
+            break;
+        case OP_REPLACE:
+            test_replace64(table, test_rand() & key_mod_mask, test_rand());
+            break;
+        case OP_REMOVE:
+            test_remove64(table, test_rand() & key_mod_mask);
+            break;
+        case OP_VIEW:
+            free(test_view64(table, &num_items, false));
+            break;
+        case OP_ORDERED_VIEW:
+            free(test_view64(table, &num_items, true));
+            break;
+        }
+        n = test_rand() % 100;
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    mmm_clean_up_before_exit();
+
+    return NULL;
+}
+
 static void
 initialize_dictionary(benchmark_t *config, char *hat)
 {
@@ -388,6 +515,27 @@ initialize_dictionary(benchmark_t *config, char *hat)
 
     for (i = 0; i < p; i++) {
         test_add(table, n, i);
+        n = (n + step) & key_mod_mask;
+    }
+
+    return;
+}
+
+static void
+initialize_dictionary64(benchmark_t *config, char *hat)
+{
+    int      i;
+    uint32_t step;
+    uint32_t n;
+    int64_t  p;
+
+    table = testhat_new_size(hat, config->start_sz);
+    step  = test_rand() & key_mod_mask;
+    n     = step;
+    p     = get_prefill_amount(config);
+
+    for (i = 0; i < p; i++) {
+        test_add64(table, n, i + 8);
         n = (n + step) & key_mod_mask;
     }
 
@@ -446,6 +594,8 @@ performance_report(char *hat, benchmark_t *config, struct timespec *start)
     return;
 }
 
+#define HB_DEFAULT 16
+
 void
 run_performance_test(benchmark_t *config)
 {
@@ -479,23 +629,45 @@ run_performance_test(benchmark_t *config)
             i++;
             continue;
         }
-        initialize_dictionary(config, config->hat_list[i]);
+
+        if (alg_info->hashbytes == HB_DEFAULT) {
+            initialize_dictionary(config, config->hat_list[i]);
+        }
+        else {
+            initialize_dictionary64(config, config->hat_list[i]);
+        }
         clear_timestamps();
         starting_gate_init(&starting_gate);
 
         for (j = 0; j < config->num_threads; j++) {
             if (config->shuffle) {
                 tstep = test_rand() & key_mod_mask;
-                pthread_create(&threads[j],
-                               NULL,
-                               shuffle_thread_run,
-                               (void *)(uint64_t)tstep);
+                if (alg_info->hashbytes == HB_DEFAULT) {
+                    pthread_create(&threads[j],
+                                   NULL,
+                                   shuffle_thread_run,
+                                   (void *)(uint64_t)tstep);
+                }
+                else {
+                    pthread_create(&threads[j],
+                                   NULL,
+                                   shuffle_thread_run64,
+                                   (void *)(uint64_t)tstep);
+                }
             }
             else {
-                pthread_create(&threads[j],
-                               NULL,
-                               rand_thread_run,
-                               (void *)ops_per_thread);
+                if (alg_info->hashbytes == HB_DEFAULT) {
+                    pthread_create(&threads[j],
+                                   NULL,
+                                   rand_thread_run,
+                                   (void *)ops_per_thread);
+                }
+                else {
+                    pthread_create(&threads[j],
+                                   NULL,
+                                   rand_thread_run64,
+                                   (void *)ops_per_thread);
+                }
             }
         }
 

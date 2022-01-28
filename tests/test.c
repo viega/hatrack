@@ -67,10 +67,6 @@ main(int argc, char *argv[])
 
     config = parse_args(argc, argv);
 
-#ifdef HATRACK_DEBUG
-    print_config(config);
-#endif
-
     mmm_register_thread();
 
     if (config->run_custom_test) {

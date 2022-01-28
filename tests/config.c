@@ -242,11 +242,6 @@ validate_operational_mix(benchmark_t *config)
                 "For performance tests, specified percentages must equal 100.");
         fprintf(stderr, " (current sum: %d)\n", sum);
 
-#ifdef HATRACK_DEBUG
-        fprintf(stderr, "\n");
-        print_config(config);
-#endif
-
         usage();
     }
 
@@ -686,46 +681,3 @@ found_match:
 
     return ret;
 }
-
-#ifdef HATRACK_DEBUG
-
-void
-print_config(config_info_t *config)
-{
-    int i;
-
-    fprintf(stderr,
-            "run_func_tests = %s\n",
-            config->run_func_tests ? "true" : "false");
-    fprintf(stderr,
-            "run_stress_tests = %s\n",
-            config->run_stress_tests ? "true" : "false");
-    fprintf(stderr,
-            "run_performance_tests = %s\n",
-            config->run_performance_tests ? "true" : "false");
-    fprintf(stderr, "read pct = %d\n", config->read_pct);
-    fprintf(stderr, "put pct = %d\n", config->put_pct);
-    fprintf(stderr, "add pct = %d\n", config->add_pct);
-    fprintf(stderr, "replace pct = %d\n", config->replace_pct);
-    fprintf(stderr, "remove pct = %d\n", config->remove_pct);
-    fprintf(stderr, "start size = 2^%d\n", config->start_sz);
-    fprintf(stderr, "prefill pct = %d\n", config->prefill_pct);
-    fprintf(stderr, "num threads = %d\n", config->num_threads);
-    fprintf(stderr, "total ops pct = %d\n", config->total_ops_pct);
-    fprintf(stderr, "total ops = %llu\n", config->total_ops);
-    fprintf(stderr, "seed = %p\n", (void *)config->seed);
-
-    i = 0;
-
-    fprintf(stderr, "Algorithms: ");
-    while (config->hat_list[i]) {
-        fprintf(stderr, "%s ", config->hat_list[i]);
-        i++;
-    }
-
-    fprintf(stderr, "\n");
-
-    return;
-}
-
-#endif

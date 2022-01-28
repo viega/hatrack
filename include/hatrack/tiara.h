@@ -56,10 +56,10 @@
 #include <hatrack/hatrack_common.h>
 
 enum64(tiara_flag_t,
-       TIARA_F_MOVING   = 0x0000000000000001,
-       TIARA_F_MOVED    = 0x0000000000000002,
-       TIARA_F_DELETED  = 0x0000000000000004,
-       TIARA_F_ALL      = TIARA_F_MOVING | TIARA_F_MOVED | TIARA_F_DELETED);
+       TIARA_F_MOVING = 0x0000000000000001,
+       TIARA_F_MOVED  = 0x0000000000000002,
+       TIARA_F_USED   = 0x0000000000000004,
+       TIARA_F_ALL    = TIARA_F_MOVING | TIARA_F_MOVED | TIARA_F_USED);
 
 typedef struct {
     uint64_t hv;
@@ -71,35 +71,30 @@ typedef _Atomic(tiara_record_t) tiara_bucket_t;
 typedef struct tiara_store_st tiara_store_t;
 
 struct tiara_store_st {
-    alignas(8)
-    uint64_t                   last_slot;
-    uint64_t                   threshold;
-    _Atomic uint64_t           used_count;
-    _Atomic(tiara_store_t *)   store_next;
-    alignas(16)
-    tiara_bucket_t             buckets[];
+    alignas(8) uint64_t last_slot;
+    uint64_t                 threshold;
+    _Atomic uint64_t         used_count;
+    _Atomic(tiara_store_t *) store_next;
+    alignas(16) tiara_bucket_t buckets[];
 };
 
-
 typedef struct {
-    alignas(8)
-    _Atomic(tiara_store_t *) store_current;
-    _Atomic uint64_t         item_count;
+    alignas(8) _Atomic(tiara_store_t *) store_current;
+    _Atomic uint64_t item_count;
 } tiara_t;
 
-
-tiara_t        *tiara_new      (void);
-tiara_t        *tiara_new_size (char);
-void            tiara_init     (tiara_t *);
+tiara_t        *tiara_new(void);
+tiara_t        *tiara_new_size(char);
+void            tiara_init(tiara_t *);
 void            tiara_init_size(tiara_t *, char);
-void            tiara_cleanup  (tiara_t *);
-void            tiara_delete   (tiara_t *);
-void           *tiara_get      (tiara_t *, uint64_t);
-void           *tiara_put      (tiara_t *, uint64_t, void *);
-void           *tiara_replace  (tiara_t *, uint64_t, void *);
-bool            tiara_add      (tiara_t *, uint64_t, void *);
-void           *tiara_remove   (tiara_t *, uint64_t);
-uint64_t        tiara_len      (tiara_t *);
-hatrack_view_t *tiara_view     (tiara_t *, uint64_t *, bool);
+void            tiara_cleanup(tiara_t *);
+void            tiara_delete(tiara_t *);
+void           *tiara_get(tiara_t *, uint64_t);
+void           *tiara_put(tiara_t *, uint64_t, void *);
+void           *tiara_replace(tiara_t *, uint64_t, void *);
+bool            tiara_add(tiara_t *, uint64_t, void *);
+void           *tiara_remove(tiara_t *, uint64_t);
+uint64_t        tiara_len(tiara_t *);
+hatrack_view_t *tiara_view(tiara_t *, uint64_t *, bool);
 
 #endif

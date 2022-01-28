@@ -102,6 +102,64 @@ testhat_view(testhat_t *self, uint64_t *num_items, bool sort)
     return (*self->vtable.view)(self->htable, num_items, sort);
 }
 
+// Convince the type system we're not crazy.
+typedef void *(*get64f)(void *, uint64_t);
+typedef void *(*put64f)(void *, uint64_t, void *);
+typedef void *(*rep64f)(void *, uint64_t, void *);
+typedef bool (*add64f)(void *, uint64_t, void *);
+typedef void *(*rm64f)(void *, uint64_t);
+
+static inline void *
+testhat_get64(testhat_t *self, hatrack_hash_t *hv)
+{
+    return (*(get64f)self->vtable.get)(self->htable, *(uint64_t *)hv);
+}
+
+static inline void *
+testhat_put64(testhat_t *self, hatrack_hash_t *hv, void *item)
+{
+    return (*(put64f)self->vtable.put)(self->htable, *(uint64_t *)hv, item);
+}
+
+static inline void *
+testhat_replace64(testhat_t *self, hatrack_hash_t *hv, void *item)
+{
+    return (*(rep64f)self->vtable.replace)(self->htable, *(uint64_t *)hv, item);
+}
+
+static inline bool
+testhat_add64(testhat_t *self, hatrack_hash_t *hv, void *item)
+{
+    return (*(add64f)self->vtable.add)(self->htable, *(uint64_t *)hv, item);
+}
+
+static inline void *
+testhat_remove64(testhat_t *self, hatrack_hash_t *hv)
+{
+    return (*(rm64f)self->vtable.remove)(self->htable, *(uint64_t *)hv);
+}
+
+static inline void
+testhat_delete64(testhat_t *self)
+{
+    (*self->vtable.delete)(self->htable);
+    free(self);
+
+    return;
+}
+
+static inline uint64_t
+testhat_len64(testhat_t *self)
+{
+    return (*self->vtable.len)(self->htable);
+}
+
+static inline hatrack_view_t *
+testhat_view64(testhat_t *self, uint64_t *num_items, bool sort)
+{
+    return (*self->vtable.view)(self->htable, num_items, sort);
+}
+
 typedef struct {
     char        *name;
     unsigned int read_pct;
@@ -146,7 +204,6 @@ void           test_init_rand        (__int128_t);
 uint32_t       test_rand             (void);
 void           test_shuffle_array    (void *, uint32_t, uint32_t);
 
-
 // from testhat.c: basic algorithm registering / info / instantiation.
 uint32_t       algorithm_register    (char *, hatrack_vtable_t *, size_t, int,
 				      bool);
@@ -169,15 +226,9 @@ void           run_performance_test  (benchmark_t *);
 
 // config.c -- Command-line argument parsing.
 config_info_t *parse_args            (int, char *[]);
-#ifdef HATRACK_DEBUG
-void           print_config          (config_info_t *);
-#endif
 
 // Items kept in test.c.
 void           precompute_hashes     (uint64_t);
-
-
-
 
 typedef union {
     struct {
@@ -246,6 +297,63 @@ static inline hatrack_view_t *
 test_view(testhat_t *self, uint64_t *n, bool sort)
 {
     return testhat_view(self, n, sort);
+}
+
+static inline uint32_t
+test_get64(testhat_t *self, uint32_t key)
+{
+    uint64_t n;
+
+    n = (uint64_t)testhat_get64(self, &precomputed_hashes[key]);
+
+    return n >> 3;
+}
+
+static inline void
+test_put64(testhat_t *self, uint32_t key, uint32_t value)
+{
+    uint64_t n;
+
+    n = value << 3;
+    testhat_put64(self, &precomputed_hashes[key], (void *)n);
+    
+    return;
+}
+
+static inline void
+test_replace64(testhat_t *self, uint32_t key, uint32_t value)
+{
+    uint64_t n;
+
+    n = value << 3;
+    
+    testhat_replace64(self, &precomputed_hashes[key], (void *)n);
+    
+    return;
+}
+
+static inline bool
+test_add64(testhat_t *self, uint32_t key, uint32_t value)
+{
+    uint64_t n;
+
+    n = value << 3;
+    
+    return testhat_add64(self, &precomputed_hashes[key], (void *)n);
+}
+
+static inline void
+test_remove64(testhat_t *self, uint32_t key)
+{
+    testhat_remove64(self, &precomputed_hashes[key]);
+
+    return;
+}
+
+static inline hatrack_view_t *
+test_view64(testhat_t *self, uint64_t *n, bool sort)
+{
+    return testhat_view64(self, n, sort);
 }
 
 
