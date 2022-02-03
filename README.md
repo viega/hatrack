@@ -49,7 +49,9 @@ multiple simultaneous readers and multiple simultaneous writers.
 
 You are responsible for all memory management for keys and items; our
 hash tables only worries about memory management for state internal to
-the table.
+the table.  Though, with the high-level interfaces, you can register
+callbacks to allow you to bump reference counts (or do other memory
+management) safely before returning.
 
 ## Installing
 

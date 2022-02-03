@@ -9,8 +9,6 @@ That will add an executable names `test` to this directory, which will
 run some very basic functionality tests, and then run a ton of timing
 tests.
 
-At some point I may put a lot more work into this.
-
 If you'd like to see counters for most of the lock-free
 implementations, to see how often compare-and-swap applications fail,
 then compile with `-DHATRACK_COUNTERS` on. This will slow down the
@@ -42,3 +40,6 @@ to scaling. The `malloc` implementation is more likely. In fact, I've
 switched out `malloc`s using `LD_PRELOAD`, and on the Mac, the system
 allocator definitely seems to be a bottleneck, as with `hoard`,
 performance scales much more linearly.
+
+You can run custom tests from the command line; `test --help` should
+get you started.

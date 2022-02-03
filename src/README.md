@@ -48,11 +48,11 @@ document that goes into much more detail.
 
 From weakest guarantees to the strongest:
 
-1. **Deadlock Freedom**, means that the algorithms are designed to
-avoid deadlock situations.  In practice, this means we use mutex locks
-that may lead to threads blocking waiting on a lock, but there are no
-cases where a lock in our code will be acquired without being
-released. Of our algorithms, *duncecap, swimcap, newshat* and
+1. **Deadlock Freedom**, informally means that the algorithms are
+designed to avoid deadlock situations.  In practice, this means we use
+mutex locks that may lead to threads blocking waiting on a lock, but
+there are no cases where a lock in our code will be acquired without
+being released. Of our algorithms, *duncecap, swimcap, newshat* and
 *ballcap* are deadlock free (but, using mutexes, do not provide
 stronger guarantees for most operations).  Most true hash tables we've
 seen in the real world that accept multiple concurrent writers, use
@@ -62,14 +62,16 @@ locking and are deadlock free.
 locks could be suspended for a long time, stalling threads that are
 running and could be doing work. With Lock Freedom, some thread is
 always able to get work done. And if a thread finds itself not getting
-work done, even though it's running, it's because other threads are
-being productive.  Of our algorithms, *hihat, oldhat, lohat and
-lohat-a* all provide lock freedom (and, in most cases, wait freedom).
-We have found one other true hash table that is lock-free, written in
-Java by Cliff Click. Our lock-free tables are far simpler, work with C
-(Click doesn't have to worry about the hard task of parallel memory
-management, as he can simply depend on Java's garbage collection), and
-is more efficient.
+work done, even though it's running, it's only because other threads
+are being productive.  Of our algorithms, *hihat, oldhat, lohat,
+lohat-a* and *tiara* all provide lock freedom (and, in most cases,
+wait freedom).
+
+We have found one other true hash table algorithm that is lock-free,
+written in Java by Cliff Click. Our lock-free tables are far simpler,
+more efficient, and work with C (Click doesn't have to worry about the
+hard task of parallel memory management, as he can simply depend on
+Java's garbage collection).
 
 3. **Wait Freedom**. With lock freedom, individual threads can have
 operations that fail to make progress by "spinning" in the same
@@ -84,9 +86,9 @@ guaranteed to make progress independent of the others.  Of our
 algorithms, *witchhat*, *woolhat* and *crown* are fully wait free.
 Actually, all our hash tables except for *duncecap* have fully wait
 free read (get) operations.  And our lock free variants are mostly
-wait-free, except under exceptional conditions-- the work to convert
-them to full wait-freedom is small, and has no practical performance
-impact.
+wait-free, except under exceptional conditions.  But the work to
+convert them to full wait-freedom is small, and has no practical
+performance impact.
 
 ### Parallelizability
 
@@ -94,9 +96,9 @@ All of our hash tables allow for multiple simultaneous readers, at all
 times.  Most of our hash tables also allow for multiple simultaneous
 writers, in most cases:
 
-0) *Refhat*, our reference algorithm, is not designed for parallelism. It
-assumes there is never more than a single thread accessing the hash
-table at any time.
+0) *Refhat*, our reference algorithm, is not designed for
+parallelism. It assumes there is never more than a single thread
+accessing the hash table at any time.
 
 1) The algorithms *duncecap* and *swimcap* are multiple reader, but
 single writer only. The first, *duncecap*, cannot start reads while
@@ -112,7 +114,7 @@ generally wait on a lock, while one thread performs the resizing.
 
 3) All other hash tables allow for multiple concurrent readers and
 writers, at all times, including the *hihats*, the *lohats*, *oldhat*,
-*witchhat*, *woolhat* and *crown*.
+*witchhat*, *woolhat*, *crown* and *tiara*.
 
 ### Order Insertion Preservation and consistent views
 
@@ -137,14 +139,15 @@ meaningful set operations, as they require consistency.
 Maintaining consistent views does have an performance penalty. Though,
 it's an O(1) penalty, that comes mainly from worse cache performance
 and more (relatively expensive) dynamic memory management
-operations. In practice, these algorithms are still very fast, in the
-grand scheme of things..
+operations. And, as you might expect, modification operations are
+significant more impacted than read operations. In practice, these
+algorithms are still very fast, in the grand scheme of things.
 
 Note that, in our tables that do not provide consistent views, we can
 still provide *approximate* insertion ordering.
 
 1) Tables without consistent views (and thus would not be good for set
-operations): *swimcap, newshat, hihat, oldhat, witchhat, crown*.
+operations): *swimcap, newshat, hihat, oldhat, witchhat, crown, tiara*.
 
 2) Tables with consistent views: *ballcap, lohat, lohat-a, woolhat*.
 
@@ -153,19 +156,25 @@ operations): *swimcap, newshat, hihat, oldhat, witchhat, crown*.
 ## Performance
 
 In general, my initial testing of the options indicates that, if you
-are using an architecture with a double-word compare-and-swap, there's
-no good reason to use anything other than the wait-free versions.  The
-only consideration should be whether fully consistent views and order
-preservation are important.
+are using an architecture with a double-word compare-and-swap (and, so
+far, even on systems without), there's no good reason to use anything
+other than the wait-free versions.  The only consideration should be
+whether fully consistent views and order preservation are important.
 
 Note that, unlike some other parallel data structures that have an
-associative (dictionary-like) interface, most these hash tables O(1)
-insertions, lookups and deletes.
+associative (dictionary-like) interface, most of these hash tables
+have pretty typical looking O(1) insertions, lookups and deletes.
 
 ## Getting started
 
-Right now, there are no high-level interfaces yet. Each algorithm has
-a low-level interface you can use. This means:
+The higher-level interfaces are in hatrack_dict.c and hatrack_set.c.
+These are not yet well documented, but there are examples in the
+example directory, and the source code should be straightforward too.
+The high-level dict interface is built on top of the lower-level
+hashtable *crown*, and the high-level set interface is currently built
+on top of *woolhat*.
+
+Each algorithm has a low-level interface you can use. This means:
 
 1) That the implementations don't memory-manage the ITEMS stored in
    the hash table.
@@ -183,32 +192,36 @@ I'll produce some developer documentation on using the API soon. Right
 now, the source code is documented; start by looking at refhat to
 understand the basic API structure.
 
-For general purpose use, *crown* is your best bet. It runs close
-enough in speed to *refhat* that I wouldn't hesitate to use it as a
-general-purpose table, even in the case of a single thread.
+For general purpose use among the low-level tables, *crown* is a
+strong contender, and why I built the high-level interface on top of
+it.  It has some optimizations that help when tables get full (though,
+it's balanced out by those optimizations resulting in some overhead,
+when tables are not full). Crown runs close enough in speed to *refhat*
+that I wouldn't hesitate to use it as a general-purpose table, even in
+the case of a single thread.
 
 If you care about sequential consistency (for instance, for set
-operations), *woolhat* is currently the best option (though I'm likely
-to soon create a version that applies the same optimizations to
-*woolhat* that *crown* applied to *witchhat*).
+operations), *woolhat* is currently the best option (though it would
+be straightforward to add a version that applies the same
+optimizations to *woolhat* that *crown* applied to *witchhat*).
 
-Note that woolhat should still be more than fast enough for most
+Note that *woolhat* should still be more than fast enough for most
 general-purpose use, but because it requires more dynamic memory
 management (and will have worse cache performance as a result), it's
-never going to be anywhere near as fast as witchhat.  In my early
-testing, woolhat tends to incur a penalty performance of 80-120% most
-of the time, though workloads with lots of writes in short succession
-will see this go up.
+never going to be as fast as witchhat, especially on modifications.
+In my early testing, woolhat tends to incur a penalty performance of
+80-120% most of the time, though workloads with lots of writes in
+short succession will see this go up.
 
 ### Logical order of the tables
 
 If you're looking to understand the implementation details better,
 then you can review the source code for the different tables, in
 logical order (I'd built the hihats and the lohats first, and then the
-locking tables to be able to directly compare performance; and woolhat
-and witchhat are the culmination of our lock-free tables). Generally,
-start with the .h file to get a sense of the data structures, then
-scan the comments in the associated .c file.
+locking tables to be able to directly compare performance; and
+woolhat, witchhat and crown are the culmination of our lock-free
+tables). Generally, start with the .h file to get a sense of the data
+structures, then scan the comments in the associated .c file.
 
 Note that I've tried to keep tables reasonably independent, to make
 them easier to pick out, and drop into some other program. That means
@@ -284,7 +297,15 @@ Here is an overview of the tables in their 'logical' order:
 
 13) **crown** A fully wait-free hash table, without fully consistent
                 views.  It applies a caching optimization to probing
-                that has a significant impact.
+                that has a significant impact for full tables.
+
+14) **tiara** A lock-free hash table that uses only a single
+              compare-and-swap operation per get/put/add/replace/remove
+	      (assuming no migration, of course).  This does make it
+	      the best performer in many situations. HOWEVER, it comes
+	      at the expense of 128-bit hash values, which in my view
+	      does not make it worth the trade-off.  Also, this table
+	      does not keep ANY information about insertion ordering.
 
 In general, looking at *refhat* will give you a good idea of the overall
 structure of all these tables, including what the top-level API for
@@ -292,51 +313,41 @@ each table will look like.
 
 Then, the earlier tables are generally going to have some redundant
 documentation.  Hihat being our first lock-free table, that gets a lot
-of exposition, as does Lohat, since it's the first one that adds in
+of exposition, as does lohat, since it's the first one that adds in
 full linearization of operations table-wide.
 
-But, in terms of ones I'd actually pick up and use, I recommend
-*woolhat* (if you need the linearization) and *crown* (if you don't,
-and are looking to maximize efficiency).
+But, again, in terms of ones I'd actually pick up and use, I recommend
+*woolhat* (if you need the linearization) and *crown* (if you don't).
 
 Of course, that's if you want to start with the lower-level
 tables. Our higher-level Dictionary and Set implementations are backed
-by the most efficient algorithms, and help solve other important
-problems, such as user-level memory management issues.
+by those two algorithms, and help solve other important problems, such
+as user-level memory management issues.
 
 ## Status of this work
 
 Right now, I'm making this available for early comment, but I still
 have a lot of work remaining:
 
-1) There's some minor work that's just undone. For instance, I need to
-   add proper handling for signals, thread deaths, and thread
-   exits.
+1) There's some minor work that's just undone, that I'd like to get
+   around to. For instance, I need to add proper handling for signals,
+   thread deaths, and thread exits.
 
 2) I'm going to write a long document describing the algorithms, that
-   will be available in the doc/ directory.
+   will be available in the doc/ directory. Currently, I'm maybe 1/4
+   the way through this.
 
-   I have half a mind to turn that into a full-fledged doctoral
-   dissertation-- there are certainly enough publishable results here
-   (though I'm not sure I want to spend my next year plus tweaking and
-   testing hash tables).
-   
-3) While I currently have a basic testbed and performance testing rig,
-   I intend to do more to improve this (including some functionality
-   testing that hasn't happened yet). 
-
-
-Also, I seem to still messing around with some implementation details,
-as I revisit my implementation decisions and explore the alternatives
-I'd previously abandoned. So there are places where the algorithm
-implementations will be slightly inconsistent.
+Also, I have often revisited my implementation decisions, and explored
+the alternatives I'd previously abandoned. So there are still places
+where the algorithm implementations are slightly inconsistent.
 
 For instance, many of the algorithms, when migrating to a new store,
 set flags indicating a move is in progress on all the buckets quickly.
 If the bucket is empty, most of those implementations will ALSO set a
 flag indicating the migration is done, in an attempt to short-circuit
-more work when threads go back to look at the bucket again.
+more work when threads go back to look at the bucket again. 
 
 Generally, on first glance that's seemed to have helped, but on one
-algorithm, it was seeming to hurt. I haven't given it enough attention
-yet, so different algorithms may or may not do this.
+algorithm, it was seeming to hurt, so I backed it out of that table,
+and never went back to it. I haven't given it enough attention yet, so
+different algorithms may or may not do this.
