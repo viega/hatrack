@@ -275,7 +275,7 @@
  * see mmm.h.
  */
 #ifndef HATRACK_THREADS_MAX
-#define HATRACK_THREADS_MAX 8192
+#define HATRACK_THREADS_MAX 4096
 #endif
 
 /* HATRACK_RETIRE_FREQ_LOG
@@ -602,7 +602,40 @@
  */
 // #define HATRACK_SKIP_ON_MIGRATIONS
 
+/* QUEUE_HELP_STEPS
+ *
+ * The "bonus" directory has a fast, wait-free queue
+ * implementation. Enqueue operations will try to enqueue
+ * QUEUE_HELP_STEPS times, before asking for "help".
+ */
 
+#ifndef QUEUE_HELP_STEPS
+#define QUEUE_HELP_STEPS 4
+#endif
+
+#if QUEUE_HELP_STEPS > 60 || QUEUE_HELP_STEPS < 2
+#error "QUEUE_HELP_STEPS must be between 2 and 60, inclusive"
+#endif
+
+#ifndef QSIZE_LOG_DEFAULT
+#define QSIZE_LOG_DEFAULT 12
+#endif
+
+#ifndef QSIZE_LOG_MIN
+#define QSIZE_LOG_MIN 6
+#endif
+
+#ifndef QSIZE_LOG_MAX
+#define QSIZE_LOG_MAX 25
+#endif
+
+#if QSIZE_LOG_MIN > QSIZE_LOG_DEFAULT
+#error "QSIZE_LOG_MIN must be <= QSIZE_LOG_DEFAULT"
+#endif
+
+#if QSIZE_LOG_MAX < QSIZE_LOG_DEFAULT
+#error "QSIZE_LOG_MAX must be >= QSIZE_LOG_DEFAULT"
+#endif
 
 #ifdef HAVE_C11_ENUMS
 #define enum64(x, ...)                                                         \

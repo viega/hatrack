@@ -44,4 +44,6 @@
 #endif
 
 #include <hatrack/hash.h>
+#include <hatrack/queue.h>
+
 #endif
