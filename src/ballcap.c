@@ -70,7 +70,7 @@ static ballcap_store_t *ballcap_store_migrate(ballcap_store_t *, ballcap_t *);
 ballcap_t *
 ballcap_new(void)
 {
-   ballcap_t *ret;
+    ballcap_t *ret;
 
     ret = (ballcap_t *)malloc(sizeof(ballcap_t));
 
@@ -82,7 +82,7 @@ ballcap_new(void)
 ballcap_t *
 ballcap_new_size(char size)
 {
-   ballcap_t *ret;
+    ballcap_t *ret;
 
     ret = (ballcap_t *)malloc(sizeof(ballcap_t));
 
@@ -106,11 +106,11 @@ ballcap_init_size(ballcap_t *self, char size)
     uint64_t         len;
 
     if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
-	abort();
+        abort();
     }
 
     if (size < HATRACK_MIN_SIZE_LOG) {
-	abort();
+        abort();
     }
 
     len                 = 1 << size;
@@ -404,7 +404,7 @@ ballcap_store_get(ballcap_store_t *self, hatrack_hash_t hv, bool *found)
     }
 
     if (found) {
-	*found = false;
+        *found = false;
     }
 
     return NULL;
@@ -529,7 +529,7 @@ check_bucket_again:
                 return ballcap_store_put(self, top, hv, item, found);
             }
 
-	    atomic_fetch_add(&self->used_count, 1);
+            atomic_fetch_add(&self->used_count, 1);
             atomic_fetch_add(&top->item_count, 1);
 
             cur->hv = hv;
@@ -611,9 +611,9 @@ ballcap_store_replace(ballcap_store_t *self,
                     *found = false;
                 }
 
-		if (pthread_mutex_unlock(&cur->mutex)) {
-		    abort();
-		}
+                if (pthread_mutex_unlock(&cur->mutex)) {
+                    abort();
+                }
                 return NULL;
             }
 
@@ -648,7 +648,7 @@ ballcap_store_replace(ballcap_store_t *self,
     }
 
     if (found) {
-	*found = false;
+        *found = false;
     }
 
     return NULL;
@@ -727,7 +727,7 @@ check_bucket_again:
                 return ballcap_store_add(top->store_current, top, hv, item);
             }
 
-	    atomic_fetch_add(&self->used_count, 1);
+            atomic_fetch_add(&self->used_count, 1);
             atomic_fetch_add(&top->item_count, 1);
 
             cur->hv = hv;
@@ -837,7 +837,7 @@ ballcap_store_remove(ballcap_store_t *self,
     }
 
     if (found) {
-	*found = false;
+        *found = false;
     }
 
     return NULL;
@@ -920,7 +920,7 @@ ballcap_store_migrate(ballcap_store_t *store, ballcap_t *top)
 
     atomic_store(&new_store->used_count, items_to_migrate);
     atomic_store(&top->item_count, items_to_migrate);
-    top->store_current    = new_store;
+    top->store_current = new_store;
 
     for (n = 0; n <= cur_last_slot; n++) {
         cur = &store->buckets[n];

@@ -100,11 +100,11 @@ newshat_init_size(newshat_t *self, char size)
     uint64_t         len;
 
     if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
-	abort();
+        abort();
     }
 
     if (size < HATRACK_MIN_SIZE_LOG) {
-	abort();
+        abort();
     }
 
     len                 = 1 << size;
@@ -479,7 +479,7 @@ newshat_store_get(newshat_store_t *self, hatrack_hash_t hv, bool *found)
     }
 
     if (found) {
-	*found = false;
+        *found = false;
     }
 
     return NULL;
@@ -604,7 +604,7 @@ newshat_store_put(newshat_store_t *self,
 
         bix = (bix + 1) & last_slot;
     }
-    
+
     self = newshat_store_migrate(self, top);
 
     return newshat_store_put(self, top, hv, item, found);
@@ -694,7 +694,7 @@ newshat_store_replace(newshat_store_t *self,
     }
 
     if (found) {
-	*found = false;
+        *found = false;
     }
 
     return NULL;
@@ -868,7 +868,7 @@ newshat_store_remove(newshat_store_t *self,
     }
 
     if (found) {
-	*found = false;
+        *found = false;
     }
     return NULL;
 }
@@ -969,7 +969,7 @@ newshat_store_migrate(newshat_store_t *store, newshat_t *top)
      */
     atomic_store(&new_store->used_count, items_to_migrate);
     atomic_store(&top->item_count, items_to_migrate);
-    top->store_current    = new_store;
+    top->store_current = new_store;
 
     /* The old store cannot be deleted immediately, as it might have
      * readers. We use mmm to ensure it's not freed until it's safe.

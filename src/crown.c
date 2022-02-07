@@ -69,10 +69,10 @@
  *                  have to load a copy the cached neighborhood map,
  *                  look at the leftmost bit, then remove it from our
  *                  copy, and repeat until we either find our item, or
- *                  until we run out of cached places to look.  
+ *                  until we run out of cached places to look.
  *
  *                  Once our cache runs out, we resume linear probing
- *                  like normal.  
+ *                  like normal.
  *
  *                  Operations that reserve buckets set the cache once
  *                  they've successfully reserved a bucket, but before

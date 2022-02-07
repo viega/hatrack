@@ -73,7 +73,8 @@ swimcap_new(void)
 }
 
 swimcap_t *
-swimcap_new_size(char size) {
+swimcap_new_size(char size)
+{
     swimcap_t *ret;
 
     ret = (swimcap_t *)malloc(sizeof(swimcap_t));
@@ -106,11 +107,11 @@ swimcap_init_size(swimcap_t *self, char size)
     uint64_t         len;
 
     if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
-	abort();
+        abort();
     }
 
     if (size < HATRACK_MIN_SIZE_LOG) {
-	abort();
+        abort();
     }
 
     len                 = 1 << size;

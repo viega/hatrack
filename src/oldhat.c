@@ -193,11 +193,11 @@ oldhat_init_size(oldhat_t *self, char size)
     uint64_t        len;
 
     if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
-	abort();
+        abort();
     }
 
     if (size < HATRACK_MIN_SIZE_LOG) {
-	abort();
+        abort();
     }
 
     len   = 1 << size;
