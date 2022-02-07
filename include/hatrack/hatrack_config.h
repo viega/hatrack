@@ -618,7 +618,7 @@
 #endif
 
 #ifndef QSIZE_LOG_DEFAULT
-#define QSIZE_LOG_DEFAULT 12
+#define QSIZE_LOG_DEFAULT 14
 #endif
 
 #ifndef QSIZE_LOG_MIN
