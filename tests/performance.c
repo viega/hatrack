@@ -563,16 +563,14 @@ time_diff(struct timespec *end, struct timespec *start)
 static void
 performance_report(char *hat, benchmark_t *config, struct timespec *start)
 {
-    double cur, min, max, total;
+    double cur, min, max;
 
     min   = 0;
     max   = 0;
-    total = 0;
 
     for (int i = 0; i < HATRACK_THREADS_MAX; i++) {
         if (stop_times[i].tv_sec || stop_times[i].tv_nsec) {
             cur   = time_diff(&stop_times[i], start);
-            total = total + cur;
 
             if (!min || cur < min) {
                 min = cur;
@@ -588,7 +586,7 @@ performance_report(char *hat, benchmark_t *config, struct timespec *start)
             hat,
             max,
             min,
-            total / config->num_threads,
+            max / config->num_threads,
             (unsigned long long)(((double)config->total_ops) / max));
 
     return;
