@@ -637,6 +637,10 @@
 #error "QSIZE_LOG_MAX must be >= QSIZE_LOG_DEFAULT"
 #endif
 
+#ifndef FLEXARRAY_DEFAULT_GROW_SIZE_LOG
+#define FLEXARRAY_DEFAULT_GROW_SIZE_LOG 8
+#endif
+
 #ifdef HAVE_C11_ENUMS
 #define enum64(x, ...)                                                         \
     typedef enum : uint64_t                                                    \
