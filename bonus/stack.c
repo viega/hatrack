@@ -334,16 +334,29 @@ hatstack_start_compression(stack_store_t *store,
 	    return;
 	}
 	
-	/* If the compression ID is still less than ours, we keep
-	 * trying on the CAS, because we lost to a push operation,
-	 * not a compression or migrate.
-	 *
-	 * Otherwise, we were very late to the party, and we're done.
+	/* If the compression ID is higher than ours, we were very
+	 * late to the party, and we're done.
 	 */
 	if ((expected & HATSTACK_HEAD_ISOLATE_CID) >=
 	    (desired & HATSTACK_HEAD_ISOLATE_CID)) {
 	    return;
 	}
+	
+	/* We look to see if the head index is lower than we had
+	 * seen; if it is, some faster pop didn't hit the threshold
+	 * for a compression, and managed to swing the head index
+	 * successfully.
+	 */
+	if ((expected & 0xffffffff00000000) < (desired & 0xffffffff00000000)) {
+	    return;
+	}
+	/*
+	 * Otherwise, keep trying on the CAS, because we lost to a
+	 * push operation, not a compression or migrate.
+	 *
+	 */
+
+	
     }
     
     hatstack_help_compress(store, top);
