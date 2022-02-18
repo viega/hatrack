@@ -6,8 +6,9 @@
  * particularly realistic, and if we're looking for best-case timing
  * of just the operations, there's a bit of extra cruft in here.
  *
- * But this is a reasonable proof-of-concept for now, until I put
- * together a better benchmark rig for it.
+ * But this is a reasonable proof-of-concept for using it.  There's
+ * a newer queue example, which is a better timing test for any of
+ * our queues including LIFOs (stacks).
  */
 
 #define TOTAL_ENQUEUES 10000000

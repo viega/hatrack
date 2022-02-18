@@ -143,6 +143,7 @@ queue_enqueue(queue_t *self, void *item)
     uint64_t          cur_ix;
     uint64_t          step;
     bool              need_help;
+    bool              need_to_enqueue;
     queue_segment_t  *new_segment;
     queue_segment_t  *expected_segment;    
     uint64_t          new_size;
@@ -163,10 +164,10 @@ queue_enqueue(queue_t *self, void *item)
     while (cur_ix < end_size) {
 	expected = empty_cell;
 	if (CAS(&segment->cells[cur_ix], &expected, candidate)) {
+	    
 	    if (need_help) {
 		atomic_fetch_sub(&self->help_needed, 1);
 	    }
-	    
 	    mmm_end_op();
 
 	    atomic_fetch_add(&self->len, 1);
@@ -208,71 +209,44 @@ queue_enqueue(queue_t *self, void *item)
     }
 
     new_segment                = queue_new_segment(new_size);
-    new_segment->enqueue_index = 1;
+    new_segment->enqueue_index = ATOMIC_VAR_INIT(1);
     expected_segment           = NULL;
     
     atomic_store(&new_segment->cells[0], candidate);
     
+
+    if (!CAS(&segment->next, &expected_segment, new_segment)) {
+	mmm_retire_unused(new_segment);
+	new_segment = expected_segment;
+	need_to_enqueue = true;
+    }
+    else {
+	need_to_enqueue = false;
+    }
+
     candidate_segments.enqueue_segment = new_segment;
     candidate_segments.dequeue_segment = segments.dequeue_segment;
 
-    /* If this CAS succeeds, our segment was selected which means our
-     * item was also enqueued.  We'll try to update the top-level
-     * pointer to the enqueue segment, until we're sure that the
-     * new segment is new.
-     *
-     * We could win this CAS, but have the whole new segment fill up
-     * before we confirm that the top-level value is updated. Since
-     * the top-level CAS is with both segments, we need to take into
-     * consideration the dequeue segment also changing, which makes
-     * out testing a bit more complicated.
-     */
-    if (CAS(&segment->next, &expected_segment, new_segment)) {
-
-	while (!CAS(&self->segments, &segments, candidate_segments)) {
-	    if (segments.enqueue_segment != segment) {
-		break;
-	    }
-	    
-	    candidate_segments.dequeue_segment = segments.dequeue_segment;
+    while (!CAS(&self->segments, &segments, candidate_segments)) {
+	if (segments.enqueue_segment != segment) {
+	    break;
 	}
-	
+	candidate_segments.dequeue_segment = segments.dequeue_segment;
+    }
+
+    if (!need_to_enqueue) {
 	if (need_help) {
 	    atomic_fetch_sub(&self->help_needed, 1);
 	}
+
 	mmm_end_op();
 	atomic_fetch_add(&self->len, 1);
 	
 	return;
     }
-
-    /* If we get here, our segment didn't get selected, so we need to
-     * retire it, help make sure the top-level segment info is
-     * updated, and then go back to trying to enqueue our item.
-     */
-    mmm_retire_unused(new_segment);
-
-    candidate_segments.enqueue_segment = expected_segment;
-
-    while (!CAS(&self->segments, &segments, candidate_segments)) {
-	if (segments.enqueue_segment != segment) {
-	    /* Either both the enqueue and dequeue segments have both
-	     * advanced, or some enqueuer is way out ahead of us, onto
-	     * still another segment.  Either way, we can update the
-	     * value of segment and cur_ix, then try again.
-	     */
-	    segment = segments.enqueue_segment;
-	    cur_ix  = atomic_fetch_add(&segment->enqueue_index, step);
-	    
-	    goto try_again;
-	}
-
-	candidate_segments.dequeue_segment = segments.dequeue_segment;
-    }
-
-    segment = expected_segment;
+    segment = new_segment;
     cur_ix  = atomic_fetch_add(&segment->enqueue_index, step);
-    
+
     goto try_again;
 }
 
@@ -285,6 +259,7 @@ queue_dequeue(queue_t *self, bool *found)
     queue_segment_t *new_segment;
     queue_item_t     cell_contents;
     uint64_t         cur_ix;
+    uint64_t         head_ix;
     void            *ret;
 
     mmm_start_basic_op();
@@ -292,90 +267,72 @@ queue_dequeue(queue_t *self, bool *found)
     segments = atomic_read(&self->segments);
     segment  = segments.dequeue_segment;
 
-    /* If we're definitely not in the same segment as enqueuers, and
-     * the slot we're given is in range for the segment, then we
-     * CANNOT fail, and can do an atomic_read() instead of a CAS.
-     */
  retry_dequeue:
-    if (segments.enqueue_segment != segment) {
-	cur_ix = atomic_fetch_add(&segment->dequeue_index, 1);
-	if (cur_ix < segment->size) {
-	    cell_contents = atomic_read(&segment->cells[cur_ix]);
-	    ret           = cell_contents.item;
-
-	    mmm_end_op();
-
-	    if (found) { *found = true; }
-	    atomic_fetch_sub(&self->len, 1);
-	    
-	    return ret;
-	}
-	goto next_segment;
-    }
-
-    /* The below loop only runs when we start off dequeuing in the
-     * current segment for enqueueing.
-     */
-    cell_contents = empty_cell;
-    	
+    
     while (true) {
-	cur_ix = atomic_fetch_add(&segment->dequeue_index, 1);
-
-	if (cur_ix >= atomic_load(&segment->enqueue_index)) {
-	    mmm_end_op();
-	    
-	    if (found) { *found = false; }
-	    
-	    return NULL;
-	}
+	cur_ix  = atomic_load(&segment->dequeue_index);
+	head_ix = atomic_load(&segment->enqueue_index);
 	
 	if (cur_ix >= segment->size) {
-	    goto next_segment;
+	    break;
 	}
+	
+	if (cur_ix >= head_ix) {
+	    return queue_not_found(found);
+	}
+	
+	cur_ix = atomic_fetch_add(&segment->dequeue_index, 1);
+	if (cur_ix >= segment->size) {
+	    break;
+	}
+	
+	cell_contents = empty_cell;
+	
+	if (CAS(&segment->cells[cur_ix], &cell_contents, too_slow_marker)) {
+	    continue;
+	}
+	
+	ret = cell_contents.item;
 
-	if (!CAS(&segment->cells[cur_ix], &cell_contents, too_slow_marker)) {
-	    ret = cell_contents.item;
-	    
-	    mmm_end_op();
-	    
-	    if (found) { *found = true; }
-	    
-	    atomic_fetch_sub(&self->len, 1);
-	    
-	    return ret;
-	}
-	// Some enqueuer was too slow, so we try the loop again.
+	atomic_fetch_sub(&self->len, 1);
+	
+	return queue_found(found, ret);
     }
-
- next_segment:
+    
     new_segment = atomic_read(&segment->next);
     if (!new_segment) {
 	/* The enqueuer threads have not completed setting up a new segment
 	 * yet, so the queue is officially empty.
+	 *
+	 * Some future dequeuer will be back here to change the
+	 * dequeue segment pointer.
 	 */
-	mmm_end_op();
-	
-	if (found) { *found = false; }
-
-	return NULL;
+	return queue_not_found(found);
     }
 
     candidate_segments.enqueue_segment = segments.enqueue_segment;
     candidate_segments.dequeue_segment = new_segment;
-
+    
     while (!CAS(&self->segments, &segments, candidate_segments)) {
+	/* If we fail, and someone else updated the dequeue segment,
+	 * then we try again in that new segment.
+	 */
 	if (segments.dequeue_segment != segment) {
+	    // We must be way behind.
 	    segment = segments.dequeue_segment;
 	    
 	    goto retry_dequeue;
 	}
 	
-	candidate_segments.dequeue_segment = segments.dequeue_segment;
+	/* Otherwise, the enqueue segment was updated, and 
+	 * we should try again w/ the proper enqueue segment.
+	 */
+	candidate_segments.enqueue_segment = segments.enqueue_segment;
     }
-
+    
     mmm_retire(segment);
     segments = candidate_segments;
     segment  = new_segment;
-
+    
     goto retry_dequeue;
 }

@@ -3,28 +3,35 @@
 #include <stdio.h>
 #include <hatrack/debug.h>
 
-const uint64_t    num_ops       = 1 << 21;
-const uint64_t    fail_multiple = 100;
-_Atomic uint64_t  successful_pops;
-__thread uint64_t cur_pops;
+const uint64_t    num_ops       = 1 << 22;
+const uint64_t    fail_multiple = 10000;
+_Atomic uint64_t  successful_dequeues;
+__thread uint64_t cur_dequeues;
 _Atomic uint64_t  write_total;
 _Atomic uint64_t  read_total;
-_Atomic uint64_t  failed_pops;
+_Atomic uint64_t  failed_dequeues;
 struct timespec   stop_times[HATRACK_THREADS_MAX];
 static gate_t     starting_gate = ATOMIC_VAR_INIT(0);
 
-typedef void (*push_func)(void *, uint64_t);
-typedef uint64_t (*pop_func)(void *, bool *);
+#ifdef ENQUEUE_ONES
+#define enqueue_value(x) 1
+#else
+#define enqueue_value(x) x
+#endif
+
+typedef void (*enqueue_func)(void *, uint64_t);
+typedef uint64_t (*dequeue_func)(void *, bool *);
 typedef void *(*new_func)(uint64_t);
 typedef void (*del_func)(void *);
 
+// clang-format off
 typedef struct {
-    char *name;
-    new_func new;
-    push_func push;
-    pop_func  pop;
-    del_func  del;
-    bool      can_prealloc;
+    char        *name;
+    new_func     new;
+    enqueue_func enqueue;
+    dequeue_func dequeue;
+    del_func     del;
+    bool         can_prealloc;
 } stack_impl_t;
 
 typedef struct {
@@ -46,19 +53,42 @@ llstack_new_proxy(uint64_t ignore)
     return NULL;
 }
 
+// Right now our queue takes a power-of-two instead of rounding.
+// Until we change that, use this proxy that hardcodes the presize.
+queue_t *
+queue_new_proxy(uint64_t len) {
+    if (len) {
+	return queue_new_size(22);
+    }
+    return queue_new();
+}
+
+// clang-format off
 static stack_impl_t algorithms[] = {
-    {.name         = "llstack",
-     .new          = (new_func)llstack_new_proxy,
-     .push         = (push_func)llstack_push,
-     .pop          = (pop_func)llstack_pop,
-     .del          = (del_func)llstack_delete,
-     .can_prealloc = false},
-    {.name         = "hatstack",
-     .new          = (new_func)hatstack_new,
-     .push         = (push_func)hatstack_push,
-     .pop          = (pop_func)hatstack_pop,
-     .del          = (del_func)hatstack_delete,
-     .can_prealloc = true},
+    {
+	.name         = "llstack",
+	.new          = (new_func)llstack_new_proxy,
+	.enqueue         = (enqueue_func)llstack_push,
+	.dequeue          = (dequeue_func)llstack_pop,
+	.del          = (del_func)llstack_delete,
+	.can_prealloc = false
+    },
+    {
+	.name         = "hatstack",
+	.new          = (new_func)hatstack_new,
+	.enqueue         = (enqueue_func)hatstack_push,
+	.dequeue          = (dequeue_func)hatstack_pop,
+	.del          = (del_func)hatstack_delete,
+	.can_prealloc = true
+     },
+    {
+	.name         = "queue",
+	.new          = (new_func)queue_new_proxy,
+	.enqueue         = (enqueue_func)queue_enqueue,
+	.dequeue          = (dequeue_func)queue_dequeue,
+	.del          = (del_func)queue_delete,
+	.can_prealloc = true
+    },
     {
         0,
     },
@@ -68,24 +98,21 @@ typedef struct {
     stack_impl_t *impl;
     void         *object;
     uint64_t      start;
-    uint64_t      end; // Don't push the last item... array rules.
+    uint64_t      end; // Don't enqueue the last item... array rules.
 } thread_info_t;
 
 typedef uint64_t thread_params_t[2];
 
-thread_params_t thread_params[] = {{1, 1},
-                                   {2, 2},
-                                   {4, 4},
-                                   {8, 8},
-                                   {2, 1},
-                                   {4, 1},
-                                   {8, 1},
-                                   {1, 2},
-                                   {1, 4},
-                                   {1, 8},
-                                   {0, 0}};
+// clang-format off
+thread_params_t thread_params[] = {
+    {1, 1}, {2, 2}, {4, 4}, {8, 8},
+    {2, 1}, {4, 1}, {8, 1},
+    {1, 2}, {1, 4}, {1, 8},
+    {0, 0}
+};
+//clang-format on
 
-static double
+static double 
 time_diff(struct timespec *end, struct timespec *start)
 {
     return ((double)(end->tv_sec - start->tv_sec))
@@ -102,75 +129,80 @@ state_reset(void)
 
     atomic_store(&read_total, 0);
     atomic_store(&write_total, 0);
-    atomic_store(&failed_pops, 0);
-    atomic_store(&successful_pops, 0);
+    atomic_store(&failed_dequeues, 0);
+    atomic_store(&successful_dequeues, 0);
     return;
 }
 
 void *
-push_thread(void *info)
+enqueue_thread(void *info)
 {
     uint64_t       my_total;
     uint64_t       i;
+    uint64_t       enqueue_value;
     uint64_t       end;
-    thread_info_t *push_info;
-    push_func      push;
+    thread_info_t *enqueue_info;
+    enqueue_func      enqueue;
     void          *stack;
 
     mmm_register_thread();
 
-    push_info = (thread_info_t *)info;
-    push      = push_info->impl->push;
-    my_total  = 0;
-    end       = push_info->end;
-    stack     = push_info->object;
+    enqueue_info = (thread_info_t *)info;
+    enqueue      = enqueue_info->impl->enqueue;
+    my_total     = 0;
+    end          = enqueue_info->end;
+    stack        = enqueue_info->object;
 
     starting_gate_thread_ready(&starting_gate);
 
-    for (i = push_info->start; i < push_info->end; i++) {
-        my_total += i;
-        (*push)(stack, i);
+    for (i = enqueue_info->start; i < enqueue_info->end; i++) {
+	enqueue_value = enqueue_value(i);
+        my_total     += enqueue_value;
+	
+        (*enqueue)(stack, enqueue_value);
     }
 
     atomic_fetch_add(&write_total, my_total);
 
     clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    
     mmm_clean_up_before_exit();
-    free(push_info);
+    free(enqueue_info);
 
     return NULL;
 }
 
 void *
-pop_thread(void *info)
+dequeue_thread(void *info)
 {
-    uint64_t       consecutive_pops;
+    uint64_t       consecutive_dequeues;
     uint64_t       my_total;
     uint64_t       n;
     uint64_t       target_ops;
     uint64_t       max_fails;
-    thread_info_t *pop_info;
+    thread_info_t *dequeue_info;
     bool           status;
-    pop_func       pop;
+    dequeue_func       dequeue;
     void          *stack;
 
     mmm_register_thread();
 
-    pop_info         = (thread_info_t *)info;
-    pop              = pop_info->impl->pop;
-    consecutive_pops = 0;
-    my_total         = 0;
-    target_ops       = pop_info->end;
-    max_fails        = target_ops * fail_multiple;
-    stack            = pop_info->object;
+    dequeue_info         = (thread_info_t *)info;
+    dequeue              = dequeue_info->impl->dequeue;
+    consecutive_dequeues = 0;
+    my_total             = 0;
+    target_ops           = dequeue_info->end;
+    max_fails            = target_ops * fail_multiple;
+    stack                = dequeue_info->object;
 
     starting_gate_thread_ready(&starting_gate);
 
-    while (atomic_read(&successful_pops) < target_ops) {
+    while (atomic_read(&successful_dequeues) < target_ops) {
+	
         while (true) {
-            n = (uint64_t)pop(stack, &status);
+            n = (uint64_t)dequeue(stack, &status);
             if (status) {
-                consecutive_pops++;
+                consecutive_dequeues++;
                 my_total += n;
             }
             else {
@@ -178,25 +210,28 @@ pop_thread(void *info)
             }
         }
 
-        atomic_fetch_add(&successful_pops, consecutive_pops);
-        if (atomic_fetch_add(&failed_pops, 1) >= max_fails) {
+        atomic_fetch_add(&successful_dequeues, consecutive_dequeues);
+	
+        if (atomic_fetch_add(&failed_dequeues, 1) >= max_fails) {
             printf("Reached failure threshold :(\n");
             break;
         }
 
-        consecutive_pops = 0;
+        consecutive_dequeues = 0;
     }
 
     atomic_fetch_add(&read_total, my_total);
 
     clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    
     mmm_clean_up_before_exit();
+    free(dequeue_info);
 
     return NULL;
 }
 
-pthread_t push_threads[HATRACK_THREADS_MAX];
-pthread_t pop_threads[HATRACK_THREADS_MAX];
+pthread_t enqueue_threads[HATRACK_THREADS_MAX];
+pthread_t dequeue_threads[HATRACK_THREADS_MAX];
 
 bool
 test_stack(test_info_t *test_info)
@@ -214,7 +249,7 @@ test_stack(test_info_t *test_info)
     err = false;
 
     fprintf(stdout,
-            "%8s, prealloc = %c, # producers = %2llu, # consumers = %2llu: ",
+            "%8s, prealloc = %c, # producers = %2llu, # consumers = %2llu -> ",
             test_info->implementation->name,
             test_info->prealloc ? 'Y' : 'N',
             test_info->producers,
@@ -236,7 +271,7 @@ test_stack(test_info_t *test_info)
         threadinfo->object = stack;
         threadinfo->impl   = test_info->implementation;
 
-        pthread_create(&push_threads[i], NULL, push_thread, (void *)threadinfo);
+        pthread_create(&enqueue_threads[i], NULL, enqueue_thread, (void *)threadinfo);
     }
 
     for (i = 0; i < test_info->consumers; i++) {
@@ -245,7 +280,7 @@ test_stack(test_info_t *test_info)
         threadinfo->object = stack;
         threadinfo->impl   = test_info->implementation;
 
-        pthread_create(&pop_threads[i], NULL, pop_thread, (void *)threadinfo);
+        pthread_create(&dequeue_threads[i], NULL, dequeue_thread, (void *)threadinfo);
     }
 
     starting_gate_open_when_ready(&starting_gate,
@@ -253,30 +288,30 @@ test_stack(test_info_t *test_info)
                                   &start_time);
 
     for (i = 0; i < test_info->producers; i++) {
-        pthread_join(push_threads[i], NULL);
+        pthread_join(enqueue_threads[i], NULL);
     }
 
     for (i = 0; i < test_info->consumers; i++) {
-        pthread_join(pop_threads[i], NULL);
+        pthread_join(dequeue_threads[i], NULL);
     }
 
     if (write_total != read_total) {
         fprintf(stdout,
-                "\n  Error: push total (%llu) != pop total (%llu)\n",
+                "\n  Error: enqueue total (%llu) != dequeue total (%llu)\n",
                 write_total,
                 read_total);
         err = true;
     }
 
-    if (num_ops != successful_pops) {
+    if (num_ops != successful_dequeues) {
         fprintf(stdout,
-                "  Error: # pushes (%llu) != # pops (%llu)\n",
+                "\n  Error: # enqueues (%llu) != # dequeues (%llu)\n",
                 num_ops,
-                successful_pops);
+                successful_dequeues);
         err = true;
     }
 
-    fprintf(stdout, "  nil pop()s: %-6llu ", failed_pops);
+    fprintf(stdout, "nil dequeue()s: %-9llu ", failed_dequeues);
 
     min = 0;
     max = 0;
@@ -297,12 +332,15 @@ test_stack(test_info_t *test_info)
     test_info->elapsed = max;
     test_info->num_ops = (num_ops * 2);
 
-    fprintf(stdout, "\t%.4f sec\n", max);
+    fprintf(stdout, "%.3f sec\n", max);
 
     (*test_info->implementation->del)(stack);
 
     return err;
 }
+
+static const char HDR[]
+    = "\nAlgorithm  | Prealloc? | Enqueuers | Dequeuers | MOps/sec\n";
 
 static const char LINE[]
     = "-----------------------------------------------------------\n";
@@ -312,7 +350,7 @@ format_results(test_info_t *tests, int num_tests, int row_size)
 {
     int i;
 
-    printf("Algorithm  | Prealloc? | Producers | Consumers | MOps/sec\n");
+    printf(HDR);
 
     for (i = 0; i < num_tests; i++) {
         if (!(i % row_size)) {
@@ -337,6 +375,9 @@ main(void)
     int          i, j;
     test_info_t *tests;
 
+    printf("Warning: llstack can get VERY slow when there's lots of enqueue contention.\n");
+    printf("Give it some time.\n\n");
+	   
     num_algos  = 0;
     num_params = 0;
     num_tests  = 0;
@@ -383,6 +424,6 @@ main(void)
     }
 
     format_results(tests, n, row_size);
-
+    
     return 0;
 }
