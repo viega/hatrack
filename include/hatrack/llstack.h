@@ -40,9 +40,12 @@ typedef struct {
     _Atomic (llstack_node_t *) head;
 } llstack_t;
 
-llstack_t *llstack_new (void);
-void       llstack_init(llstack_t *);
-void       llstack_push(llstack_t *, void *);
-void      *llstack_pop (llstack_t *, bool *);
+// clang-format off
+llstack_t *llstack_new    (void);
+void       llstack_init   (llstack_t *);
+void       llstack_cleanup(llstack_t *);
+void       llstack_delete (llstack_t *);
+void       llstack_push   (llstack_t *, void *);
+void      *llstack_pop    (llstack_t *, bool *);
 
 #endif

@@ -44,6 +44,30 @@ llstack_init(llstack_t *self)
     atomic_store(&self->head, NULL);
 }
 
+/* You're better off emptying the stack manually to do memory management
+ * on the contents.  But if you didn't, we'll still clean up the records
+ * we allocated, at least!
+ */
+void
+llstack_cleanup(llstack_t *self)
+{
+    bool found;
+
+    do {
+	llstack_pop(self, &found);
+    } while(found);
+
+    return;
+}
+
+void
+llstack_delete(llstack_t *self)
+{
+    llstack_cleanup(self);
+    free(self);
+
+    return;
+}
 
 void
 llstack_push(llstack_t *self, void *item)
@@ -70,7 +94,8 @@ void *
 llstack_pop(llstack_t *self, bool *found)
 {
     llstack_node_t *old_head;
-
+    void           *ret;
+    
     mmm_start_basic_op();
 
     old_head = atomic_read(&self->head);
@@ -90,8 +115,10 @@ llstack_pop(llstack_t *self, bool *found)
 	*found = true;
     }
 
+    ret = old_head->item;
+
     mmm_retire(old_head);
     mmm_end_op();
 
-    return old_head->item;
+    return ret;
 }
