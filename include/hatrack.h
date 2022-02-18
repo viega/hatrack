@@ -45,5 +45,7 @@
 
 #include <hatrack/hash.h>
 #include <hatrack/queue.h>
-
+#include <hatrack/flexarray.h>
+#include <hatrack/llstack.h>
+#include <hatrack/stack.h>
 #endif
