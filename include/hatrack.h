@@ -22,6 +22,8 @@
 #ifndef __HATRACK_H__
 #define __HATRACK_H__
 
+#include <hatrack/gate.h>
+
 // Currently pulls in Crown.
 #include <hatrack/dict.h>
 

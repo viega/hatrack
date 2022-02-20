@@ -16,7 +16,7 @@
 
 #define basictest(name, g, p, a, r, d, v, o, sz, pf, range, num, ops)          \
     {                                                                          \
-        name, g, p, a, r, d, v, o, sz, pf, range, num, ops, false, 0, NULL     \
+        name, g, p, a, r, d, v, o, sz, pf, range, num, ops, true, 0, NULL      \
     }
 
 #define threadset(name, g, p, a, r, d, v, o, sz, pf, range, ops)               \

@@ -11,6 +11,7 @@
  */
 
 #include <testhat.h>
+#include <hatrack/gate.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/utsname.h>
@@ -57,7 +58,7 @@ static uint32_t key_mod_mask;
  * readiness, and then wait for a signal from the controller thread
  * that all threads are ready, and that they should start!
  */
-static gate_t starting_gate = ATOMIC_VAR_INIT(0);
+static basic_gate_t starting_gate = ATOMIC_VAR_INIT(0);
 
 /*
  * The table for the current test.
@@ -254,7 +255,7 @@ shuffle_thread_run(void *v)
     memcpy(thread_mix, op_distribution, 100);
     test_shuffle_array(thread_mix, 100, sizeof(char));
     mmm_register_thread();
-    starting_gate_thread_ready(&starting_gate);
+    basic_gate_thread_ready(&starting_gate);
 
     for (i = 0; i < thread_full_cycles; i++) {
         j = 0;
@@ -337,7 +338,7 @@ shuffle_thread_run64(void *v)
     memcpy(thread_mix, op_distribution, 100);
     test_shuffle_array(thread_mix, 100, sizeof(char));
     mmm_register_thread();
-    starting_gate_thread_ready(&starting_gate);
+    basic_gate_thread_ready(&starting_gate);
 
     for (i = 0; i < thread_full_cycles; i++) {
         j = 0;
@@ -418,7 +419,7 @@ rand_thread_run(void *v)
     n                = test_rand() % 100;
 
     mmm_register_thread();
-    starting_gate_thread_ready(&starting_gate);
+    basic_gate_thread_ready(&starting_gate);
 
     for (i = 0; i < thread_total_ops; i++) {
         switch (op_distribution[n]) {
@@ -465,7 +466,7 @@ rand_thread_run64(void *v)
     n                = test_rand() % 100;
 
     mmm_register_thread();
-    starting_gate_thread_ready(&starting_gate);
+    basic_gate_thread_ready(&starting_gate);
 
     for (i = 0; i < thread_total_ops; i++) {
         switch (op_distribution[n]) {
@@ -582,12 +583,12 @@ performance_report(char *hat, benchmark_t *config, struct timespec *start)
     }
 
     fprintf(stderr,
-            "%10s time: %.4f sec (fastest: %.4f, avg: %.4f); Ops/sec: %llu\n",
+            "%10s time: %.4f sec (fastest: %.4f, avg: %.4f); MOps/sec: %.3f\n",
             hat,
             max,
             min,
             max / config->num_threads,
-            (unsigned long long)(((double)config->total_ops) / max));
+            (((double)config->total_ops) / (max * 1000000)));
 
     return;
 }
@@ -635,7 +636,7 @@ run_performance_test(benchmark_t *config)
             initialize_dictionary64(config, config->hat_list[i]);
         }
         clear_timestamps();
-        starting_gate_init(&starting_gate);
+        basic_gate_init(&starting_gate);
 
         for (j = 0; j < config->num_threads; j++) {
             if (config->shuffle) {
@@ -669,9 +670,7 @@ run_performance_test(benchmark_t *config)
             }
         }
 
-        starting_gate_open_when_ready(&starting_gate,
-                                      config->num_threads,
-                                      &sspec);
+        basic_gate_open(&starting_gate, config->num_threads, &sspec);
 
         for (j = 0; j < config->num_threads; j++) {
             pthread_join(threads[j], NULL);

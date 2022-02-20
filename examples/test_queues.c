@@ -3,15 +3,15 @@
 #include <stdio.h>
 #include <hatrack/debug.h>
 
-const uint64_t    num_ops       = 1 << 22;
-const uint64_t    fail_multiple = 10000;
-_Atomic uint64_t  successful_dequeues;
+// clang-format off
+const    uint64_t num_ops       = 1 << 22;
+const    uint64_t fail_multiple = 10000;
+_Atomic  uint64_t successful_dequeues;
 __thread uint64_t cur_dequeues;
-_Atomic uint64_t  write_total;
-_Atomic uint64_t  read_total;
-_Atomic uint64_t  failed_dequeues;
-struct timespec   stop_times[HATRACK_THREADS_MAX];
-static gate_t     starting_gate = ATOMIC_VAR_INIT(0);
+_Atomic  uint64_t write_total;
+_Atomic  uint64_t read_total;
+_Atomic  uint64_t failed_dequeues;
+static   gate_t  *gate;
 
 #ifdef ENQUEUE_ONES
 #define enqueue_value(x) 1
@@ -19,10 +19,11 @@ static gate_t     starting_gate = ATOMIC_VAR_INIT(0);
 #define enqueue_value(x) x
 #endif
 
-typedef void (*enqueue_func)(void *, uint64_t);
+// clang-format off
+typedef void     (*enqueue_func)(void *, uint64_t);
 typedef uint64_t (*dequeue_func)(void *, bool *);
-typedef void *(*new_func)(uint64_t);
-typedef void (*del_func)(void *);
+typedef void    *(*new_func)    (uint64_t);
+typedef void     (*del_func)    (void *);
 
 // clang-format off
 typedef struct {
@@ -68,24 +69,24 @@ static stack_impl_t algorithms[] = {
     {
 	.name         = "llstack",
 	.new          = (new_func)llstack_new_proxy,
-	.enqueue         = (enqueue_func)llstack_push,
-	.dequeue          = (dequeue_func)llstack_pop,
+	.enqueue      = (enqueue_func)llstack_push,
+	.dequeue      = (dequeue_func)llstack_pop,
 	.del          = (del_func)llstack_delete,
 	.can_prealloc = false
     },
     {
 	.name         = "hatstack",
 	.new          = (new_func)hatstack_new,
-	.enqueue         = (enqueue_func)hatstack_push,
-	.dequeue          = (dequeue_func)hatstack_pop,
+	.enqueue      = (enqueue_func)hatstack_push,
+	.dequeue      = (dequeue_func)hatstack_pop,
 	.del          = (del_func)hatstack_delete,
 	.can_prealloc = true
      },
     {
 	.name         = "queue",
 	.new          = (new_func)queue_new_proxy,
-	.enqueue         = (enqueue_func)queue_enqueue,
-	.dequeue          = (dequeue_func)queue_dequeue,
+	.enqueue      = (enqueue_func)queue_enqueue,
+	.dequeue      = (dequeue_func)queue_dequeue,
 	.del          = (del_func)queue_delete,
 	.can_prealloc = true
     },
@@ -112,25 +113,15 @@ thread_params_t thread_params[] = {
 };
 //clang-format on
 
-static double 
-time_diff(struct timespec *end, struct timespec *start)
-{
-    return ((double)(end->tv_sec - start->tv_sec))
-         + ((end->tv_nsec - start->tv_nsec) / 1000000000.0);
-}
-
 static void
 state_reset(void)
 {
-    for (int i = 0; i < HATRACK_THREADS_MAX; i++) {
-        stop_times[i].tv_sec  = 0;
-        stop_times[i].tv_nsec = 0;
-    }
-
+    gate_init   (gate, gate->max_threads);
     atomic_store(&read_total, 0);
     atomic_store(&write_total, 0);
     atomic_store(&failed_dequeues, 0);
     atomic_store(&successful_dequeues, 0);
+    
     return;
 }
 
@@ -142,7 +133,7 @@ enqueue_thread(void *info)
     uint64_t       enqueue_value;
     uint64_t       end;
     thread_info_t *enqueue_info;
-    enqueue_func      enqueue;
+    enqueue_func   enqueue;
     void          *stack;
 
     mmm_register_thread();
@@ -153,7 +144,7 @@ enqueue_thread(void *info)
     end          = enqueue_info->end;
     stack        = enqueue_info->object;
 
-    starting_gate_thread_ready(&starting_gate);
+    gate_thread_ready(gate);
 
     for (i = enqueue_info->start; i < enqueue_info->end; i++) {
 	enqueue_value = enqueue_value(i);
@@ -164,7 +155,7 @@ enqueue_thread(void *info)
 
     atomic_fetch_add(&write_total, my_total);
 
-    clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    gate_thread_done(gate);
     
     mmm_clean_up_before_exit();
     free(enqueue_info);
@@ -182,7 +173,7 @@ dequeue_thread(void *info)
     uint64_t       max_fails;
     thread_info_t *dequeue_info;
     bool           status;
-    dequeue_func       dequeue;
+    dequeue_func   dequeue;
     void          *stack;
 
     mmm_register_thread();
@@ -195,7 +186,7 @@ dequeue_thread(void *info)
     max_fails            = target_ops * fail_multiple;
     stack                = dequeue_info->object;
 
-    starting_gate_thread_ready(&starting_gate);
+    gate_thread_ready(gate);
 
     while (atomic_read(&successful_dequeues) < target_ops) {
 	
@@ -222,7 +213,7 @@ dequeue_thread(void *info)
 
     atomic_fetch_add(&read_total, my_total);
 
-    clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    gate_thread_done(gate);
     
     mmm_clean_up_before_exit();
     free(dequeue_info);
@@ -240,8 +231,7 @@ test_stack(test_info_t *test_info)
     uint64_t        prealloc_sz;
     uint64_t        ops_per_thread;
     uint64_t        num_ops;
-    struct timespec start_time;
-    double          cur, min, max;
+    double          max;
     thread_info_t  *threadinfo;
     bool            err;
     void           *stack;
@@ -262,8 +252,6 @@ test_stack(test_info_t *test_info)
     ops_per_thread = test_info->num_ops / test_info->producers;
     num_ops        = ops_per_thread * test_info->producers;
 
-    starting_gate_init(&starting_gate);
-
     for (i = 0; i < test_info->producers; i++) {
         threadinfo         = (thread_info_t *)malloc(sizeof(thread_info_t));
         threadinfo->start  = (i * ops_per_thread) + 1;
@@ -271,7 +259,10 @@ test_stack(test_info_t *test_info)
         threadinfo->object = stack;
         threadinfo->impl   = test_info->implementation;
 
-        pthread_create(&enqueue_threads[i], NULL, enqueue_thread, (void *)threadinfo);
+        pthread_create(&enqueue_threads[i],
+		       NULL,
+		       enqueue_thread,
+		       (void *)threadinfo);
     }
 
     for (i = 0; i < test_info->consumers; i++) {
@@ -283,9 +274,7 @@ test_stack(test_info_t *test_info)
         pthread_create(&dequeue_threads[i], NULL, dequeue_thread, (void *)threadinfo);
     }
 
-    starting_gate_open_when_ready(&starting_gate,
-                                  test_info->producers + test_info->consumers,
-                                  &start_time);
+    gate_open(gate, test_info->producers + test_info->consumers);
 
     for (i = 0; i < test_info->producers; i++) {
         pthread_join(enqueue_threads[i], NULL);
@@ -295,6 +284,8 @@ test_stack(test_info_t *test_info)
         pthread_join(dequeue_threads[i], NULL);
     }
 
+    max = gate_close(gate);
+    
     if (write_total != read_total) {
         fprintf(stdout,
                 "\n  Error: enqueue total (%llu) != dequeue total (%llu)\n",
@@ -312,22 +303,6 @@ test_stack(test_info_t *test_info)
     }
 
     fprintf(stdout, "nil dequeue()s: %-9llu ", failed_dequeues);
-
-    min = 0;
-    max = 0;
-
-    for (i = 0; i < HATRACK_THREADS_MAX; i++) {
-        if (stop_times[i].tv_sec || stop_times[i].tv_nsec) {
-            cur = time_diff(&stop_times[i], &start_time);
-
-            if (!min || cur < min) {
-                min = cur;
-            }
-            if (!max || cur > max) {
-                max = cur;
-            }
-        }
-    }
 
     test_info->elapsed = max;
     test_info->num_ops = (num_ops * 2);
@@ -375,7 +350,10 @@ main(void)
     int          i, j;
     test_info_t *tests;
 
-    printf("Warning: llstack can get VERY slow when there's lots of enqueue contention.\n");
+    gate = gate_new();
+	
+    printf("Warning: llstack can get VERY slow when there's lots of "
+	   "enqueue contention.\n");
     printf("Give it some time.\n\n");
 	   
     num_algos  = 0;

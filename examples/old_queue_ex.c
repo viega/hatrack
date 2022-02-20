@@ -21,7 +21,7 @@ time_diff(struct timespec *end, struct timespec *start)
 }
 
 static struct timespec stop_times[HATRACK_THREADS_MAX];
-static gate_t          starting_gate = ATOMIC_VAR_INIT(0);
+static basic_gate_t    starting_gate = ATOMIC_VAR_INIT(0);
 static queue_t        *mt_queue;
 
 static void
@@ -43,7 +43,7 @@ multi_threaded_enqueues(void *info)
 
     mmm_register_thread();
 
-    starting_gate_thread_ready(&starting_gate);
+    basic_gate_thread_ready(&starting_gate);
 
     while (my_counter < max_counter) {
         my_counter++;
@@ -72,7 +72,7 @@ multi_threaded_dequeues(void *info)
 
     mmm_register_thread();
 
-    starting_gate_thread_ready(&starting_gate);
+    basic_gate_thread_ready(&starting_gate);
 
     for (i = 0; i < num_iters; i++) {
         res = (uint64_t)queue_dequeue(mt_queue, NULL);
@@ -108,7 +108,7 @@ multi_threaded_v1(int num_threads)
 
     mt_queue = queue_new_size(25);
     clear_timestamps();
-    starting_gate_init(&starting_gate);
+    basic_gate_init(&starting_gate);
 
     num_iters = TOTAL_ENQUEUES / num_threads;
 
@@ -124,7 +124,7 @@ multi_threaded_v1(int num_threads)
         next_threadid++;
     }
 
-    starting_gate_open_when_ready(&starting_gate, num_threads * 2, &start_time);
+    basic_gate_open(&starting_gate, num_threads * 2, &start_time);
 
     for (i = 0; i < num_threads; i++) {
         pthread_join(enqueue_threads[i], NULL);
