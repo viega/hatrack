@@ -4,8 +4,8 @@
 #include <hatrack/debug.h>
 
 // clang-format off
-const    uint64_t num_ops       = 1 << 22;
-const    uint64_t fail_multiple = 10000;
+const    uint64_t num_ops       = 1 << 21;
+const    uint64_t fail_multiple = 100000;
 _Atomic  uint64_t successful_dequeues;
 __thread uint64_t cur_dequeues;
 _Atomic  uint64_t write_total;
@@ -73,7 +73,7 @@ static stack_impl_t algorithms[] = {
 	.dequeue      = (dequeue_func)llstack_pop,
 	.del          = (del_func)llstack_delete,
 	.can_prealloc = false
-    },
+	},
     {
 	.name         = "hatstack",
 	.new          = (new_func)hatstack_new,
@@ -90,6 +90,14 @@ static stack_impl_t algorithms[] = {
 	.del          = (del_func)queue_delete,
 	.can_prealloc = true
     },
+        {
+	.name         = "hq",
+	.new          = (new_func)hq_new_size,
+	.enqueue      = (enqueue_func)hq_enqueue,
+	.dequeue      = (dequeue_func)hq_dequeue,
+	.del          = (del_func)hq_delete,
+	.can_prealloc = true
+	},
     {
         0,
     },
@@ -225,7 +233,7 @@ pthread_t enqueue_threads[HATRACK_THREADS_MAX];
 pthread_t dequeue_threads[HATRACK_THREADS_MAX];
 
 bool
-test_stack(test_info_t *test_info)
+test_queue(test_info_t *test_info)
 {
     uint64_t        i;
     uint64_t        prealloc_sz;
@@ -288,9 +296,14 @@ test_stack(test_info_t *test_info)
     
     if (write_total != read_total) {
         fprintf(stdout,
-                "\n  Error: enqueue total (%llu) != dequeue total (%llu)\n",
+                "\n  Error: enqueue total (%llu) != dequeue total (%llu); "
+		"diff = %llu\n",
                 write_total,
-                read_total);
+                read_total,
+		write_total > read_total ?
+		write_total - read_total :
+		read_total - write_total
+		);
         err = true;
     }
 
@@ -398,7 +411,7 @@ main(void)
     }
 
     for (i = 0; i < n; i++) {
-        test_stack(&tests[i]);
+        test_queue(&tests[i]);
     }
 
     format_results(tests, n, row_size);

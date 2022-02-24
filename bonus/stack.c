@@ -394,8 +394,11 @@ hatstack_grow_store(stack_store_t *store, hatstack_t *top)
 
     for (i = 0; i < store->num_cells; i++) {
 	expected_item = atomic_read(&store->cells[i]);
+	
 	while (true) {
-	    if (state_is_moving(expected_item.state)) { break;  }
+	    if (state_is_moving(expected_item.state)) {
+		break;
+	    }
 	    
 	    if (!state_is_pushed(expected_item.state)) {
 		candidate_item.item  = NULL;
