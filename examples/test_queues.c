@@ -13,6 +13,10 @@ _Atomic  uint64_t read_total;
 _Atomic  uint64_t failed_dequeues;
 static   gate_t  *gate;
 
+pthread_t enqueue_threads[HATRACK_THREADS_MAX];
+pthread_t dequeue_threads[HATRACK_THREADS_MAX];
+
+
 #ifdef ENQUEUE_ONES
 #define enqueue_value(x) 1
 #else
@@ -33,14 +37,14 @@ typedef struct {
     dequeue_func dequeue;
     del_func     del;
     bool         can_prealloc;
-} stack_impl_t;
+} queue_impl_t;
 
 typedef struct {
     bool          prealloc;
     uint64_t      num_ops;
     uint64_t      producers;
     uint64_t      consumers;
-    stack_impl_t *implementation;
+    queue_impl_t *implementation;
     double        elapsed;
 } test_info_t;
 
@@ -65,7 +69,7 @@ queue_new_proxy(uint64_t len) {
 }
 
 // clang-format off
-static stack_impl_t algorithms[] = {
+static queue_impl_t algorithms[] = {
     {
 	.name         = "llstack",
 	.new          = (new_func)llstack_new_proxy,
@@ -104,7 +108,7 @@ static stack_impl_t algorithms[] = {
 };
 
 typedef struct {
-    stack_impl_t *impl;
+    queue_impl_t *impl;
     void         *object;
     uint64_t      start;
     uint64_t      end; // Don't enqueue the last item... array rules.
@@ -142,7 +146,7 @@ enqueue_thread(void *info)
     uint64_t       end;
     thread_info_t *enqueue_info;
     enqueue_func   enqueue;
-    void          *stack;
+    void          *queue;
 
     mmm_register_thread();
 
@@ -150,15 +154,15 @@ enqueue_thread(void *info)
     enqueue      = enqueue_info->impl->enqueue;
     my_total     = 0;
     end          = enqueue_info->end;
-    stack        = enqueue_info->object;
+    queue        = enqueue_info->object;
 
     gate_thread_ready(gate);
 
-    for (i = enqueue_info->start; i < enqueue_info->end; i++) {
+    for (i = enqueue_info->start; i < end; i++) {
 	enqueue_value = enqueue_value(i);
         my_total     += enqueue_value;
 	
-        (*enqueue)(stack, enqueue_value);
+        (*enqueue)(queue, enqueue_value);
     }
 
     atomic_fetch_add(&write_total, my_total);
@@ -182,7 +186,7 @@ dequeue_thread(void *info)
     thread_info_t *dequeue_info;
     bool           status;
     dequeue_func   dequeue;
-    void          *stack;
+    void          *queue;
 
     mmm_register_thread();
 
@@ -192,14 +196,14 @@ dequeue_thread(void *info)
     my_total             = 0;
     target_ops           = dequeue_info->end;
     max_fails            = target_ops * fail_multiple;
-    stack                = dequeue_info->object;
+    queue                = dequeue_info->object;
 
     gate_thread_ready(gate);
 
     while (atomic_read(&successful_dequeues) < target_ops) {
 	
         while (true) {
-            n = (uint64_t)dequeue(stack, &status);
+            n = (uint64_t)dequeue(queue, &status);
             if (status) {
                 consecutive_dequeues++;
                 my_total += n;
@@ -229,9 +233,6 @@ dequeue_thread(void *info)
     return NULL;
 }
 
-pthread_t enqueue_threads[HATRACK_THREADS_MAX];
-pthread_t dequeue_threads[HATRACK_THREADS_MAX];
-
 bool
 test_queue(test_info_t *test_info)
 {
@@ -242,21 +243,22 @@ test_queue(test_info_t *test_info)
     double          max;
     thread_info_t  *threadinfo;
     bool            err;
-    void           *stack;
+    void           *queue;
 
     err = false;
 
     fprintf(stdout,
-            "%8s, prealloc = %c, # producers = %2llu, # consumers = %2llu -> ",
+            "%8s, prealloc = %c, # enqueuers = %2llu, # dequeuers = %2llu -> ",
             test_info->implementation->name,
             test_info->prealloc ? 'Y' : 'N',
             test_info->producers,
             test_info->consumers);
     fflush(stdout);
+    
     state_reset();
 
     prealloc_sz    = test_info->prealloc ? test_info->num_ops : 0;
-    stack          = (*test_info->implementation->new)(prealloc_sz);
+    queue          = (*test_info->implementation->new)(prealloc_sz);
     ops_per_thread = test_info->num_ops / test_info->producers;
     num_ops        = ops_per_thread * test_info->producers;
 
@@ -264,7 +266,7 @@ test_queue(test_info_t *test_info)
         threadinfo         = (thread_info_t *)malloc(sizeof(thread_info_t));
         threadinfo->start  = (i * ops_per_thread) + 1;
         threadinfo->end    = ((i + 1) * ops_per_thread) + 1;
-        threadinfo->object = stack;
+        threadinfo->object = queue;
         threadinfo->impl   = test_info->implementation;
 
         pthread_create(&enqueue_threads[i],
@@ -276,7 +278,7 @@ test_queue(test_info_t *test_info)
     for (i = 0; i < test_info->consumers; i++) {
         threadinfo         = (thread_info_t *)malloc(sizeof(thread_info_t));
         threadinfo->end    = num_ops;
-        threadinfo->object = stack;
+        threadinfo->object = queue;
         threadinfo->impl   = test_info->implementation;
 
         pthread_create(&dequeue_threads[i], NULL, dequeue_thread, (void *)threadinfo);
@@ -322,7 +324,7 @@ test_queue(test_info_t *test_info)
 
     fprintf(stdout, "%.3f sec\n", max);
 
-    (*test_info->implementation->del)(stack);
+    (*test_info->implementation->del)(queue);
 
     return err;
 }
