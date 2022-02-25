@@ -50,7 +50,7 @@ To date, my testing has generally happened on a 2020 13" M1 MacBook Pro.  Across
 
 3) Even so, our mutation operations still tend to (again, on my laptop), run really fast in the grand scheme of things. For instance, while I've not yet fully built out queue testing (so the performance should get even better), `hq`, `hatstack` and `hatring` still tend to be able to push between 10 and 40 MOps per second, depending on the configuration.
 
-These algorithms are good for general-purpose use; they will all perform pretty admirably 
+These algorithms are good for general-purpose use; they will all perform pretty admirably, even in single-threaded applications.
 
 
 ## Installation and Use
