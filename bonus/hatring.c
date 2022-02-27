@@ -101,7 +101,7 @@ hatring_delete(hatring_t *self)
     return;
 }
 
-void
+uint32_t
 hatring_enqueue(hatring_t *self, void *item)
 {
     uint64_t       epochs;
@@ -167,7 +167,8 @@ hatring_enqueue(hatring_t *self, void *item)
 		    self->drop_handler) {
 		    (*self->drop_handler)(expected.item);
 		}
-		return;
+		
+		return write_epoch;
 	    }
 
 	    cell_epoch = hatring_cell_epoch(expected.state);
@@ -213,6 +214,70 @@ hatring_dequeue(hatring_t *self, bool *found)
 	    if (CAS(&self->cells[ix], &expected, candidate)) {
 		if (cell_epoch == read_epoch) {
 		    if (hatring_is_enqueued(expected.state)) {
+			return hatring_found(expected.item, found);
+		    }
+		    goto try_again; // We beat an enqueuer.
+		}
+
+		if (read_epoch >= write_epoch) {
+		    return hatring_not_found(found);
+		}
+		/* We might find an unread enqueued item if the
+		 * dequeuer catches up to the writer while it's
+		 * writing (e.g., if a thread is suspended).  It's
+		 * also why we need to apply the drop handler during
+		 * clean-up.
+		 */
+		if (hatring_is_enqueued(expected.state) &&
+		    self->drop_handler) {
+		    (*self->drop_handler)(expected.item);
+		}
+		continue;
+	    }
+
+	    cell_epoch = hatring_cell_epoch(expected.state);	    
+	}
+	continue;  	// we got lapped.
+    }
+}
+
+void *
+hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
+{
+    uint64_t       epochs;
+    uint32_t       read_epoch;
+    uint32_t       write_epoch;
+    uint32_t       cell_epoch;    
+    uint64_t       ix;
+    hatring_item_t expected;
+    hatring_item_t candidate;
+
+    candidate.item = NULL;
+
+    while (true) {
+    try_again:
+	epochs      = atomic_read(&self->epochs);
+	read_epoch  = hatring_dequeue_epoch(epochs);
+	write_epoch = hatring_enqueue_epoch(epochs);
+
+	if (read_epoch >= write_epoch) {
+	    return hatring_not_found(found);
+	}
+	
+	epochs      = atomic_fetch_add(&self->epochs, 1);
+	ix          = hatring_dequeue_ix(epochs, self->last_slot);
+	read_epoch  = hatring_dequeue_epoch(epochs);
+	write_epoch = hatring_enqueue_epoch(epochs);
+	expected    = atomic_read(&self->cells[ix]);
+	cell_epoch  = hatring_cell_epoch(expected.state);
+	
+	while (cell_epoch <= read_epoch) {
+	    candidate.state = HATRING_DEQUEUED | read_epoch;
+	    
+	    if (CAS(&self->cells[ix], &expected, candidate)) {
+		if (cell_epoch == read_epoch) {
+		    if (hatring_is_enqueued(expected.state)) {
+			*epoch = read_epoch;
 			return hatring_found(expected.item, found);
 		    }
 		    goto try_again; // We beat an enqueuer.

@@ -52,4 +52,5 @@
 #include <hatrack/llstack.h>
 #include <hatrack/stack.h>
 #include <hatrack/hatring.h>
+#include <hatrack/logring.h>
 #endif
