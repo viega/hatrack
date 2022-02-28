@@ -193,13 +193,15 @@ logring_dequeue(logring_t *self, void *output, uint64_t *len)
 }
 
 logring_view_t *
-logring_view(logring_t *self)
+logring_view(logring_t *self, bool lax_view)
 {
-    logring_view_t *ret;
-    uint64_t        n;
-    uint64_t        len;
-    view_info_t     expected;
-    view_info_t     candidate;
+    logring_view_t       *ret;
+    uint64_t              n;
+    uint64_t              len;
+    view_info_t           expected;
+    view_info_t           candidate;
+    uint64_t              i;
+    logring_view_entry_t *entry;
 
     n        = self->ring->size + HATRACK_THREADS_MAX;
     len      = sizeof(logring_view_t) + sizeof(logring_view_entry_t) * n;
@@ -222,6 +224,95 @@ logring_view(logring_t *self)
 
     logring_view_help_if_needed(self);
 
+    if (lax_view) {
+	return ret;
+    }
+
+    /* If we're here, the caller asked NOT to get a "lax" view.
+     *
+     * With lax views, we return every item in order, unless it got
+     * dequeued before we read it, which means there's the possibility
+     * that we have gaps in what we return.
+     *
+     * Without lax views, we find a place to properly linearize
+     * ourselves, based on the data we managed to collect.  
+     *
+     * First, note that our algorithm has enqueuers and dequeuers
+     * check whether a view is in progress, helping to complete it,
+     * before going to finish off other work.
+     *
+     * That means, any single thread can be in the middle of at most
+     * one enqueue or dequeue operation when the view begins
+     * construction. But no thread can do more than one, which means
+     * that their view of whether the view is consistent or not is
+     * only dependent on the one operation they managed to perform.
+     *
+     * Given that fact, it's very easy for us to linearize ourselves
+     * as starting at one of two places (whichever has the higher
+     * cell write epoch):
+     *
+     * 1) One epoch higher than the highest dequeued epoch we saw.
+     * Particularly, when we started dequeuing, the tail might have
+     * been pointing at the cell for epoch N, but while we were
+     * processing the view, some dequeues might have finished up, and
+     * so we might not have been able to read epoch N + M (where M
+     * would necessarily be smaller than the maximum number of
+     * threads).
+     *
+     * 2) At the (head - ring_size) position, if and only if the
+     * number of contiguous cells we read is larger than the ring
+     * size.  This is possible if enqueues are finishing, and we
+     * manage to both read cells before they are dequeued, as well as
+     * read the replacements as we're finishing up creating the view.
+     *
+     * Again, if we have "lax" views on, we'll still get valid items
+     * in order, perhaps with drops where dequeues beat us out (and we
+     * silently skip over those).
+     *
+     * But, when strict views are required, we will scan the output
+     * array from the back to the front.  In each cell, we look at
+     * whether a value is installed.  If there isn't, and the cell was
+     * 'skipped', this means that the write was too slow and no value
+     * was written in the given epoch.  That's okay, we we keep
+     * scanning.
+     *
+     * Once we scan a cell where there is no value object associated
+     * with it AND cell_skipped is false, then that was a drop, and we
+     * want to linearize ourselves to the right of that slot.  
+     *
+     * After that, we tweak the start point if we would yield more
+     * items than the ring can hold.
+     *
+     * Finally, we scan up to the new start point, in order to free
+     * any values that we're not going to actually present.
+     */
+    
+    i = ret->num_cells;
+
+    while (i--) {
+	entry = &ret->cells[i];
+
+	if (!entry->value && !entry->cell_skipped) {
+	    i++;
+	    break;
+	}
+    }
+
+    if ((ret->num_cells - i) > self->ring->size) {
+	i = ret->num_cells - self->ring->size;
+	ret->num_cells = self->ring->size;
+    }
+
+    ret->next_ix = i;
+
+    for (i = 0; i < ret->next_ix; i++) {
+	entry = &ret->cells[i];
+
+	if (entry->value) {
+	    free(entry->value);
+	}
+    }
+    
     return ret;
 }
 
@@ -241,7 +332,6 @@ logring_view_next(logring_view_t *view, uint64_t *len)
 
 	*len       = cur->len;
 	ret        = cur->value;
-	cur->value = NULL;  // Delete will go and free any unused items.
 	
 	return ret;
     }
@@ -253,6 +343,8 @@ void
 logring_view_delete(logring_view_t *view)
 {
     logring_view_entry_t *cur;
+
+    // We only free values that have NOT been yielded.
     
     while (view->next_ix < view->num_cells) {
 	cur = &view->cells[view->next_ix];
@@ -371,6 +463,18 @@ logring_view_help_if_needed(logring_t *self)
 	    goto next_cell;
 	}
 
+	/* Once cell_epoch == rix, there's a still chance that the
+	 * cell is empty, due to a slow writer.  When that is true,
+	 * we update the value of cell_skipped to true, and then
+	 * move to the next cell.
+	 */
+	if (ringcell.state & HATRING_DEQUEUED) {
+	    atomic_store(&cur_view_entry->cell_skipped, true);
+	    goto next_cell;
+	}
+
+	/* Otherwise, we're good to try to read from the bigger array.
+	 */
 	entry_ix = (uint64_t)ringcell.item;
 	atomic_store(&cur_view_entry->offset_entry_ix, entry_ix + 1);
 		     

@@ -164,6 +164,7 @@
 typedef struct {
     _Atomic uint64_t offset_entry_ix; // Off by 1 to help w/ CASing.
     _Atomic uint64_t len;
+    _Atomic bool     cell_skipped;
     _Atomic (void  *)value;
 } logring_view_entry_t;
 
@@ -286,7 +287,7 @@ void            logring_cleanup    (logring_t *);
 void            logring_delete     (logring_t *);
 void            logring_enqueue    (logring_t *, void *, uint64_t);
 bool            logring_dequeue    (logring_t *, void *, uint64_t *);
-logring_view_t *logring_view       (logring_t *);
+logring_view_t *logring_view       (logring_t *, bool);
 void           *logring_view_next  (logring_view_t *, uint64_t *);
 void            logring_view_delete(logring_view_t *);
 

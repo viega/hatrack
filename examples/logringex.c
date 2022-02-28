@@ -34,7 +34,7 @@ output_logs(void)
     uint64_t        len;
     logring_view_t *view;
 
-    view = logring_view(ring);
+    view = logring_view(ring, false);
 
     while (logring_dequeue(ring, &log, &len)) {
         printf("tid=%llu; mid=%llu; msg=%s\n", log.tid, log.mid, log.msg);
