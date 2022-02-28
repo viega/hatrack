@@ -6,7 +6,7 @@ Hatrack provides a number of data structures for parallel programming, currently
 2. **Sets** (via `hatrack_set_*`; see `include/set.h`)
 3. **Stacks** (via `hatstack_*`; see `include/stack.h`)
 4. **FIFO queues** (via `hq_*` ; see `include/hq.h`)
-5. **Ring buffers** (via `hatring_*` for pointer-size entries and `logbuffer_* for abitrary entry sizes)
+5. **Ring buffers** (via `hatring_*` for pointer-size entries and `logbuffer_*` for abitrary entry sizes)
 6. **Flex arrays** (i.e., resizable arrays, via `flexarray_*`; see `include/flexarray.h`)
 7. **A "debug ring"**, a ring buffer that trades off correctness in favor of speed (see `include/debug.h`)
 
