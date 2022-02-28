@@ -12,7 +12,7 @@ Hatrack provides a number of data structures for parallel programming, currently
 
 Additionally, before the 1.0 release, there will be:
 
-2. A `vector`: a flex array, but with additional `push()` and `pop()` operations, so that you can switch between using a single data structure as a stack or as a random-access array, interchangably.
+1. A `vector`: a flex array, but with additional `push()` and `pop()` operations, so that you can switch between using a single data structure as a stack or as a random-access array, interchangably.
 
 ## Status
 
