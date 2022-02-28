@@ -158,13 +158,34 @@
 
 #define LOGRING_MIN_SIZE 64
 
+/* Information about the current entry.
+ *
+ */
+typedef struct {
+    _Atomic uint64_t offset_entry_ix; // Off by 1 to help w/ CASing.
+    _Atomic uint64_t len;
+    _Atomic (void  *)value;
+} logring_view_entry_t;
+
+// A "view" object, where we copy contents from the big array, for
+// iteration.
+typedef struct {
+    uint64_t             start_epoch;
+    uint64_t             next_ix;
+    _Atomic uint64_t     num_cells;
+    logring_view_entry_t cells[];
+} logring_view_t;
+
+// Atomically swapped metadata about entries in the big array.
 typedef struct {
     uint32_t        write_epoch;
     uint32_t        state;
+    uint64_t        view_id;
 } logring_entry_info_t;
 
+// Entries in the bigger array.
 typedef struct {
-    alignas(8)
+    alignas(16)
     _Atomic logring_entry_info_t info;
     uint64_t                     len;
     char                         data[];
@@ -174,21 +195,29 @@ enum {
     LOGRING_EMPTY           = 0x00,
     LOGRING_RESERVED        = 0x01,
     LOGRING_ENQUEUE_DONE    = 0x02,
-    LOGRING_DEQUEUE_RESERVE = 0x04
+    LOGRING_DEQUEUE_RESERVE = 0x04,
+    LOGRING_VIEW_RESERVE    = 0x08
 };
 
+typedef struct {
+    logring_view_t *view;
+    uint64_t        last_viewid;
+} view_info_t;
+    
 typedef struct {
     _Atomic uint64_t          entry_ix;
     uint64_t                  last_entry;
     uint64_t                  entry_len;
+    _Atomic view_info_t       view_state;
     hatring_t                *ring;
     logring_entry_t          *entries;
 } logring_t;
 
 static inline bool
-logring_entry_is_being_read(logring_entry_info_t info)
+logring_entry_is_being_used(logring_entry_info_t info)
 {
-    if (info.state & LOGRING_DEQUEUE_RESERVE) {
+    if (info.state &
+	(LOGRING_RESERVED|LOGRING_VIEW_RESERVE|LOGRING_DEQUEUE_RESERVE)) {
 	return true;
     }
     
@@ -196,9 +225,19 @@ logring_entry_is_being_read(logring_entry_info_t info)
 }
 
 static inline bool
+logring_current_entry_epoch(logring_entry_info_t info, uint32_t my_epoch)
+{
+    if (info.write_epoch == my_epoch) {
+	return true;
+    }
+
+    return false;
+}
+
+static inline bool
 logring_can_write_here(logring_entry_info_t info, uint32_t my_write_epoch)
 {
-    if (logring_entry_is_being_read(info)) {
+    if (logring_entry_is_being_used(info)) {
 	return false;
     }
     
@@ -219,11 +258,36 @@ logring_can_dequeue_here(logring_entry_info_t info, uint32_t expected_epoch)
     return true;
 }
 
-logring_t *logring_new    (uint64_t, uint64_t);
-void       logring_init   (logring_t *, uint64_t, uint64_t);
-void       logring_cleanup(logring_t *);
-void       logring_delete (logring_t *);
-void       logring_enqueue(logring_t *, void *, uint64_t);
-bool       logring_dequeue(logring_t *, void *, uint64_t *);
+static inline hatring_cell_t *
+logring_get_ringcell(logring_t *self, uint32_t ix)
+{
+    return &self->ring->cells[ix & self->ring->last_slot];
+}
+
+static inline logring_entry_t *
+logring_get_entry(logring_t *self, uint64_t ix)
+{
+    uint64_t byte_ix;
+
+    byte_ix = ix * (sizeof(logring_entry_t) + self->entry_len);
+
+    return (logring_entry_t *)&(((char *)self->entries)[byte_ix]);
+}
+
+static inline uint64_t
+logring_set_dequeue_done(uint64_t state)
+{
+    return state & ~(LOGRING_DEQUEUE_RESERVE|LOGRING_ENQUEUE_DONE);
+}
+
+logring_t      *logring_new        (uint64_t, uint64_t);
+void            logring_init       (logring_t *, uint64_t, uint64_t);
+void            logring_cleanup    (logring_t *);
+void            logring_delete     (logring_t *);
+void            logring_enqueue    (logring_t *, void *, uint64_t);
+bool            logring_dequeue    (logring_t *, void *, uint64_t *);
+logring_view_t *logring_view       (logring_t *);
+void           *logring_view_next  (logring_view_t *, uint64_t *);
+void            logring_view_delete(logring_view_t *);
 
 #endif
