@@ -24,5 +24,9 @@ include/stamp-h1
 examples/basic
 examples/hashable
 examples/set1
-examples/queue
+examples/oldqx
+examples/qtest
+examples/ring
+examples/logringex
+docs/~*
 #*

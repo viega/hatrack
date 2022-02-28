@@ -4,7 +4,7 @@ noinst_PROGRAMS = examples/basic examples/set1 examples/hashable examples/oldqx 
 # 64-bit systems will complain up the wazoo about the 128-bit CAS operations.
 # Yes, they won't be lock free, but they will be sufficiently fast, thanks.
 libhatrack_a_CFLAGS  = -Wall -Wextra -Wno-atomic-alignment -Wno-unused-parameter  -I./include/
-libhatrack_a_SOURCES = src/mmm.c src/debug.c src/xxhash.c src/counters.c src/hatrack_common.c src/refhat.c src/duncecap.c src/swimcap.c src/newshat.c src/ballcap.c src/hihat.c src/hihat-a.c src/oldhat.c src/lohat.c src/lohat-a.c src/witchhat.c src/woolhat.c src/tophat.c src/crown.c src/tiara.c src/dict.c src/set.c bonus/queue.c bonus/hq.c bonus/flexarray.c bonus/llstack.c bonus/stack.c bonus/hatring.c bonus/logring.c
+libhatrack_a_SOURCES = src/support/mmm.c src/support/counters.c src/support/hatrack_common.c src/hash/refhat.c src/hash/duncecap.c src/hash/swimcap.c src/hash/newshat.c src/hash/ballcap.c src/hash/hihat.c src/hash/hihat-a.c src/hash/oldhat.c src/hash/lohat.c src/hash/lohat-a.c src/hash/witchhat.c src/hash/woolhat.c src/hash/tophat.c src/hash/crown.c src/hash/tiara.c src/hash/dict.c src/hash/set.c src/hash/xxhash.c src/queue/queue.c src/queue/hq.c src/queue/llstack.c src/queue/stack.c src/queue/hatring.c src/queue/logring.c src/queue/debug.c src/array/flexarray.c
 
 lib_LIBRARIES = libhatrack.a
 
