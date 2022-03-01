@@ -35,6 +35,7 @@
  */
 #define HATRING_MAX_SLEEP_TIME 999999999
 
+
 hatring_t *
 hatring_new(uint64_t num_buckets)
 {
@@ -130,6 +131,21 @@ hatring_enqueue(hatring_t *self, void *item)
 	read_epoch  = hatring_dequeue_epoch(epochs);
 	write_epoch = hatring_enqueue_epoch(epochs);
 
+	/*  If there are more enqueues than dequeues, we may end up
+	 *  with the tail lagging. The enqueue side is responsible for
+	 *  keeping the tail close; if we're having a problem doing
+	 *  that, then we are competing either with dequeuers who are
+	 *  overwhelmed by the enqueues.
+	 *
+	 *  In this kind of case, we want to slow things down some, to
+	 *  give dequeuers a bit of time to finish an operation.
+	 *  Basically, once the ring fills up, we make enqueues
+	 *  deferential to operations that might be having a hard time
+	 *  completing, using exponential backoff.
+	 *
+	 * This will not only help out dequeue attempts, it will also
+         * help slow enqueuers.
+	 */
 	while (hatring_is_lagging(read_epoch, write_epoch, self->size)) {
 	    candidate_epoch = hatring_fixed_epoch(write_epoch + 1,
 						  self->size);
@@ -216,9 +232,6 @@ hatring_dequeue(hatring_t *self, bool *found)
 
 	/* If we find that an epoch read from a cell is larger than
 	 * our 'read' epoch, then our operation got lapped by a write.
-	 * 
-	 * TODO: make this wait-free by adding a failure counter,
-	 * and a help mechanism.
 	 */
 	while (cell_epoch <= read_epoch) {
 
@@ -311,9 +324,6 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
 
 	/* If we find that an epoch read from a cell is larger than
 	 * our 'read' epoch, then our operation got lapped by a write.
-	 * 
-	 * TODO: make this wait-free by adding a failure counter,
-	 * and a help mechanism.
 	 */
 	while (cell_epoch <= read_epoch) {
 
