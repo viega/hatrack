@@ -50,6 +50,7 @@
  * outlier, where it can take 10x the time of other algorithms as you
  * add threads.
  */
+// clang-format off
 benchmark_t default_tests[] = {
     threadset("big read", 100, 0, 0, 0, 0, 0, 0, 17, 100, 100000, 10000000),
     threadset("big put", 0, 100, 0, 0, 0, 0, 0, 4, 0, 100000, 10000000),
@@ -69,7 +70,8 @@ benchmark_t default_tests[] = {
     threadset("|| sort", 60, 20, 0, 5, 5, 0, 10, 17, 50, 100000, 2000),
     {
         0,
-    }};
+    }
+};
 
 void
 run_default_tests(config_info_t *config)

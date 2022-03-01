@@ -346,7 +346,6 @@ crown_view(crown_t *self, uint64_t *num, bool sort)
 /* This is the witchhat version.  We do not invoke mmm here; the dict
  *  class wraps this operation in mmm.
  */
-
 hatrack_view_t *
 crown_view_fast(crown_t *self, uint64_t *num, bool sort)
 {
