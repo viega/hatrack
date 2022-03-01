@@ -305,6 +305,52 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
     }
 }
 
+/* This is not a consistent view; items may have dropped, or not been
+ * written yet. We could take the approach we use with log buffers if
+ * we're willing to pause all new operations while creating a view; I
+ * chose not to do that here. 
+ */
+hatring_view_t *
+hatring_view(hatring_t *self)
+{
+    hatring_view_t *ret;
+    uint64_t        epochs;
+    uint32_t        n;
+    uint32_t        end;
+    hatring_item_t  cell;
+
+    ret    = hatrack_cell_alloc(hatring_view_t, hatring_item_t, self->size);
+    epochs = atomic_read(&self->epochs);
+    n      = hatring_dequeue_epoch(epochs);
+    end    = hatring_enqueue_epoch(epochs);
+
+    while ((n < end) && (ret->next_ix < self->size)) {
+	cell = atomic_read(&self->cells[n & self->last_slot]);
+	
+	if (hatring_is_enqueued(cell.state) &&
+	    (hatring_cell_epoch(cell.state) == n)) {
+	    ret->cells[ret->num_items++] = cell.item;
+	}
+
+	n++;
+	epochs = atomic_read(&self->epochs);
+	end    = hatring_enqueue_epoch(epochs);
+
+    }
+
+    return ret;
+}
+
+void *
+hatring_view_next(hatring_view_t *view, bool *done)
+{
+    if (view->next_ix == view->num_items) {
+	return hatrack_not_found(done);
+    }
+    
+    return hatrack_found(view->cells[view->next_ix++], done);
+}
+
 void
 hatring_set_drop_handler(hatring_t *self, hatring_drop_handler func)
 {

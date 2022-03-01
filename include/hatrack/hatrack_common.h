@@ -345,5 +345,28 @@ hatrack_round_up_to_power_of_2(uint64_t n)
     return 0x8000000000000000 >> (__builtin_clzll(n) - 1);
 }
 
+static inline void *
+hatrack_found(void *ret, bool *found)
+{
+    if (found) {
+	*found = true;
+    }
+
+    return ret;
+}
+
+static inline void *
+hatrack_not_found(bool *found)
+{
+    if (found) {
+	*found = true;
+    }
+
+    return NULL;
+}
+
+#define hatrack_cell_alloc(container_type, cell_type, n)                       \
+    (container_type *)calloc(1, sizeof(container_type) + sizeof(cell_type) * n)
+
 int  hatrack_quicksort_cmp(const void *, const void *);
 #endif

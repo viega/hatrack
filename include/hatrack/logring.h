@@ -188,7 +188,7 @@ typedef struct {
 typedef struct {
     alignas(16)
     _Atomic logring_entry_info_t info;
-    uint64_t                     len;
+    uint64_t                     len; 
     char                         data[];
 } logring_entry_t;
 
