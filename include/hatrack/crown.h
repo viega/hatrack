@@ -78,6 +78,7 @@ struct crown_store_st {
     uint64_t                 threshold;
     _Atomic uint64_t         used_count;    
     _Atomic(crown_store_t *) store_next;
+    _Atomic bool             claimed;
     alignas(16)
     crown_bucket_t           buckets[];
 };
@@ -85,9 +86,9 @@ struct crown_store_st {
 typedef struct {
     alignas(8)
     _Atomic(crown_store_t *) store_current;
-    _Atomic uint64_t            item_count;
-    _Atomic uint64_t            help_needed;
-            uint64_t            next_epoch;
+    _Atomic uint64_t         item_count;
+    _Atomic uint64_t         help_needed;
+            uint64_t         next_epoch;
 
 } crown_t;
 
@@ -105,7 +106,8 @@ bool            crown_add        (crown_t *, hatrack_hash_t, void *);
 void           *crown_remove     (crown_t *, hatrack_hash_t, bool *);
 uint64_t        crown_len        (crown_t *);
 hatrack_view_t *crown_view       (crown_t *, uint64_t *, bool);
-hatrack_view_t *crown_view_no_mmm(crown_t *, uint64_t *, bool);
+hatrack_view_t *crown_view_fast  (crown_t *, uint64_t *, bool);
+hatrack_view_t *crown_view_slow  (crown_t *, uint64_t *, bool);
 
 /* These need to be non-static because tophat and hatrack_dict both
  * need them, so that they can call in without a second call to

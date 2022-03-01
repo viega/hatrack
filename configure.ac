@@ -15,7 +15,7 @@ AC_PROG_CC(clang cc gcc)
 
 AC_PROG_RANLIB
 
-AC_CONFIG_SRCDIR([src/refhat.c])
+AC_CONFIG_SRCDIR([src/README.md])
 AC_CONFIG_HEADERS([include/hatrack/config.h])
 AC_CHECK_HEADERS([include/hatrack.h])
 

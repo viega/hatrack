@@ -63,7 +63,8 @@ hatrack_dict_init(hatrack_dict_t *self, uint32_t key_type)
     self->hash_info.offsets.cache_offset = HATRACK_DICT_NO_CACHE;
     self->free_handler                   = NULL;
     self->key_return_hook                = NULL;
-    self->val_return_hook                = NULL;    
+    self->val_return_hook                = NULL;
+    self->slow_views                     = false;
 
     return;
 }
@@ -157,6 +158,22 @@ void
 hatrack_dict_set_val_return_hook(hatrack_dict_t *self, hatrack_mem_hook_t func)
 {
     self->val_return_hook = func;
+
+    return;
+}
+
+void
+hatrack_dict_set_consistent_views(hatrack_dict_t *self, bool value)
+{
+    self->slow_views = value;
+
+    return;
+}
+
+void
+hatrack_dict_set_sorted_views(hatrack_dict_t *self, bool value)
+{
+    self->sorted_views = value;
 
     return;
 }
@@ -349,8 +366,8 @@ hatrack_dict_remove(hatrack_dict_t *self, void *key)
     return false;
 }
 
-hatrack_dict_key_t *
-hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
+static hatrack_dict_key_t *
+hatrack_dict_keys_base(hatrack_dict_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t      *view;
     hatrack_dict_key_t  *ret;
@@ -359,8 +376,14 @@ hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
     uint32_t             i;
 
     mmm_start_basic_op();
+
+    if (self->slow_views) {
+	view = crown_view_slow(&self->crown_instance, num, sort);
+    }
+    else {
+	view = crown_view_fast(&self->crown_instance, num, sort);
+    }
     
-    view      = crown_view_no_mmm(&self->crown_instance, num, false);
     alloc_len = sizeof(hatrack_dict_key_t) * *num;
     ret       = (hatrack_dict_key_t *)malloc(alloc_len);
 
@@ -386,8 +409,8 @@ hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
     return ret;
 }
 
-hatrack_dict_value_t *
-hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
+static hatrack_dict_value_t *
+hatrack_dict_values_base(hatrack_dict_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t       *view;
     hatrack_dict_value_t *ret;
@@ -396,8 +419,14 @@ hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
     uint32_t              i;
 
     mmm_start_basic_op();
-    
-    view      = crown_view_no_mmm(&self->crown_instance, num, false);
+
+    if (self->slow_views) {
+	view = crown_view_slow(&self->crown_instance, num, sort);
+    }
+    else {
+	view = crown_view_fast(&self->crown_instance, num, sort);
+    }
+
     alloc_len = sizeof(hatrack_dict_value_t) * *num;
     ret       = (hatrack_dict_value_t *)malloc(alloc_len);
 
@@ -422,8 +451,8 @@ hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
     return ret;
 }
 
-hatrack_dict_item_t *
-hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
+static hatrack_dict_item_t *
+hatrack_dict_items_base(hatrack_dict_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t      *view;
     hatrack_dict_item_t *ret;
@@ -433,7 +462,13 @@ hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
 
     mmm_start_basic_op();
     
-    view      = crown_view_no_mmm(&self->crown_instance, num, false);
+    if (self->slow_views) {
+	view = crown_view_slow(&self->crown_instance, num, sort);
+    }
+    else {
+	view = crown_view_fast(&self->crown_instance, num, sort);
+    }
+
     alloc_len = sizeof(hatrack_dict_item_t) * *num;
     ret       = (hatrack_dict_item_t *)malloc(alloc_len);
 
@@ -458,111 +493,57 @@ hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
 }
 
 hatrack_dict_key_t *
+hatrack_dict_keys(hatrack_dict_t *self, uint64_t *num)
+{
+    return hatrack_dict_keys_base(self, num, self->sorted_views);
+}
+
+hatrack_dict_value_t *
+hatrack_dict_values(hatrack_dict_t *self, uint64_t *num)
+{
+    return hatrack_dict_values_base(self, num, self->sorted_views);
+}
+
+hatrack_dict_item_t *
+hatrack_dict_items(hatrack_dict_t *self, uint64_t *num)
+{
+    return hatrack_dict_items_base(self, num, self->sorted_views);
+}
+
+hatrack_dict_key_t *
 hatrack_dict_keys_sort(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t      *view;
-    hatrack_dict_key_t  *ret;
-    hatrack_dict_item_t *item;
-    uint64_t             alloc_len;
-    uint32_t             i;
-
-    mmm_start_basic_op();
-    
-    view      = crown_view_no_mmm(&self->crown_instance, num, true);
-    alloc_len = sizeof(hatrack_dict_key_t) * *num;
-    ret       = (hatrack_dict_key_t *)malloc(alloc_len);
-
-    if (self->key_return_hook) {
-	for (i = 0; i < *num; i++) {
-	    item   = (hatrack_dict_item_t *)view[i].item;
-	    ret[i] = item->key;
-	    
-	    (*self->key_return_hook)(self, item->key);	
-	}	
-    }
-    else {
-	for (i = 0; i < *num; i++) {
-	    item   = (hatrack_dict_item_t *)view[i].item;
-	    ret[i] = item->key;
-	}
-    }
-
-    mmm_end_op();
-
-    free(view);
-
-    return ret;
+    return hatrack_dict_keys_base(self, num, true);
 }
 
 hatrack_dict_value_t *
 hatrack_dict_values_sort(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t       *view;
-    hatrack_dict_value_t *ret;
-    hatrack_dict_item_t  *item;
-    uint64_t              alloc_len;
-    uint32_t              i;
-
-    mmm_start_basic_op();
-    
-    view      = crown_view_no_mmm(&self->crown_instance, num, true);
-    alloc_len = sizeof(hatrack_dict_value_t) * *num;
-    ret       = (hatrack_dict_value_t *)malloc(alloc_len);
-
-    if (self->val_return_hook) {
-	for (i = 0; i < *num; i++) {
-	    item   = (hatrack_dict_item_t *)view[i].item;
-	    ret[i] = item->value;
-	    
-	    (*self->val_return_hook)(self, item->value);		    
-	}
-    } else {
-	for (i = 0; i < *num; i++) {
-	    item   = (hatrack_dict_item_t *)view[i].item;
-	    ret[i] = item->value;
-	}
-    }
-
-    mmm_end_op();
-    
-    free(view);
-
-    return ret;
+    return hatrack_dict_values_base(self, num, true);
 }
 
 hatrack_dict_item_t *
 hatrack_dict_items_sort(hatrack_dict_t *self, uint64_t *num)
 {
-    hatrack_view_t      *view;
-    hatrack_dict_item_t *ret;
-    hatrack_dict_item_t *item;
-    uint64_t             alloc_len;
-    uint32_t             i;
+    return hatrack_dict_items_base(self, num, true);
+}
 
-    mmm_start_basic_op();
-    
-    view      = crown_view_no_mmm(&self->crown_instance, num, true);
-    alloc_len = sizeof(hatrack_dict_item_t) * *num;
-    ret       = (hatrack_dict_item_t *)malloc(alloc_len);
+hatrack_dict_key_t *
+hatrack_dict_keys_nosort(hatrack_dict_t *self, uint64_t *num)
+{
+    return hatrack_dict_keys_base(self, num, false);
+}
 
-    for (i = 0; i < *num; i++) {
-	item         = (hatrack_dict_item_t *)view[i].item;
-	ret[i].key   = item->key;
-	ret[i].value = item->value;
+hatrack_dict_value_t *
+hatrack_dict_values_nosort(hatrack_dict_t *self, uint64_t *num)
+{
+    return hatrack_dict_values_base(self, num, false);
+}
 
-	if (self->key_return_hook) {
-	    (*self->key_return_hook)(self, item->key);
-	}
-	if (self->val_return_hook) {
-	    (*self->val_return_hook)(self, item->value);
-	}
-    }
-    
-    mmm_end_op();
-    
-    free(view);
-
-    return ret;
+hatrack_dict_item_t *
+hatrack_dict_items_nosort(hatrack_dict_t *self, uint64_t *num)
+{
+    return hatrack_dict_items_base(self, num, false);
 }
 
 

@@ -343,13 +343,14 @@ hatstack_view(hatstack_t *self)
 {
     stack_view_t  *ret;
     stack_store_t *store;
-    bool           expected = false;
+    bool           expected;
 
     mmm_start_basic_op();
 
     while (true) {
-	store = atomic_read(&self->store);
-
+	store    = atomic_read(&self->store);
+	expected = false;
+	
 	if (CAS(&store->claimed, &expected, true)) {
 	    break;
 	}

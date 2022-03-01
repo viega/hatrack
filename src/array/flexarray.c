@@ -329,14 +329,15 @@ flexarray_view(flexarray_t *self)
 {
     flex_view_t  *ret;
     flex_store_t *store;
-    bool          expected = false;
+    bool          expected;
     uint64_t      i;
     flex_item_t   item;
 
     mmm_start_basic_op();
     
     while (true) {
-	store = atomic_read(&self->store);
+	store    = atomic_read(&self->store);
+	expected = false;
 	
 	if (CAS(&store->claimed, &expected, true)) {
 	    break;

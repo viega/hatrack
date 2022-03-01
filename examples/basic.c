@@ -47,11 +47,12 @@ print_argv(hatrack_dict_t *argv, bool ordered)
 
     if (ordered) {
         fprintf(stderr, "argv (cmd line order): \n  ");
+
         values = hatrack_dict_values_sort(argv, &num);
     }
     else {
         fprintf(stderr, "argv (hash order): \n  ");
-        values = hatrack_dict_values(argv, &num);
+        values = hatrack_dict_values_nosort(argv, &num);
     }
 
     for (i = 0; i < num; i++) {
@@ -74,7 +75,7 @@ print_envp(hatrack_dict_t *argv, bool ordered)
     }
     else {
         fprintf(stderr, "env (hash order): \n");
-        items = hatrack_dict_items(argv, &num);
+        items = hatrack_dict_items_nosort(argv, &num);
     }
 
     for (i = 0; i < num; i++) {

@@ -330,22 +330,25 @@ crown_len(crown_t *self)
 }
 
 hatrack_view_t *
-crown_view(crown_t *self, uint64_t *num, bool start)
+crown_view(crown_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t *ret;
     
     mmm_start_basic_op();
     
-    ret = crown_view_no_mmm(self, num, start);
+    ret = crown_view_fast(self, num, sort);
 
     mmm_end_op();
 
     return ret;
 }
 
-// This is unchanged from Witchhat, since we do no linear probing here. 
+/* This is the witchhat version.  We do not invoke mmm here; the dict
+ *  class wraps this operation in mmm.
+ */
+
 hatrack_view_t *
-crown_view_no_mmm(crown_t *self, uint64_t *num, bool sort)
+crown_view_fast(crown_t *self, uint64_t *num, bool sort)
 {
     hatrack_view_t *view;
     hatrack_view_t *p;
@@ -392,6 +395,80 @@ crown_view_no_mmm(crown_t *self, uint64_t *num, bool sort)
     if (sort) {
 	qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
     }
+
+    return view;
+}
+
+/* This is modified to copy the store first, ensuring a consistent view.
+ * But it's much slower, since we're doing a LOT of extra work.
+ *
+ * In practice, seems to be 2x slower for sorted views, and 10x slower
+ * for unsorted views.  Probably could get that down a little bit by
+ * sorting the store and yielding from the store, but not enough to
+ * matter.
+ */
+hatrack_view_t *
+crown_view_slow(crown_t *self, uint64_t *num, bool sort)
+{
+    hatrack_view_t *view;
+    hatrack_view_t *p;
+    crown_bucket_t *cur;
+    crown_bucket_t *end;
+    crown_record_t  record;
+    uint64_t        num_items;
+    uint64_t        alloc_len;
+    crown_store_t  *store;
+    bool            expected;
+    
+    while (true) {
+	store    = atomic_read(&self->store_current);
+	expected = false;
+
+	if (CAS(&store->claimed, &expected, true)) {
+	    break;
+	}
+	crown_store_migrate(store, self);
+    }
+
+    crown_store_migrate(store, self);
+
+    alloc_len = sizeof(hatrack_view_t) * (store->last_slot + 1);
+    view      = (hatrack_view_t *)malloc(alloc_len);
+    p         = view;
+    cur       = store->buckets;
+    end       = cur + (store->last_slot + 1);
+
+    while (cur < end) {
+        record        = atomic_read(&cur->record);
+        p->sort_epoch = record.info & CROWN_EPOCH_MASK;
+
+	if (!p->sort_epoch) {
+	    cur++;
+	    continue;
+	}
+	
+        p->item       = record.item;
+	
+        p++;
+        cur++;
+    }
+
+    num_items = p - view;
+    *num      = num_items;
+
+    if (!num_items) {
+        free(view);
+	
+        return NULL;
+    }
+
+    view = realloc(view, num_items * sizeof(hatrack_view_t));
+
+    if (sort) {
+	qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
+    }
+    
+    mmm_retire(store);
 
     return view;
 }
@@ -1307,7 +1384,9 @@ crown_store_migrate(crown_store_t *self, crown_t *top)
 	     &self,
 	     new_store
 	   )) {
-        mmm_retire(self);
+	if (!self->claimed) {
+	    mmm_retire(self);
+	}
     }
 
     return top->store_current;
