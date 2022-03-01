@@ -70,14 +70,14 @@ queue_new_proxy(uint64_t len) {
 
 // clang-format off
 static queue_impl_t algorithms[] = {
-    /*{
+    {
 	.name         = "llstack",
 	.new          = (new_func)llstack_new_proxy,
 	.enqueue      = (enqueue_func)llstack_push,
 	.dequeue      = (dequeue_func)llstack_pop,
 	.del          = (del_func)llstack_delete,
 	.can_prealloc = false
-	},*/
+    },
     {
 	.name         = "hatstack",
 	.new          = (new_func)hatstack_new,
