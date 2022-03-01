@@ -35,6 +35,16 @@
 #include <stdatomic.h>
 #include <stdalign.h>
 
+#undef HATSTACK_WAIT_FREE
+
+#ifdef  HATSTACK_WAIT_FREE
+#define HATSTACK_BACKOFF_INCREMENT 50
+#define HATSTACK_MAX_BACKOFF_LOG   10
+#define HATSTACK_RETRY_THRESHOLD   7
+
+#include <time.h>
+#endif
+
 /* "Valid after" means that, in any epoch after the epoch stored in
  * this field, pushers that are assigned that slot are free to try
  * to write there.
@@ -74,6 +84,11 @@ typedef struct {
     alignas(8)
     _Atomic (stack_store_t *)store;
     uint64_t                 compress_threshold;
+    
+#ifdef HATSTACK_WAIT_FREE
+    _Atomic int64_t          push_help_shift;
+#endif
+    
 } hatstack_t;
 
 

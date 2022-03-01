@@ -157,6 +157,10 @@ hatstack_push(hatstack_t *self, void *item)
     uint32_t       epoch;
     stack_item_t   candidate;
     stack_item_t   expected;
+
+#ifdef HATSTACK_WAIT_FREE
+    uint32_t       retries = 0;
+#endif    
     
     candidate      = proto_item_pushed;
     candidate.item = item;
@@ -180,6 +184,14 @@ hatstack_push(hatstack_t *self, void *item)
 
 	if (CAS(&store->cells[ix], &expected, candidate)) {
 	    mmm_end_op();
+
+#ifdef HATSTACK_WAIT_FREE
+	    if (retries >= HATSTACK_RETRY_THRESHOLD) {
+		atomic_fetch_sub(&self->push_help_shift,
+				 retries / HATSTACK_RETRY_THRESHOLD);
+	    }
+#endif	    
+	    
 	    return;
 	}
 
@@ -203,6 +215,13 @@ hatstack_push(hatstack_t *self, void *item)
 	// Usually this will be uncontested, and if so, we are done.
 	if (CAS(&store->cells[ix], &expected, candidate)) {
 	    mmm_end_op();
+
+#ifdef HATSTACK_WAIT_FREE
+	    if (retries >= HATSTACK_RETRY_THRESHOLD) {
+		atomic_fetch_sub(&self->push_help_shift,
+				 retries / HATSTACK_RETRY_THRESHOLD);
+	    }
+#endif	    
 	    return;
 	}
 
@@ -215,6 +234,11 @@ hatstack_push(hatstack_t *self, void *item)
 	 * Whatever the case, we head back up to the top for another
 	 * go.
 	 */
+#ifdef HATSTACK_WAIT_FREE
+	if (!(++retries % HATSTACK_RETRY_THRESHOLD)) {
+	    atomic_fetch_add(&self->push_help_shift, 1);
+	}
+#endif	
 	continue;
     }
 }
@@ -230,6 +254,32 @@ hatstack_pop(hatstack_t *self, bool *found)
     uint64_t       ix;
     uint32_t       epoch;
 
+#ifdef HATSTACK_WAIT_FREE
+    uint64_t        incr;
+    int64_t        wait_time;
+    struct timespec sleep_time;
+
+	/* If pushers need help pushing, we need to slow down our
+	 * invalidation popping.
+	 */
+	wait_time = atomic_read(&self->push_help_shift);
+
+	if (wait_time) {
+	    sleep_time.tv_sec = 0;
+
+	    incr = HATSTACK_BACKOFF_INCREMENT;
+	    
+	    if (wait_time > HATSTACK_MAX_BACKOFF_LOG) {
+		sleep_time.tv_nsec = incr << HATSTACK_MAX_BACKOFF_LOG;
+	    }
+	    else {
+		sleep_time.tv_nsec = incr << wait_time;
+	    }
+
+	    nanosleep(&sleep_time, NULL);
+	}
+#endif	
+    
     mmm_start_basic_op();
 
 
@@ -264,8 +314,8 @@ hatstack_pop(hatstack_t *self, bool *found)
 	    return hatstack_not_found(found);
 	}
 
-	ix = ix - 1; 
-
+	ix = ix - 1;
+		
 	/* First, let's assume the top of the stack is clean, and that
 	 * we're racing pushes.  We can use proto_item_empty for
 	 * expected and blindly try to swap.  After that finally

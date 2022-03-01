@@ -70,14 +70,14 @@ queue_new_proxy(uint64_t len) {
 
 // clang-format off
 static queue_impl_t algorithms[] = {
-    {
+    /*{
 	.name         = "llstack",
 	.new          = (new_func)llstack_new_proxy,
 	.enqueue      = (enqueue_func)llstack_push,
 	.dequeue      = (dequeue_func)llstack_pop,
 	.del          = (del_func)llstack_delete,
 	.can_prealloc = false
-	},
+	},*/
     {
 	.name         = "hatstack",
 	.new          = (new_func)hatstack_new,
@@ -85,7 +85,7 @@ static queue_impl_t algorithms[] = {
 	.dequeue      = (dequeue_func)hatstack_pop,
 	.del          = (del_func)hatstack_delete,
 	.can_prealloc = true
-     },
+    },
     {
 	.name         = "queue",
 	.new          = (new_func)queue_new_proxy,
@@ -94,14 +94,14 @@ static queue_impl_t algorithms[] = {
 	.del          = (del_func)queue_delete,
 	.can_prealloc = true
     },
-        {
+    {
 	.name         = "hq",
 	.new          = (new_func)hq_new_size,
 	.enqueue      = (enqueue_func)hq_enqueue,
 	.dequeue      = (dequeue_func)hq_dequeue,
 	.del          = (del_func)hq_delete,
 	.can_prealloc = true
-	},
+    },
     {
         0,
     },
@@ -120,7 +120,7 @@ typedef uint64_t thread_params_t[2];
 thread_params_t thread_params[] = {
     {1, 1}, {2, 2}, {4, 4}, {8, 8},
     {2, 1}, {4, 1}, {8, 1},
-    {1, 2}, {1, 4}, {1, 8},
+    {1, 2}, {1, 4}, {1, 8}, 
     {0, 0}
 };
 //clang-format on

@@ -346,7 +346,7 @@ hatrack_round_up_to_power_of_2(uint64_t n)
 }
 
 static inline void *
-hatrack_found(void *ret, bool *found)
+hatrack_found(bool * found, void *ret)
 {
     if (found) {
 	*found = true;
@@ -366,10 +366,10 @@ hatrack_not_found(bool *found)
 }
 
 static inline void *
-hatrack_found_w_mmm(void *ret, bool *found)
+hatrack_found_w_mmm(bool *found, void *ret)
 {
     mmm_end_op();
-    return hatrack_found(ret, found);
+    return hatrack_found(found, ret);
 }
 
 static inline void *

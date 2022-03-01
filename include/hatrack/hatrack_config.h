@@ -637,6 +637,41 @@
 #error "QSIZE_LOG_MAX must be >= QSIZE_LOG_DEFAULT"
 #endif
 
+/* HATSTACK_WAIT_FREE
+ *
+ * You can define this to make HATSTACK wait free.  However, my
+ * testing doesn't show that it's worth the effort; there's some
+ * overhead, so without compelling evidence that it will help prevent
+ * disastrous times in reasonable circumstances, I would tend to
+ * go for the less complex approach w/o the constant overhead.
+ */
+//#define HATSTACK_WAIT_FREE
+
+/* HATSTACK_BACKOFF_INCREMENT
+ *
+ * This is only used if HATSTACK_WAIT_FREE is on; when help is needed,
+ * we sleep a minimum of this number of nanoseconds (we also add in
+ * the thread ID for a tiny bit of jitter).
+ */
+#define HATSTACK_BACKOFF_INCREMENT 50
+
+/* HATSTACK_RETRY_THRESHOLD
+ *
+ * This is the number of times a pop operation needs to retry before
+ * we ask for backoff.
+ */
+#define HATSTACK_RETRY_THRESHOLD  4
+
+/* HATSTACK_MAX_BACKOFF_LOG
+ *
+ * This controls the maximum length a popper will wait to try its
+ * pop operation.  The lower bound is:
+ *
+ *  HATSTACK_BACKOFF_INCREMENT ^ HATSTACK_MAX_BACKOFF_LOG
+ */
+#define HATSTACK_MAX_BACKOFF_LOG  10
+
+
 #ifndef FLEXARRAY_DEFAULT_GROW_SIZE_LOG
 #define FLEXARRAY_DEFAULT_GROW_SIZE_LOG 8
 #endif
