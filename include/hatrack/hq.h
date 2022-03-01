@@ -49,12 +49,19 @@ typedef struct {
 typedef _Atomic hq_item_t hq_cell_t;
 
 typedef struct hq_store_t hq_store_t;
+
+typedef struct {
+    uint64_t    next_ix;
+    hq_store_t *store;
+} hq_view_t;
+    
 struct hq_store_t {
     alignas(8)
     _Atomic (hq_store_t *)next_store;
     uint64_t              size;
     _Atomic uint64_t      enqueue_index;
     _Atomic uint64_t      dequeue_index;
+    _Atomic bool          claimed;
     hq_cell_t             cells[];
 };
 
@@ -80,14 +87,17 @@ hq_len(hq_t *self)
     return atomic_read(&self->len);
 }
 
-hq_t *hq_new      (void);
-hq_t *hq_new_size (uint64_t);
-void  hq_init     (hq_t *);
-void  hq_init_size(hq_t *, uint64_t);
-void  hq_cleanup  (hq_t *);
-void  hq_delete   (hq_t *);
-void  hq_enqueue  (hq_t *, void *);
-void *hq_dequeue  (hq_t *, bool *);
+hq_t      *hq_new        (void);
+hq_t      *hq_new_size   (uint64_t);
+void       hq_init       (hq_t *);
+void       hq_init_size  (hq_t *, uint64_t);
+void       hq_cleanup    (hq_t *);
+void       hq_delete     (hq_t *);
+void       hq_enqueue    (hq_t *, void *);
+void      *hq_dequeue    (hq_t *, bool *);
+hq_view_t *hq_view       (hq_t *);
+void      *hq_view_next  (hq_view_t *, bool *);
+void       hq_view_delete(hq_view_t *);
 
 static inline bool
 hq_cell_too_slow(hq_item_t item)

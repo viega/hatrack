@@ -21,8 +21,8 @@
 
 #include <hatrack.h>
 
-static const hq_item_t empty_cell      = { NULL, HQ_EMPTY };
-static const hq_item_t too_slow_marker = { NULL, HQ_TOOSLOW };
+static const hq_item_t empty_cell    = { NULL, HQ_EMPTY };
+static const hq_item_t too_slow_mark = { NULL, HQ_TOOSLOW };
 
 static hq_store_t *hq_new_store(uint64_t);
 static hq_store_t *hq_migrate  (hq_store_t *, hq_t *);
@@ -173,7 +173,7 @@ hq_dequeue(hq_t *self, bool *found)
 	cur_ix   = atomic_fetch_add(&store->dequeue_index, 1);
 	expected = empty_cell;
 	
-	if (CAS(&store->cells[hq_ix(cur_ix, sz)], &expected, too_slow_marker)) {
+	if (CAS(&store->cells[hq_ix(cur_ix, sz)], &expected, too_slow_mark)) {
 	    cur_ix++;
 	    end_ix = atomic_read(&store->enqueue_index);	    
 	    continue;
@@ -200,6 +200,68 @@ hq_dequeue(hq_t *self, bool *found)
     }
 
     return hq_not_found(found);
+}
+
+hq_view_t *
+hq_view(hq_t *self)
+{
+    hq_view_t  *ret;
+    hq_store_t *store;
+    bool        expected = false;
+
+    mmm_start_basic_op();
+
+    while (true) {
+	store = atomic_read(&self->store);
+
+	if (CAS(&store->claimed, &expected, true)) {
+	    break;
+	}
+	hq_migrate(store, self);
+    }
+
+    hq_migrate(store, self);
+    mmm_end_op();
+
+    ret          = (hq_view_t *)malloc(sizeof(hq_view_t));
+    ret->store   = store;
+    ret->next_ix = 0;
+
+    return ret;
+}
+
+void *
+hq_view_next(hq_view_t *view, bool *found)
+{
+    hq_item_t item;
+
+    while (true) {
+	if (view->next_ix >= view->store->size) {
+	    if (found) {
+		*found = false;
+	    }
+	    return NULL;
+	}
+
+	item = atomic_read(&view->store->cells[view->next_ix++]);
+
+	if (hq_is_queued(item.state)) {
+	    if (found) {
+		*found = true;
+	    }
+	    return item.item;
+	}
+    }
+}
+
+void
+hq_view_delete(hq_view_t *view)
+{
+    mmm_retire(view->store);
+
+    free(view);
+
+    return;
 }
 
 static hq_store_t *
@@ -343,10 +405,10 @@ hq_migrate(hq_store_t *store, hq_t *top)
     CAS(&next_store->enqueue_index, &i, n);
 
     if (CAS(&top->store, &store, next_store)) {
-	mmm_retire(store);
+	if (!store->claimed) {
+	    mmm_retire(store);
+	}
     }
     
-    // Install the new store.
-
     return next_store;
 }

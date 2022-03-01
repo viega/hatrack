@@ -338,26 +338,8 @@ hatstack_pop(hatstack_t *self, bool *found)
     }
 }
 
-static stack_store_t *
-hatstack_new_store(uint64_t num_cells)
-{
-    stack_store_t *ret;
-    uint64_t       alloc_len;
-
-    if (num_cells < (1 << HATSTACK_MIN_STORE_SZ_LOG)) {
-	num_cells = 1 << HATSTACK_MIN_STORE_SZ_LOG;
-    }
-    
-    alloc_len       = sizeof(stack_store_t) + num_cells * sizeof(stack_cell_t);
-    ret             = (stack_store_t *)mmm_alloc_committed(alloc_len);
-    ret->num_cells  = num_cells;
-    ret->head_state = ATOMIC_VAR_INIT(head_candidate_new_epoch(0, 0));
-
-    return ret;
-}
-
 stack_view_t *
-stack_view(hatstack_t *self)
+hatstack_view(hatstack_t *self)
 {
     stack_view_t  *ret;
     stack_store_t *store;
@@ -385,7 +367,7 @@ stack_view(hatstack_t *self)
 }
 
 void *
-stack_view_next(stack_view_t *view, bool *found)
+hatstack_view_next(stack_view_t *view, bool *found)
 {
     stack_item_t item;
 
@@ -409,13 +391,31 @@ stack_view_next(stack_view_t *view, bool *found)
 }
 
 void
-stack_view_delete(stack_view_t *view)
+hatstack_view_delete(stack_view_t *view)
 {
     mmm_retire(view->store);
 
     free(view);
 
     return;
+}
+
+static stack_store_t *
+hatstack_new_store(uint64_t num_cells)
+{
+    stack_store_t *ret;
+    uint64_t       alloc_len;
+
+    if (num_cells < (1 << HATSTACK_MIN_STORE_SZ_LOG)) {
+	num_cells = 1 << HATSTACK_MIN_STORE_SZ_LOG;
+    }
+    
+    alloc_len       = sizeof(stack_store_t) + num_cells * sizeof(stack_cell_t);
+    ret             = (stack_store_t *)mmm_alloc_committed(alloc_len);
+    ret->num_cells  = num_cells;
+    ret->head_state = ATOMIC_VAR_INIT(head_candidate_new_epoch(0, 0));
+
+    return ret;
 }
 
 /* Migration operates pretty similarly to how it's operated in our
