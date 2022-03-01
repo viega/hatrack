@@ -191,9 +191,13 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
     fprintf(stdout, "DQs=%llu; ", successful_dequeues);
     fprintf(stdout, "(⊥=%llu in ", failed_dequeues);
     fprintf(stdout, "%.3f sec ", max);
-    fprintf(stdout, "(%.3f MOps / sec)\n",
+    fprintf(stdout, "(%.3f MOp/s, ",
 	    (((double)(num_ops + successful_dequeues))/1000000.) / max);
+    fprintf(stdout, "%.3f MOp/s w/ ⊥s)\n",
+	    (((double)(num_ops + successful_dequeues + failed_dequeues
+		       ))/1000000.) / max);
 
+    
 #ifdef CONSISTENCY_CHECK
     fprintf(stdout,
 	    "pushed value: %llu; dq + eject: %llu; "
