@@ -146,6 +146,8 @@ hq_enqueue(hq_t *self, void *item)
     }
 }
 
+#include <stdio.h>
+
 void *
 hq_dequeue(hq_t *self, bool *found)
 {
@@ -155,51 +157,56 @@ hq_dequeue(hq_t *self, bool *found)
     uint64_t    end_ix;
     hq_item_t   expected;
     void       *ret;
+    hq_cell_t  *cell;
 
     mmm_start_basic_op();
 
     store  = atomic_read(&self->store);
 
- retry_dequeue:
-    sz     = store->size;
-    cur_ix = atomic_read(&store->dequeue_index);
-    end_ix = atomic_read(&store->enqueue_index);
-	
     while (true) {
+	sz     = store->size;
+	cur_ix = atomic_read(&store->dequeue_index);
+	end_ix = atomic_read(&store->enqueue_index);
+	
 	if (cur_ix >= end_ix) {
-	    return hatrack_not_found(found);
+	    return hatrack_not_found_w_mmm(found);
 	}
 	
 	cur_ix   = atomic_fetch_add(&store->dequeue_index, 1);
 	expected = empty_cell;
+	cell     = &store->cells[hq_ix(cur_ix, sz)];
 	
-	if (CAS(&store->cells[hq_ix(cur_ix, sz)], &expected, too_slow_mark)) {
-	    cur_ix++;
-	    end_ix = atomic_read(&store->enqueue_index);	    
+	if (CAS(cell, &expected, too_slow_mark)) {
+	    if ((cur_ix + 1) == end_ix) {
+		return hatrack_not_found_w_mmm(found);
+	    }
 	    continue;
 	}
 	
-	if (hq_is_moving(expected.state)) {
-	    store = hq_migrate(store, self);
-	    goto retry_dequeue;
+	if (hq_extract_epoch(expected.state) != cur_ix) {
+	    return hatrack_not_found_w_mmm(found); 
 	}
 
+	if (hq_is_moving(expected.state)) {
+	    store = hq_migrate(store, self);
+	    continue;
+	}
+	
 	if (hq_cell_too_slow(expected)) {
-	    return hatrack_not_found(found); 
+	    return hatrack_not_found_w_mmm(found); 
 	}
 	
 	ret = expected.item;
-
-	if (!CAS(&store->cells[hq_ix(cur_ix, sz)], &expected, empty_cell)) {
+	
+	if (!CAS(cell, &expected, empty_cell)) {
 	    // Looped around and competed.
 	    store = hq_migrate(store, self);
-	    goto retry_dequeue;
+	    continue;
 	}
 	atomic_fetch_sub(&self->len, 1);
-	return hatrack_found(found, ret);
+	
+	return hatrack_found_w_mmm(found, ret);
     }
-
-    return hatrack_not_found(found);
 }
 
 hq_view_t *
@@ -238,19 +245,13 @@ hq_view_next(hq_view_t *view, bool *found)
 
     while (true) {
 	if (view->next_ix >= view->store->size) {
-	    if (found) {
-		*found = false;
-	    }
-	    return NULL;
+	    return hatrack_not_found(found);
 	}
 
 	item = atomic_read(&view->store->cells[view->next_ix++]);
 
 	if (hq_is_queued(item.state)) {
-	    if (found) {
-		*found = true;
-	    }
-	    return item.item;
+	    return hatrack_found(found, item.item);
 	}
     }
 }
@@ -386,7 +387,7 @@ hq_migrate(hq_store_t *store, hq_t *top)
 
 	expected_item        = empty_cell;
 	candidate_item       = old_item;
-	candidate_item.state = HQ_USED;
+	candidate_item.state = HQ_USED|n;
 	CAS(&next_store->cells[n++], &expected_item, candidate_item);
 
 	candidate_item       = old_item;

@@ -672,6 +672,16 @@
 #define HATSTACK_MAX_BACKOFF_LOG  10
 
 
+/* HATSTACK_MIN_STORE_SZ_LOG
+ *
+ * Minimium size of a hatstack store, expressed as a base 2 log.
+ * I.e., this represents a power-of-two.
+ */
+#define HATSTACK_MIN_STORE_SZ_LOG 6
+
+
+
+
 #ifndef FLEXARRAY_DEFAULT_GROW_SIZE_LOG
 #define FLEXARRAY_DEFAULT_GROW_SIZE_LOG 8
 #endif

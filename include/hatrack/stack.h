@@ -188,32 +188,4 @@ cell_can_push(stack_item_t item, uint32_t epoch)
     return true;
 }
 
-static inline void *
-hatstack_not_found(bool *found)
-{
-    if (found) {
-	*found = false;
-    }
-
-    mmm_end_op();
-
-    return NULL;
-}
-
-static inline void *
-hatstack_found(bool *found, void *item)
-{
-    if (found) {
-	*found = true;
-    }
-    
-    mmm_end_op();
-    
-    return item;
-}
-
-#define HATSTACK_MIN_STORE_SZ_LOG           6
-#define HATSTACK_DEFAULT_COMPRESS_THRESHOLD 1 << 4
-
-
 #endif

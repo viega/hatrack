@@ -311,7 +311,7 @@ hatstack_pop(hatstack_t *self, bool *found)
 	 * stack is empty.  If we're not at 0, we substract 1.
 	 */
 	if (!ix) {
-	    return hatstack_not_found(found);
+	    return hatrack_not_found_w_mmm(found);
 	}
 
 	ix = ix - 1;
@@ -327,7 +327,7 @@ hatstack_pop(hatstack_t *self, bool *found)
 	    if (ix--) {
 		continue;
 	    }
-	    return hatstack_not_found(found);
+	    return hatrack_not_found_w_mmm(found);
 	}
 	
 	/* Go down the stack trying to swap in pops (updating epochs
@@ -355,7 +355,7 @@ hatstack_pop(hatstack_t *self, bool *found)
 			expected = atomic_read(&store->cells[ix]);
 			continue;
 		    }
-		    return hatstack_not_found(found);
+		    return hatrack_not_found_w_mmm(found);
 		}
 
 		if (CAS(&store->cells[ix], &expected, candidate)) {
@@ -376,7 +376,7 @@ hatstack_pop(hatstack_t *self, bool *found)
 		expected = atomic_read(&store->cells[ix]);
 		continue;
 	    }
-	    return hatstack_not_found(found);
+	    return hatrack_not_found_w_mmm(found);
 	}
 	
 	// Now try to swing the head.
@@ -384,8 +384,48 @@ hatstack_pop(hatstack_t *self, bool *found)
 
 	CAS(&store->head_state, &head_state, head_candidate);
 
-	return hatstack_found(found, expected.item);
+	return hatrack_found_w_mmm(found, expected.item);
     }
+}
+
+/* Here we don't worry about invalidating pushers; we may end up
+ * racing with poppers, but if we do, we linearize ourselves
+ * conceptually to the instant immediately after the pop right in
+ * front of us ended, before any push that succeeded further up the
+ * stack.
+ */
+void *
+hatstack_peek(hatstack_t *self, bool *found)
+{
+    stack_store_t *store;
+    stack_item_t   expected;
+    stack_item_t   candidate;
+    uint64_t       head_state;
+    uint64_t       ix;
+    uint32_t       epoch;
+
+    mmm_start_basic_op();
+
+
+    store      = atomic_read(&self->store);
+    head_state = atomic_read(&store->head_state);
+    candidate  = proto_item_pop;	
+    ix         = head_get_index(head_state);
+    epoch      = head_get_epoch(head_state);
+    
+	expected              = proto_item_empty;
+	candidate.valid_after = epoch;
+
+	/* Go down the stack until we see any pushed cell, or we reach the
+	 * bottom of the stack.
+	 */
+	while (ix--) {
+	    if (state_is_pushed(expected.state)) {
+		return hatrack_found_w_mmm(found, expected.item);
+	    }
+	}
+
+	return hatrack_not_found_w_mmm(found);
 }
 
 stack_view_t *
@@ -424,19 +464,13 @@ hatstack_view_next(stack_view_t *view, bool *found)
 
     while (true) {
 	if (view->next_ix >= view->store->num_cells) {
-	    if (found) {
-		*found = false;
-	    }
-	    return NULL;
+	    return hatrack_not_found(found);
 	}
 
 	item = atomic_read(&view->store->cells[view->next_ix++]);
 
 	if (state_is_pushed(item.state)) {
-	    if (found) {
-		*found = true;
-	    }
-	    return item.item;
+	    return hatrack_found(found, item.item);
 	}
     }
 }

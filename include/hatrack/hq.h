@@ -144,7 +144,7 @@ hq_add_moved(uint64_t state)
 static inline uint64_t
 hq_extract_epoch(uint64_t state)
 {
-    return state & ~HQ_MOVED;
+    return state & ~(HQ_FLAG_MASK);
 }
 
 static inline bool
