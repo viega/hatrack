@@ -50,6 +50,11 @@ hatring_new(uint64_t num_buckets)
     alloc_len = sizeof(hatring_cell_t) * num_buckets;
     ret       = (hatring_t *)calloc(1,sizeof(hatring_t) + alloc_len);
 
+    /* We start the epochs up high so that we can be confident when
+     * dequeuing whether the cell was enqueued, when we see an epoch
+     * numbered 0.
+     */
+    
     ret->epochs    = (num_buckets << 32) | num_buckets;
     ret->last_slot = num_buckets - 1;
     ret->size      = num_buckets;
@@ -193,7 +198,6 @@ hatring_dequeue(hatring_t *self, bool *found)
     candidate.item = NULL;
 
     while (true) {
-    try_again:
 	epochs      = atomic_read(&self->epochs);
 	read_epoch  = hatring_dequeue_epoch(epochs);
 	write_epoch = hatring_enqueue_epoch(epochs);
@@ -202,44 +206,73 @@ hatring_dequeue(hatring_t *self, bool *found)
 	    return hatrack_not_found(found);
 	}
 	
-	epochs      = atomic_fetch_add(&self->epochs, 1);
-	ix          = hatring_dequeue_ix(epochs, self->last_slot);
-	read_epoch  = hatring_dequeue_epoch(epochs);
-	write_epoch = hatring_enqueue_epoch(epochs);
-	expected    = atomic_read(&self->cells[ix]);
-	cell_epoch  = hatring_cell_epoch(expected.state);
-	
+	epochs          = atomic_fetch_add(&self->epochs, 1);
+	ix              = hatring_dequeue_ix(epochs, self->last_slot);
+	read_epoch      = hatring_dequeue_epoch(epochs);
+	write_epoch     = hatring_enqueue_epoch(epochs);
+	expected        = atomic_read(&self->cells[ix]);
+	cell_epoch      = hatring_cell_epoch(expected.state);
+	candidate.state = HATRING_DEQUEUED | read_epoch;
+
+	/* If we find that an epoch read from a cell is larger than
+	 * our 'read' epoch, then our operation got lapped by a write.
+	 * 
+	 * TODO: make this wait-free by adding a failure counter,
+	 * and a help mechanism.
+	 */
 	while (cell_epoch <= read_epoch) {
-	    candidate.state = HATRING_DEQUEUED | read_epoch;
 
 	    saw = expected;
-	    
+	    /* We're going to try to swap in 'dequeued' here. If we
+	     * succeed and the cell's epoch that we swapped out is
+	     * less than ours, then it will mean that we have beaten a
+	     * writer, and so the queue was effectively empty for us.
+	     *
+	     * If the cell we're swapping out the same as ours, great
+	     * success... return the value.
+	     *
+	     * If we fail the swap, but the epoch was correct, we
+	     * can return this value as long as there's no drop
+	     * handler installed.  If there IS a drop handler,
+	     * then the item will have officially been dropped.
+	     */
 	    if (CAS(&self->cells[ix], &expected, candidate)) {
 		if (cell_epoch == read_epoch) {
-		    if (hatring_is_enqueued(expected.state)) {
-			return hatrack_found(expected.item, found);
-		    }
-		    goto try_again; // We beat an enqueuer.
+		    return hatrack_found(expected.item, found);
 		}
 
-		if (read_epoch >= write_epoch) {
+		if (read_epoch > cell_epoch) {
+		/* We might find an unread enqueued item if the
+		 * dequeuer catches up to the writer while it's
+		 * writing (e.g., if a thread is suspended).  It's
+		 * also why we need to apply the drop handler during
+		 * clean-up.
+		 */
+		    if (self->drop_handler &&
+			hatring_is_enqueued(expected.state)) {
+			(*self->drop_handler)(expected.item);
+		    }
 		    return hatrack_not_found(found);
 		}
 	    }
 	    else {
 		/* If we were too late to invalidate the old cell
-		 * because we got lapped, yet the epoch was right, and
-		 * there were contents, then we are okay to return
-		 * the value.
+		 * because we got lapped, yet the epoch was right,
+		 * then we are okay to return the value, unless we
+		 * have a drop handler installed, because the drop
+		 * handler will have officially ejected this item.
 		 */
 		if ((hatring_cell_epoch(saw.state) == read_epoch) &&
-		    hatring_is_enqueued(saw.state)) {
+		    !self->drop_handler) {
 		    return hatrack_found(saw.item, found);
 		}
-
+		/* If the CAS failed the first time through the loop,
+		 * it might be due to a somewhat slow enqueur
+		 * writing to the slot (the alternative would be
+		 * because we got lapped).
+		 */
+		cell_epoch = hatring_cell_epoch(expected.state);		
 	    }
-
-	    cell_epoch = hatring_cell_epoch(expected.state);
 	}
 	continue;  	// we got lapped.
     }
@@ -255,12 +288,11 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
     uint64_t       ix;
     hatring_item_t expected;
     hatring_item_t candidate;
-    hatring_item_t saw;    
+    hatring_item_t saw;
 
     candidate.item = NULL;
 
     while (true) {
-    try_again:
 	epochs      = atomic_read(&self->epochs);
 	read_epoch  = hatring_dequeue_epoch(epochs);
 	write_epoch = hatring_enqueue_epoch(epochs);
@@ -269,56 +301,75 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
 	    return hatrack_not_found(found);
 	}
 	
-	epochs      = atomic_fetch_add(&self->epochs, 1);
-	ix          = hatring_dequeue_ix(epochs, self->last_slot);
-	read_epoch  = hatring_dequeue_epoch(epochs);
-	write_epoch = hatring_enqueue_epoch(epochs);
-	expected    = atomic_read(&self->cells[ix]);
-	cell_epoch  = hatring_cell_epoch(expected.state);
-	
+	epochs          = atomic_fetch_add(&self->epochs, 1);
+	ix              = hatring_dequeue_ix(epochs, self->last_slot);
+	read_epoch      = hatring_dequeue_epoch(epochs);
+	write_epoch     = hatring_enqueue_epoch(epochs);
+	expected        = atomic_read(&self->cells[ix]);
+	cell_epoch      = hatring_cell_epoch(expected.state);
+	candidate.state = HATRING_DEQUEUED | read_epoch;
+
+	/* If we find that an epoch read from a cell is larger than
+	 * our 'read' epoch, then our operation got lapped by a write.
+	 * 
+	 * TODO: make this wait-free by adding a failure counter,
+	 * and a help mechanism.
+	 */
 	while (cell_epoch <= read_epoch) {
-	    candidate.state = HATRING_DEQUEUED | read_epoch;
 
 	    saw = expected;
-	    
+	    /* We're going to try to swap in 'dequeued' here. If we
+	     * succeed and the cell's epoch that we swapped out is
+	     * less than ours, then it will mean that we have beaten a
+	     * writer, and so the queue was effectively empty for us.
+	     *
+	     * If the cell we're swapping out the same as ours, great
+	     * success... return the value.
+	     *
+	     * If we fail the swap, but the epoch was correct, we
+	     * can return this value as long as there's no drop
+	     * handler installed.  If there IS a drop handler,
+	     * then the item will have officially been dropped.
+	     */
 	    if (CAS(&self->cells[ix], &expected, candidate)) {
 		if (cell_epoch == read_epoch) {
-		    if (hatring_is_enqueued(expected.state)) {
-			*epoch = read_epoch;
-			return hatrack_found(expected.item, found);
-		    }
-		    goto try_again; // We beat an enqueuer.
+		    *epoch = read_epoch;
+		    return hatrack_found(expected.item, found);
 		}
 
-		if (read_epoch >= write_epoch) {
-		    return hatrack_not_found(found);
-		}
+		if (read_epoch > cell_epoch) {
 		/* We might find an unread enqueued item if the
 		 * dequeuer catches up to the writer while it's
 		 * writing (e.g., if a thread is suspended).  It's
 		 * also why we need to apply the drop handler during
 		 * clean-up.
 		 */
-		if (hatring_is_enqueued(expected.state) &&
-		    self->drop_handler) {
-		    (*self->drop_handler)(expected.item);
+		    if (self->drop_handler &&
+			hatring_is_enqueued(expected.state)) {
+			(*self->drop_handler)(expected.item);
+		    }
+		    return hatrack_not_found(found);
 		}
-		continue;
 	    }
 	    else {
 		/* If we were too late to invalidate the old cell
-		 * because we got lapped, yet the epoch was right, and
-		 * there were contents, then we are okay to return
-		 * the value.
+		 * because we got lapped, yet the epoch was right,
+		 * then we are okay to return the value, unless we
+		 * have a drop handler installed, because the drop
+		 * handler will have officially ejected this item.
 		 */
 		if ((hatring_cell_epoch(saw.state) == read_epoch) &&
-		    hatring_is_enqueued(saw.state)) {
+		    !self->drop_handler) {
+		    *epoch = read_epoch;
 		    return hatrack_found(saw.item, found);
 		}
-
+		/* If the CAS failed the first time through the loop,
+		 * it might be due to a somewhat slow enqueur
+		 * writing to the slot (the alternative would be
+		 * because we got lapped).
+		 */
+		cell_epoch = hatring_cell_epoch(expected.state);		
 	    }
-
-	    cell_epoch = hatring_cell_epoch(expected.state);	    
 	}
 	continue;  	// we got lapped.
     }
