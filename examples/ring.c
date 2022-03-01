@@ -205,7 +205,6 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
 #endif    
 
     return;
-    
 }
 
 static const char LINE[]

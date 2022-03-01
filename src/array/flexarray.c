@@ -324,6 +324,92 @@ flexarray_set_size(flexarray_t *self, uint64_t index)
     return;
 }
 
+flex_view_t *
+flexarray_view(flexarray_t *self)
+{
+    flex_view_t  *ret;
+    flex_store_t *store;
+    bool          expected = false;
+    uint64_t      i;
+    flex_item_t   item;
+
+    mmm_start_basic_op();
+    
+    while (true) {
+	store = atomic_read(&self->store);
+	
+	if (CAS(&store->claimed, &expected, true)) {
+	    break;
+	}
+	flexarray_migrate(store, self);
+    }
+
+    flexarray_migrate(store, self);
+
+    if (self->ret_callback) {
+	for (i = 0; i < store->array_size; i++) {
+	    item = atomic_read(&store->cells[i]);
+	    if (item.state & FLEX_ARRAY_USED) {
+		(*self->ret_callback)(item.item);
+	    }
+	}
+    }
+    
+    mmm_end_op();
+    
+    ret           = (flex_view_t *)malloc(sizeof(flex_view_t));
+    ret->contents = store;
+    ret->next_ix  = 0;
+    
+    return ret;
+}
+
+void *
+flexarray_view_next(flex_view_t *view, bool *found)
+{
+    flex_item_t item;
+
+    while (true) {
+	if (view->next_ix >= view->contents->array_size) {
+	    if (found) {
+		*found = false;
+	    }
+	    return NULL;
+	}
+	
+	item = atomic_read(&view->contents->cells[view->next_ix++]);
+
+	if (item.state & FLEX_ARRAY_USED) {
+	    if (found) {
+		*found = true;
+	    }
+	    return item.item;
+	}
+    }
+}
+
+void
+flexarray_view_delete(flex_view_t *view)
+{
+    void *item;
+    bool  found;
+    
+    if (view->eject_callback) {
+	while (true) {
+	    item = flexarray_view_next(view, &found);
+	    if (!found) {
+		break;
+	    }
+
+	    (*view->eject_callback)(item);
+	}
+    }
+
+    mmm_retire(view->contents);
+
+    return;
+}
+
 static flex_store_t *
 flexarray_new_store(uint64_t array_size, uint64_t store_size)
 {
@@ -446,7 +532,9 @@ flexarray_migrate(flex_store_t *store, flexarray_t *top)
 
     // Okay, now swing the store pointer; winner retires the old store!
     if (CAS(&top->store, &store, next_store)) {
-	mmm_retire(store);
+	if (!store->claimed) {
+	    mmm_retire(store);
+	}
     }
 
     return;
