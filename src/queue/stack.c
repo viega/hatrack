@@ -356,6 +356,68 @@ hatstack_new_store(uint64_t num_cells)
     return ret;
 }
 
+stack_view_t *
+stack_view(hatstack_t *self)
+{
+    stack_view_t  *ret;
+    stack_store_t *store;
+    bool           expected = false;
+
+    mmm_start_basic_op();
+
+    while (true) {
+	store = atomic_read(&self->store);
+
+	if (CAS(&store->claimed, &expected, true)) {
+	    break;
+	}
+	hatstack_grow_store(store, self);
+    }
+
+    hatstack_grow_store(store, self);
+    mmm_end_op();
+
+    ret          = (stack_view_t *)malloc(sizeof(flex_view_t));
+    ret->store   = store;
+    ret->next_ix = 0;
+
+    return ret;
+}
+
+void *
+stack_view_next(stack_view_t *view, bool *found)
+{
+    stack_item_t item;
+
+    while (true) {
+	if (view->next_ix >= view->store->num_cells) {
+	    if (found) {
+		*found = false;
+	    }
+	    return NULL;
+	}
+
+	item = atomic_read(&view->store->cells[view->next_ix++]);
+
+	if (state_is_pushed(item.state)) {
+	    if (found) {
+		*found = true;
+	    }
+	    return item.item;
+	}
+    }
+}
+
+void
+stack_view_delete(stack_view_t *view)
+{
+    mmm_retire(view->store);
+
+    free(view);
+
+    return;
+}
+
 /* Migration operates pretty similarly to how it's operated in our
  * other algorithms.
  *
@@ -424,7 +486,7 @@ hatstack_grow_store(stack_store_t *store, hatstack_t *top)
 	next_store     = hatstack_new_store(store->num_cells);	
     }
     else {
-	next_store     = hatstack_new_store(store->num_cells << 1);		
+	next_store     = hatstack_new_store(store->num_cells << 1);
     }
 
 
@@ -479,7 +541,9 @@ hatstack_grow_store(stack_store_t *store, hatstack_t *top)
      * no work, because every local cell is marked as moved.
      */
     if (CAS(&top->store, &store, next_store)) {
-	mmm_retire(store);
+	if (!store->claimed) {
+	    mmm_retire(store);
+	}
     }
 
     return next_store;

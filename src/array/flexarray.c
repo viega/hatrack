@@ -407,6 +407,8 @@ flexarray_view_delete(flex_view_t *view)
 
     mmm_retire(view->contents);
 
+    free(view);
+
     return;
 }
 

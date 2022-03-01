@@ -56,12 +56,17 @@ typedef struct {
 typedef _Atomic stack_item_t stack_cell_t;
 typedef struct stack_store_t stack_store_t;
 
+typedef struct {
+    uint64_t       next_ix;
+    stack_store_t *store;
+} stack_view_t;
 
 struct stack_store_t {
     alignas(8)
     uint64_t                 num_cells;
     _Atomic uint64_t         head_state;
     _Atomic (stack_store_t *)next_store;
+    _Atomic bool             claimed;
     stack_cell_t             cells[];
 };
 
