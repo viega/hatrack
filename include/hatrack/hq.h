@@ -105,30 +105,6 @@ hq_cell_too_slow(hq_item_t item)
     return (bool)(item.state & HQ_TOOSLOW);
 }
 
-static inline void *
-hq_found(bool *found, void *item)
-{
-    mmm_end_op();
-
-    if (found) {
-	*found = true;
-    }
-
-    return item;
-}
-
-static inline void *
-hq_not_found(bool *found)
-{
-    mmm_end_op();
-
-    if (found) {
-	*found = false;
-    }
-
-    return NULL;
-}
-
 static inline uint64_t
 hq_set_used(uint64_t ix)
 {

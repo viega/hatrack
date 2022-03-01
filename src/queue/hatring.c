@@ -188,6 +188,7 @@ hatring_dequeue(hatring_t *self, bool *found)
     uint64_t       ix;
     hatring_item_t expected;
     hatring_item_t candidate;
+    hatring_item_t saw;
 
     candidate.item = NULL;
 
@@ -198,7 +199,7 @@ hatring_dequeue(hatring_t *self, bool *found)
 	write_epoch = hatring_enqueue_epoch(epochs);
 
 	if (read_epoch >= write_epoch) {
-	    return hatring_not_found(found);
+	    return hatrack_not_found(found);
 	}
 	
 	epochs      = atomic_fetch_add(&self->epochs, 1);
@@ -210,32 +211,35 @@ hatring_dequeue(hatring_t *self, bool *found)
 	
 	while (cell_epoch <= read_epoch) {
 	    candidate.state = HATRING_DEQUEUED | read_epoch;
+
+	    saw = expected;
 	    
 	    if (CAS(&self->cells[ix], &expected, candidate)) {
 		if (cell_epoch == read_epoch) {
 		    if (hatring_is_enqueued(expected.state)) {
-			return hatring_found(expected.item, found);
+			return hatrack_found(expected.item, found);
 		    }
 		    goto try_again; // We beat an enqueuer.
 		}
 
 		if (read_epoch >= write_epoch) {
-		    return hatring_not_found(found);
+		    return hatrack_not_found(found);
 		}
-		/* We might find an unread enqueued item if the
-		 * dequeuer catches up to the writer while it's
-		 * writing (e.g., if a thread is suspended).  It's
-		 * also why we need to apply the drop handler during
-		 * clean-up.
+	    }
+	    else {
+		/* If we were too late to invalidate the old cell
+		 * because we got lapped, yet the epoch was right, and
+		 * there were contents, then we are okay to return
+		 * the value.
 		 */
-		if (hatring_is_enqueued(expected.state) &&
-		    self->drop_handler) {
-		    (*self->drop_handler)(expected.item);
+		if ((hatring_cell_epoch(saw.state) == read_epoch) &&
+		    hatring_is_enqueued(saw.state)) {
+		    return hatrack_found(saw.item, found);
 		}
-		continue;
+
 	    }
 
-	    cell_epoch = hatring_cell_epoch(expected.state);	    
+	    cell_epoch = hatring_cell_epoch(expected.state);
 	}
 	continue;  	// we got lapped.
     }
@@ -251,6 +255,7 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
     uint64_t       ix;
     hatring_item_t expected;
     hatring_item_t candidate;
+    hatring_item_t saw;    
 
     candidate.item = NULL;
 
@@ -261,7 +266,7 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
 	write_epoch = hatring_enqueue_epoch(epochs);
 
 	if (read_epoch >= write_epoch) {
-	    return hatring_not_found(found);
+	    return hatrack_not_found(found);
 	}
 	
 	epochs      = atomic_fetch_add(&self->epochs, 1);
@@ -273,18 +278,20 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
 	
 	while (cell_epoch <= read_epoch) {
 	    candidate.state = HATRING_DEQUEUED | read_epoch;
+
+	    saw = expected;
 	    
 	    if (CAS(&self->cells[ix], &expected, candidate)) {
 		if (cell_epoch == read_epoch) {
 		    if (hatring_is_enqueued(expected.state)) {
 			*epoch = read_epoch;
-			return hatring_found(expected.item, found);
+			return hatrack_found(expected.item, found);
 		    }
 		    goto try_again; // We beat an enqueuer.
 		}
 
 		if (read_epoch >= write_epoch) {
-		    return hatring_not_found(found);
+		    return hatrack_not_found(found);
 		}
 		/* We might find an unread enqueued item if the
 		 * dequeuer catches up to the writer while it's
@@ -297,6 +304,18 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
 		    (*self->drop_handler)(expected.item);
 		}
 		continue;
+	    }
+	    else {
+		/* If we were too late to invalidate the old cell
+		 * because we got lapped, yet the epoch was right, and
+		 * there were contents, then we are okay to return
+		 * the value.
+		 */
+		if ((hatring_cell_epoch(saw.state) == read_epoch) &&
+		    hatring_is_enqueued(saw.state)) {
+		    return hatrack_found(saw.item, found);
+		}
+
 	    }
 
 	    cell_epoch = hatring_cell_epoch(expected.state);	    

@@ -278,7 +278,7 @@ queue_dequeue(queue_t *self, bool *found)
 	}
 	
 	if (cur_ix >= head_ix) {
-	    return queue_not_found(found);
+	    return hatrack_not_found_w_mmm(found);
 	}
 	
 	cur_ix = atomic_fetch_add(&segment->dequeue_index, 1);
@@ -296,7 +296,7 @@ queue_dequeue(queue_t *self, bool *found)
 
 	atomic_fetch_sub(&self->len, 1);
 	
-	return queue_found(found, ret);
+	return hatrack_found_w_mmm(found, ret);
     }
     
     new_segment = atomic_read(&segment->next);
@@ -307,7 +307,7 @@ queue_dequeue(queue_t *self, bool *found)
 	 * Some future dequeuer will be back here to change the
 	 * dequeue segment pointer.
 	 */
-	return queue_not_found(found);
+	return hatrack_not_found_w_mmm(found);
     }
 
     candidate_segments.enqueue_segment = segments.enqueue_segment;

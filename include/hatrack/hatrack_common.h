@@ -359,11 +359,26 @@ static inline void *
 hatrack_not_found(bool *found)
 {
     if (found) {
-	*found = true;
+	*found = false;
     }
 
     return NULL;
 }
+
+static inline void *
+hatrack_found_w_mmm(void *ret, bool *found)
+{
+    mmm_end_op();
+    return hatrack_found(ret, found);
+}
+
+static inline void *
+hatrack_not_found_w_mmm(bool *found)
+{
+    mmm_end_op();
+    return hatrack_not_found(found);
+}
+
 
 #define hatrack_cell_alloc(container_type, cell_type, n)                       \
     (container_type *)calloc(1, sizeof(container_type) + sizeof(cell_type) * n)

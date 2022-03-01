@@ -167,7 +167,7 @@ hq_dequeue(hq_t *self, bool *found)
 	
     while (true) {
 	if (cur_ix >= end_ix) {
-	    return hq_not_found(found);
+	    return hatrack_not_found(found);
 	}
 	
 	cur_ix   = atomic_fetch_add(&store->dequeue_index, 1);
@@ -185,7 +185,7 @@ hq_dequeue(hq_t *self, bool *found)
 	}
 
 	if (hq_cell_too_slow(expected)) {
-	    return hq_not_found(found); 
+	    return hatrack_not_found(found); 
 	}
 	
 	ret = expected.item;
@@ -196,10 +196,10 @@ hq_dequeue(hq_t *self, bool *found)
 	    goto retry_dequeue;
 	}
 	atomic_fetch_sub(&self->len, 1);
-	return hq_found(found, ret);
+	return hatrack_found(found, ret);
     }
 
-    return hq_not_found(found);
+    return hatrack_not_found(found);
 }
 
 hq_view_t *

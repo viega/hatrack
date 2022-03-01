@@ -80,27 +80,6 @@ enum {
     HATRING_MASK     = 0xcfffffffffffffff
 };
 
-
-static inline void *
-hatring_not_found(bool *found)
-{
-    if (found) {
-	*found = false;
-    }
-
-    return NULL;
-}
-
-static inline void *
-hatring_found(void *item, bool *found)
-{
-    if (found) {
-	*found = true;
-    }
-
-    return item;
-}
-
 static inline bool
 hatring_is_lagging(uint32_t read_epoch, uint32_t write_epoch, uint64_t size)
 {

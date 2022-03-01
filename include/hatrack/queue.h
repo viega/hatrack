@@ -145,26 +145,4 @@ void     queue_delete   (queue_t *);
 void     queue_enqueue  (queue_t *, void *);
 void    *queue_dequeue  (queue_t *, bool *);
 
-static inline void *
-queue_found(bool *found, void *item) {
-    mmm_end_op();
-
-    if (found) {
-	*found = true;
-    }
-
-    return item;
-}
-
-static inline void *
-queue_not_found(bool *found) {
-    mmm_end_op();
-
-    if (found) {
-	*found = false;
-    }
-
-    return NULL;
-}
-
 #endif
