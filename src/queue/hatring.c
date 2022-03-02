@@ -251,7 +251,7 @@ hatring_dequeue(hatring_t *self, bool *found)
 	     */
 	    if (CAS(&self->cells[ix], &expected, candidate)) {
 		if (cell_epoch == read_epoch) {
-		    return hatrack_found(expected.item, found);
+		    return hatrack_found(found, expected.item);
 		}
 
 		if (read_epoch > cell_epoch) {
@@ -277,7 +277,7 @@ hatring_dequeue(hatring_t *self, bool *found)
 		 */
 		if ((hatring_cell_epoch(saw.state) == read_epoch) &&
 		    !self->drop_handler) {
-		    return hatrack_found(saw.item, found);
+		    return hatrack_found(found, saw.item);
 		}
 		/* If the CAS failed the first time through the loop,
 		 * it might be due to a somewhat slow enqueur
@@ -344,7 +344,7 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
 	    if (CAS(&self->cells[ix], &expected, candidate)) {
 		if (cell_epoch == read_epoch) {
 		    *epoch = read_epoch;
-		    return hatrack_found(expected.item, found);
+		    return hatrack_found(found, expected.item);
 		}
 
 		if (read_epoch > cell_epoch) {
@@ -371,7 +371,7 @@ hatring_dequeue_w_epoch(hatring_t *self, bool *found, uint32_t *epoch)
 		if ((hatring_cell_epoch(saw.state) == read_epoch) &&
 		    !self->drop_handler) {
 		    *epoch = read_epoch;
-		    return hatrack_found(saw.item, found);
+		    return hatrack_found(found, saw.item);
 		}
 		/* If the CAS failed the first time through the loop,
 		 * it might be due to a somewhat slow enqueur
@@ -428,7 +428,7 @@ hatring_view_next(hatring_view_t *view, bool *done)
 	return hatrack_not_found(done);
     }
     
-    return hatrack_found(view->cells[view->next_ix++], done);
+    return hatrack_found(done, view->cells[view->next_ix++]);
 }
 
 void
