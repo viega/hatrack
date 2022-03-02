@@ -262,6 +262,7 @@ test_queue(test_info_t *test_info)
     ops_per_thread = test_info->num_ops / test_info->producers;
     num_ops        = ops_per_thread * test_info->producers;
 
+    DEBUG("Starting run.");
     for (i = 0; i < test_info->producers; i++) {
         threadinfo         = (thread_info_t *)malloc(sizeof(thread_info_t));
         threadinfo->start  = (i * ops_per_thread) + 1;
@@ -417,6 +418,6 @@ main(void)
     }
 
     format_results(tests, n, row_size);
-    
+
     return 0;
 }

@@ -75,8 +75,8 @@ enum {
     HQ_EMPTY              = 0x0000000000000000,
     HQ_TOOSLOW            = 0x1000000000000000,
     HQ_USED               = 0x2000000000000000,
-    HQ_MOVING             = 0x4000000000000000,
-    HQ_MOVED              = 0x8000000000000000,
+    HQ_MOVED              = 0x4000000000000000,
+    HQ_MOVING             = 0x8000000000000000,
     HQ_FLAG_MASK          = 0xf000000000000000,
     HQ_STORE_INITIALIZING = 0xffffffffffffffff
 };

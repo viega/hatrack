@@ -16,16 +16,119 @@
  *  Name:           hq.c
  *  Description:    A fast, wait-free queue implementation.
  *
+ * This is mainly an array we use in a ring, until the head grows to
+ * meet the tail, at which point we double the size of the store,
+ * copying data over.
+ *
+ * The hardest bit is keeping a linearized ordering intact during this
+ * migration operation.
+ *
+ * If some active enqueues have to wait until after the migration,
+ * that's no problem; the threads in the middle of their operations
+ * can complete in any order without any of them being able to detect
+ * it.
+ *
+ * We don't have the same luxury on the dequeue side.  For example,
+ * imagine we're resizing a queue of size four, that contains: 
+ *
+ *    [0, 1, 2, 3]
+ *
+ * If the migration begins in parallel with three dequeuers of various
+ * speeds, we might end up having 2 dequeue before 0 and 1.  That in
+ * and of itself isn't a problem, as we can consider the linearization
+ * point when we handed out the address from which to dequeue-- as
+ * long as the three threads each dequeue their item, then all is
+ * good; the operations can be linearized, and we just act like the
+ * threads just took different speeds to return, conceptually.
+ *
+ * However, if we pause dequeuers in order to migrate, and then we
+ * restart the operation, it would certainly be possible for the
+ * thread that dequeued 2 to dequeue 0 or 1, which would violate our
+ * linearization.
+ *
+ * Dequeuers can notice there's a dequeue in progress in two
+ * ways. First, they might see it when they're trying to load an index
+ * to store into. But, if they miss that signal, they might see it in
+ * the cell when they try to read, or to mark the cell as read.
+ *
+ * If they don't notice the dequeue at all, the threads on either side
+ * of them might be slower.  To ensure linearization, we would at
+ * least need to make sure that any thread that theoretically dequeues
+ * before us finishes its dequeue, even if it's out of the new store.
+ *
+ * Note also that various threads helping in the migration could end
+ * up seeing different values of the various pointers, as late FAAs
+ * process.
+ *
+ * Since different threads might have slightly different views on
+ * where the start and end of the list are, we need to make sure we
+ * don't get confused.  We don't want to miss copying items or
+ * accidentally allow items to be dequeued twice, once in each store.
+ *
+ * To be clear, what we want to accomplish is to move a contiguous
+ * block of cells, ending at what is the head at the time the
+ * migration completes that have been enqueued (or skipped; writers
+ * are allowed to skip cells, in which case the epoch in the cell will
+ * be older than the tail), but have NOT been dequeued.  Once we find
+ * ANY dequeued item, we must assume every item with an epoch lower
+ * than it is in the process of being dequeued, and NOT migrate it.
+ *
+ * And, if *we* are a dequeuer who noticed the need to migrate, but
+ * not until we were assigned a slot, then we will complete our
+ * operation out of the OLD store if it turns out that our index ends
+ * up LOWER than something that got dequeued (but only after the
+ * migration is finished).  Otherwise, we will re-start the operation
+ * in the new store.
+ *
+ * Once we mark a cell for migration, no other cell will change the
+ * status of whether the cell is queued or enqueued, until after the
+ * migration is complete.  So, we can simply rush to mark all the
+ * cells, while keeping note of the highest epoch found in any cell.
+ *
+ * Once we have marked all cells, we go to the cell w/ the highest
+ * epoch, and scan until we've either scanned all cells, or until we
+ * find a cell that has been dequeued.  
+ *
+ * Remember again that cells can be skipped by the enqueue operation,
+ * in which case the scan will show epochs that are lower than the
+ * lowest possible epoch.  Those cells get marked as 'moved', since
+ * there is no work to do to them.
+ *
+ * Once we find the starting point for the migration, we do all the
+ * typical copying that we'd do in most of our other algorithms. Then,
+ * any threads who had pending dequeue operations need to check the
+ * epoch they were given; if it's below the starting point, we
+ * complete the dequeue out of the old store. Otherwise, we pretend
+ * like we never got a number assigned, and try again out of the new
+ * store.
+ *
+ * As a result of the algorithm, our API for the migration is a little
+ * bit different than most of our other migrations.  hq_migrate()
+ * doesn't return the new store, it instead returns the smallest
+ * migrated epoch, so that dequeuers know whether or not to resume.
+ *
+ * Threads needing to redo in the new store, just re-acquire the store
+ * via the top-level object pointer.
+ *
  *  Author:         John Viega, john@zork.org
  */
 
 #include <hatrack.h>
 
+
 static const hq_item_t empty_cell    = { NULL, HQ_EMPTY };
-static const hq_item_t too_slow_mark = { NULL, HQ_TOOSLOW };
+
+static const union {
+    hq_item_t   cell;
+    __uint128_t num;
+}
+    moving_cell = { .cell = { NULL, HQ_MOVING } },
+    moved_cell = { .cell = { NULL, HQ_MOVING | HQ_MOVED } };
+
+
 
 static hq_store_t *hq_new_store(uint64_t);
-static hq_store_t *hq_migrate  (hq_store_t *, hq_t *);
+static uint64_t    hq_migrate  (hq_store_t *, hq_t *);
 
 #define HQ_DEFAULT_SIZE 1024
 #define HQ_MINIMUM_SIZE 128
@@ -45,8 +148,11 @@ hq_init_size(hq_t *self, uint64_t size)
 	size = HQ_MINIMUM_SIZE;
     }
     
-    self->store = hq_new_store(size);
-    self->len   = ATOMIC_VAR_INIT(0);
+    self->store         = hq_new_store(size);
+    self->len           = ATOMIC_VAR_INIT(0);
+    
+    self->store->dequeue_index = ATOMIC_VAR_INIT(size);
+    self->store->enqueue_index = ATOMIC_VAR_INIT(size);    
 
     return;
 }
@@ -101,52 +207,86 @@ hq_delete(hq_t *self)
 void
 hq_enqueue(hq_t *self, void *item)
 {
-    hq_store_t    *store;
-    hq_item_t      expected;
-    hq_item_t      candidate;
-    uint64_t       cur_ix;
-    uint64_t       end_ix;
-    uint64_t       max;
-    uint64_t       step;
-    uint64_t       sz;
+    hq_store_t *store;
+    hq_item_t   expected;
+    hq_item_t   candidate;
+    uint64_t    cur_ix;
+    uint64_t    end_ix;
+    uint64_t    max;
+    uint64_t    step;
+    uint64_t    sz;
+    uint64_t    epoch;
+    hq_cell_t  *cell;    
     
     mmm_start_basic_op();
     
-    store           = atomic_read(&self->store);
     candidate.item  = item;
-    step            = 1;
     
     while (true) {
+	store  = atomic_read(&self->store);
 	sz     = store->size;
+	step   = 1;
+	
 
 	while (true) {
 	    // Note: it's important we read cur_ix before end_ix.
 	    cur_ix = atomic_fetch_add(&store->enqueue_index, step);
 	    end_ix = atomic_read(&store->dequeue_index);
-	    max    = end_ix + sz;
+
+	    if (end_ix & HQ_MOVING) {
+		break;
+	    }
+	    
+	    max = end_ix + sz;
 	    
 	    if (cur_ix >= max) {
 		break;
 	    }
 
-	    expected        = empty_cell;
+	    cell     = &store->cells[hq_ix(cur_ix, sz)];
+	    expected = atomic_read(cell);
+	    epoch    = hq_extract_epoch(expected.state);
+
+	    if (epoch > cur_ix) {
+		break;
+	    }
+
+	    if (hq_is_moving(expected.state)) {
+		break;
+	    }
+
+	    if ((epoch < cur_ix) && hq_is_queued(expected.state)) {
+		break;
+	    }
+
+	    if ((epoch == cur_ix) && hq_cell_too_slow(expected)) {
+		step <<= 1;		
+		continue;
+	    }
+	    
 	    candidate.state = hq_set_used(cur_ix);
 
-	    if (CAS(&store->cells[hq_ix(cur_ix, sz)], &expected, candidate)) {
+	    if (CAS(cell, &expected, candidate)) {
 		atomic_fetch_add(&self->len, 1);
 		mmm_end_op();
-		
+
 		return;
+	    }
+
+	    if (hq_extract_epoch(expected.state) != cur_ix) {
+		break;
+	    }
+
+	    if (hq_is_moving(expected.state)) {
+		break;
 	    }
 
 	    step <<= 1;
 	}
 	
-	store  = hq_migrate(store, self);
+	hq_migrate(store, self);
     }
 }
-
-#include <stdio.h>
 
 void *
 hq_dequeue(hq_t *self, bool *found)
@@ -155,56 +295,128 @@ hq_dequeue(hq_t *self, bool *found)
     uint64_t    sz;
     uint64_t    cur_ix;
     uint64_t    end_ix;
+    uint64_t    epoch;
     hq_item_t   expected;
+    hq_item_t   candidate;
     void       *ret;
     hq_cell_t  *cell;
 
     mmm_start_basic_op();
 
-    store  = atomic_read(&self->store);
+    store          = atomic_read(&self->store);
+    candidate.item = NULL;
 
+ retry_dequeue:
     while (true) {
 	sz     = store->size;
-	cur_ix = atomic_read(&store->dequeue_index);
-	end_ix = atomic_read(&store->enqueue_index);
+
+	/* First, we should check if it's seems futile to ask for a
+	 * dequeue spot.  If it does, we don't want to bump the
+	 * tail way past the head, that will only slow us down.
+	 */
+
+	cur_ix    = atomic_read(&store->dequeue_index);
+
+	if (cur_ix & HQ_MOVING) {
+	    hq_migrate(store, self);
+	    store = atomic_read(&self->store);
+	    continue;
+	}
+	
+	end_ix    = atomic_read(&store->enqueue_index);
 	
 	if (cur_ix >= end_ix) {
 	    return hatrack_not_found_w_mmm(found);
 	}
+
+	/* Unfortunately, that means when we think there's a pretty
+	 * good shot of getting a slot, we FAA the current index
+	 * and re-check wrt. migration.
+	 */
+	cur_ix    = atomic_fetch_add(&store->dequeue_index, 1);
 	
-	cur_ix   = atomic_fetch_add(&store->dequeue_index, 1);
-	expected = empty_cell;
-	cell     = &store->cells[hq_ix(cur_ix, sz)];
+	if (cur_ix & HQ_MOVING) {
+	migrate_then_possibly_dequeue:
+	    
+	    epoch   = hq_migrate(store, self);
+	    cur_ix &= ~HQ_MOVING;
+	    
+	    if (epoch <= cur_ix) {
+		store = atomic_read(&self->store);		
+		continue;
+	    }
+
+	    /* If our epoch is older than the last dequeue out of this
+	     * store, we're supposed to finish our operation, but if
+	     * there was nothing to read due to a skipped cell, we
+	     * then get to go to the new store.
+	     */
+	    cell     = &store->cells[hq_ix(cur_ix, sz)];
+	    expected = atomic_read(cell);
+	    epoch    = hq_extract_epoch(expected.state);
+	    
+	    if (epoch != cur_ix) {
+		store = atomic_read(&self->store);		
+		continue;
+	    }
+
+	    atomic_fetch_sub(&self->len, 1);	    
+	    return hatrack_found_w_mmm(found, expected.item);
+	}
 	
-	if (CAS(cell, &expected, too_slow_mark)) {
-	    if ((cur_ix + 1) == end_ix) {
+	cell      = &store->cells[hq_ix(cur_ix, sz)];
+	expected  = atomic_read(cell);
+	epoch     = hq_extract_epoch(expected.state);
+
+	while (epoch < cur_ix) {
+	    /* We'd like to write in TOOSLOW, but we're definitely
+	     * past the head, and there's data that hasn't been
+	     * dequeued, so declare not found.
+	     */
+	    if(hq_is_queued(expected.state)) {
 		return hatrack_not_found_w_mmm(found);
 	    }
-	    continue;
-	}
-	
-	if (hq_extract_epoch(expected.state) != cur_ix) {
-	    return hatrack_not_found_w_mmm(found); 
+	    
+	    candidate.state = HQ_TOOSLOW | cur_ix;
+
+	    /* If we were right next to the head pointer, assume a
+	     * miss.
+	     */
+	    if (CAS(cell, &expected, candidate)) {
+		if ((cur_ix + 1) == end_ix) {
+		    return hatrack_not_found_w_mmm(found);			
+		}
+		goto retry_dequeue;
+	    }
+	    epoch = hq_extract_epoch(expected.state);
 	}
 
+	if (epoch > cur_ix) {
+	    /* We failed to read out of the slot, and an enqueuer put
+	     * something new here. That indicates the cell was
+	     * previously skipped, otherwise the enqueuer would have
+	     * triggered a resize.  There's probably a resize in
+	     * progress, but let's make sure, and then restart the op.
+	     */
+
+	    hq_migrate(store, self);
+	    store = atomic_read(&self->store);
+	    continue;
+	}
+	
 	if (hq_is_moving(expected.state)) {
-	    store = hq_migrate(store, self);
-	    continue;
+	    goto migrate_then_possibly_dequeue;
 	}
 	
-	if (hq_cell_too_slow(expected)) {
-	    return hatrack_not_found_w_mmm(found); 
-	}
+	ret             = expected.item;
+	candidate.state = cur_ix;
 	
-	ret = expected.item;
-	
-	if (!CAS(cell, &expected, empty_cell)) {
-	    // Looped around and competed.
-	    store = hq_migrate(store, self);
-	    continue;
+	if (!CAS(cell, &expected, candidate)) {
+	    // This should only occur if a migration is being triggered.
+	    goto migrate_then_possibly_dequeue;
 	}
+
 	atomic_fetch_sub(&self->len, 1);
-	
 	return hatrack_found_w_mmm(found, ret);
     }
 }
@@ -280,7 +492,7 @@ hq_new_store(uint64_t size)
     return ret;
 }
 
-static hq_store_t *
+static uint64_t
 hq_migrate(hq_store_t *store, hq_t *top)
 {
     hq_store_t *next_store;
@@ -288,73 +500,66 @@ hq_migrate(hq_store_t *store, hq_t *top)
     hq_item_t   expected_item;
     hq_item_t   candidate_item;
     hq_item_t   old_item;
-    uint64_t    i, j, n;
-    uint64_t    stored_epoch;
+    uint64_t    i, n;
+    uint64_t    highest;
     uint64_t    lowest;
-    uint64_t    lowest_ix;
+    uint64_t    epoch;
 
-    next_store = atomic_read(&top->store);
 
-    if (next_store != store) {
-	return next_store;
-    }
-
-    lowest    = 0;
-    lowest_ix = 0;
-    j         = 0;
-
-    i = store->size;
-
-    /* Note that it's possible for enqueues and dequeues to finish for
-     * one slot faster than the operation on either side.  For
-     * instance, we might try to dequeue at position 0 and 1, and slot
-     * 1 manages to dequeue before we lock the queue, but slot 0 does not.
-     *
-     * That's conceptually an issue, however the thread that was
-     * slated to dequeue 0 will still retry, and some thread that
-     * retries will necessarily return 0.  Even if there are no future
-     * dequeue requests, we're guaranteed to get the value returned.
-     * So it can be simply be seen as a slow returner, that is still
-     * linearized before the 1 return; the thread just helped migrate
-     * where the other thread did not.
-     *
-     * If we care, we can address this issue, at some cost to
-     * performance. But I don't think that's necessary.
-     */
-    while (i--) {
+    atomic_fetch_or_explicit(&store->dequeue_index,
+			     HQ_MOVING,
+			     memory_order_relaxed);
+				     
+    highest = 0;
+    
+    for (i = 0; i < store->size; i++) {
 	expected_item = atomic_read(&store->cells[i]);
 
-	while (true) {
-	    stored_epoch = 0;
-	    
-	    if (hq_is_moving(expected_item.state)) {
-		break;
+	if (hq_is_queued(expected_item.state)) {
+	    epoch = hq_extract_epoch(expected_item.state);
+	
+	    if (epoch > highest) {
+		highest = epoch;
 	    }
+	}
 
-	    if (!hq_is_queued(expected_item.state)) {
-		candidate_item.item = NULL;
-		candidate_item.state = hq_add_moved(expected_item.state);
-	    }
-	    else {
-		candidate_item       = expected_item;
-		candidate_item.state = hq_add_moving(expected_item.state);
-		stored_epoch         = hq_extract_epoch(expected_item.state);
-	    }
-
-	    if (CAS(&store->cells[i], &expected_item, candidate_item)) {
-		expected_item = candidate_item;
-		break;
-	    }
+	if (hq_is_moving(expected_item.state)) {
+	    continue;
 	}
 	
+	if (!hq_is_queued(expected_item.state)) {
+	    atomic_fetch_or_explicit((_Atomic __uint128_t *)&store->cells[i],
+				     moved_cell.num,
+				     memory_order_relaxed);
+	}
+	else {
+	    atomic_fetch_or_explicit((_Atomic __uint128_t *)&store->cells[i],
+				     moving_cell.num,
+				     memory_order_relaxed);
+	}
+    }
+
+    n      = highest;
+    lowest = (highest - store->size); // Anything lower than this is a skip.
+    
+
+    // When starting at the highest epoch, the lowest non-skipped
+    // but non-queued epoch becomes the new value for 'lowest'.
+    for (i = 0; i < store->size; i++) {
+	expected_item = atomic_read(&store->cells[hq_ix(--n, store->size)]);
+	
 	if (hq_is_queued(expected_item.state)) {
-	    j++;
+	    continue;
+	}
+	
+	epoch = hq_extract_epoch(expected_item.state);
+
+	if (epoch < lowest) {
+	    continue;
 	}
 
-	if (stored_epoch && stored_epoch < lowest) {
-	    lowest    = stored_epoch;
-	    lowest_ix = i;
-	}
+	lowest = epoch;
+	break;
     }
 
     expected_store = NULL;
@@ -368,43 +573,42 @@ hq_migrate(hq_store_t *store, hq_t *top)
 	next_store = expected_store;
     }
 
-    i = lowest_ix;
+    i = lowest;
     n = 0;
 
-    while (true) {
-	old_item = atomic_read(&store->cells[i]);
+    for (i = lowest; i <= highest; i++) {
+	old_item = atomic_read(&store->cells[hq_ix(i, store->size)]);
 	
 	if (hq_is_moved(old_item.state)) {
 	    if (hq_is_queued(old_item.state)) {
 		n++;
 	    }
-	    i = i + 1 & (store->size - 1);
-	    if (i == lowest_ix) {
-		break;
-	    }
 	    continue;
 	}
 
-	expected_item        = empty_cell;
-	candidate_item       = old_item;
-	candidate_item.state = HQ_USED|n;
-	CAS(&next_store->cells[n++], &expected_item, candidate_item);
-
-	candidate_item       = old_item;
-	candidate_item.state = hq_add_moved(old_item.state);
-
-	CAS(&store->cells[i], &old_item, candidate_item);
+	/* We might have something in the range of lowest-highest
+	 * That is actually enqueued because of a slow dequeuer.  Don't
+	 * copy such things.
+	 */
 	
-	i = i + 1 & (store->size - 1);
-	if (i == lowest_ix) {
-	    break;
+	if (hq_extract_epoch(old_item.state) < lowest) {
+	    continue;
 	}
 	
+	expected_item        = empty_cell;
+	candidate_item.item  = old_item.item;
+	candidate_item.state = hq_set_used(n + next_store->size);
+	CAS(&next_store->cells[n++], &expected_item, candidate_item);
+
+	atomic_fetch_or((_Atomic __uint128_t *)
+			&store->cells[hq_ix(i, store->size)],
+			 moved_cell.num);
     }
+
     i = HQ_STORE_INITIALIZING;
-    CAS(&next_store->dequeue_index, &i, 0);
+    CAS(&next_store->dequeue_index, &i, 0 + next_store->size);
     i = HQ_STORE_INITIALIZING;
-    CAS(&next_store->enqueue_index, &i, n);
+    CAS(&next_store->enqueue_index, &i, n + next_store->size);
 
     if (CAS(&top->store, &store, next_store)) {
 	if (!store->claimed) {
@@ -412,5 +616,5 @@ hq_migrate(hq_store_t *store, hq_t *top)
 	}
     }
     
-    return next_store;
+    return lowest;
 }
