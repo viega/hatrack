@@ -430,6 +430,8 @@ hq_view(hq_t *self)
 
     mmm_start_basic_op();
 
+    ret = (hq_view_t *)malloc(sizeof(hq_view_t));
+
     while (true) {
 	store    = atomic_read(&self->store);
 	expected = false;
@@ -441,9 +443,9 @@ hq_view(hq_t *self)
     }
 
     ret->start_epoch = hq_migrate(store, self);
+    
     mmm_end_op();
 
-    ret             = (hq_view_t *)malloc(sizeof(hq_view_t));
     ret->store      = store;
     ret->next_ix    = ret->start_epoch;
     ret->last_epoch = ret->start_epoch + store->size;
