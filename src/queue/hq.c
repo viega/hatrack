@@ -440,12 +440,13 @@ hq_view(hq_t *self)
 	hq_migrate(store, self);
     }
 
-    hq_migrate(store, self);
+    ret->start_epoch = hq_migrate(store, self);
     mmm_end_op();
 
-    ret          = (hq_view_t *)malloc(sizeof(hq_view_t));
-    ret->store   = store;
-    ret->next_ix = 0;
+    ret             = (hq_view_t *)malloc(sizeof(hq_view_t));
+    ret->store      = store;
+    ret->next_ix    = ret->start_epoch;
+    ret->last_epoch = ret->start_epoch + store->size;
 
     return ret;
 }
@@ -454,15 +455,22 @@ void *
 hq_view_next(hq_view_t *view, bool *found)
 {
     hq_item_t item;
+    uint64_t  ix;
 
     while (true) {
-	if (view->next_ix >= view->store->size) {
+	if (view->next_ix >= view->last_epoch) {
 	    return hatrack_not_found(found);
 	}
 
-	item = atomic_read(&view->store->cells[view->next_ix++]);
+	ix   = hq_ix(view->next_ix++, view->store->size);
+	item = atomic_read(&view->store->cells[ix]);
 
 	if (hq_is_queued(item.state)) {
+	    
+	    if (hq_extract_epoch(item.state) < view->start_epoch) {
+		continue;
+	    }
+	    
 	    return hatrack_found(found, item.item);
 	}
     }

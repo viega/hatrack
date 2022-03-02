@@ -51,6 +51,8 @@ typedef _Atomic hq_item_t hq_cell_t;
 typedef struct hq_store_t hq_store_t;
 
 typedef struct {
+    uint64_t    start_epoch;
+    uint64_t    last_epoch;
     uint64_t    next_ix;
     hq_store_t *store;
 } hq_view_t;
