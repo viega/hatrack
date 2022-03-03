@@ -117,13 +117,22 @@ flexarray_get(flexarray_t *self, uint64_t index, int *status)
     mmm_start_basic_op();
 
     store = atomic_read(&self->store);
-    
+
     if (index >= atomic_read(&store->array_size)) {
 	if (status) {
 	    *status = FLEX_OOB;
 	}
 	return NULL;
     }
+
+    // A resize is in progress, item is not there yet.
+    if (index >= store->store_size) {
+	if (status) {
+	    *status = FLEX_UNINITIALIZED;
+	}
+	return NULL;
+    }
+    
 	
     current = atomic_read(&store->cells[index]);
     
@@ -155,13 +164,21 @@ flexarray_set(flexarray_t *self, uint64_t index, void *item)
     flex_item_t   current;
     flex_item_t   candidate;
     flex_cell_t  *cellptr;
+    uint64_t      read_index;
     
     mmm_start_basic_op();
     
-    store = atomic_read(&self->store);
-
-    if (index >= atomic_read(&store->array_size)) {
+    store      = atomic_read(&self->store);
+    read_index = atomic_read(&store->array_size) & ~FLEX_ARRAY_SHRINK;
+	
+    if (index >= read_index) {
 	return false;
+    }
+
+    if (index >= store->store_size) {
+	flexarray_migrate(store, self);
+	mmm_end_op();
+	return flexarray_set(self, index, item);
     }
 
     cellptr = &store->cells[index];
@@ -202,127 +219,69 @@ flexarray_set(flexarray_t *self, uint64_t index, void *item)
     return true;
 }
 
+
 void
-flexarray_set_size(flexarray_t *self, uint64_t index)
+flexarray_grow(flexarray_t *self, uint64_t index)
 {
     flex_store_t *store;
-    flex_next_t   next_candidate;
-    flex_next_t   next_expected;
     uint64_t      array_size;
-    bool          must_retry;
 
     mmm_start_basic_op();
 
-    store      = atomic_read(&self->store);
-    array_size = atomic_read(&store->array_size);
-
-    /* The 'easy' path is if our store is large enough to handle the
-     * resize, but we're resizing UP.  In that case, we can just
-     * bump up store->array_size and be done.
-     *
-     * It's possible that shrink ops could come in, in parallel.
-     * That's okay; fast-path grows will order before any shrink.
+    /* Just change store->array_size, kick off a migration if
+     * necessary, and be done.
      */
-    if (index >= array_size && index <= store->store_size) {
-	while (array_size < index) {
-	    if(CAS(&store->array_size, &array_size, index)) {
-		mmm_end_op();
-		return;
-	    }
-	}
-    }
+    do {
+	store      = atomic_read(&self->store);
+	array_size = atomic_read(&store->array_size);
 
-    /* Any time we need more memory, we have to migrate to a new
-     * store.  However, we do the same thing if we are SHRINKING a
-     * store, partially to make it easy to convince ourselves of the
-     * linearization point for each operation.
-     *
-     * Note that there could be multiple set-size operations in
-     * parallel.  Competing GROWS can be folded when possible-- if
-     * there's a grow in progress that's bigger than our desired size,
-     * we can just grow to the larger size.
-     *
-     * Similarly, we can fold SHRINKS.  However, we CANNOT combine the
-     * two, because shrinks conceptually delete cells.
-     * 
-     * However, if there's contention we can linearize any grows
-     * *before* the shrinks.   Therefore, the only times we need to 
-     * do a retry are:
-     *
-     * 1) When we have a late shrink, where the current migration is 
-     *    setting to a higher size than us.
-     *
-     * 2) We have a late grow, where the current migration isn't
-     *    growing the array ENOUGH.
-     */
-
-    next_expected.next_size   = 0;
-    next_expected.next_store  = NULL;
-    next_candidate.next_size  = index;
-    next_candidate.next_store = NULL;
-    must_retry                = false;
-    
-    
-    while (!CAS(&store->next, &next_expected, next_candidate)) {
-	if (next_expected.next_store) {
-	    // We are too late to have a say.  Help migrate.
+	/* If we're shrinking, we don't want to re-expand until we
+	 * know that truncated cells are zeroed out.
+	 */
+	if (array_size & FLEX_ARRAY_SHRINK) {
 	    flexarray_migrate(store, self);
-	    
-	    if (index > store->store_size) {
-		// If we're a grow, we're done if the migration was a shrink
-		// or a larger grow.
-		if ((next_candidate.next_size < store->store_size) ||
-		    index < next_candidate.next_size) {
-		    mmm_end_op();
-		    return;
-		}
-	    } else {
-		// If we're a shrink, we're done if the migration was a
-		// larger shrink.
-		if (next_candidate.next_size < index) {
-		    mmm_end_op();
-		    return;
-		}
-	    }
-	    // Otherwise, we need to retry our operation.
-	    mmm_end_op();
-	    flexarray_set_size(self, index);
+	    continue;
+	}
+	
+	if (index < array_size) {
 	    return;
 	}
-	/* No store is agreed upon yet, so: 
-	 *
-	 * 1) If we are a grow and we see a bigger grow or a shrink,
-	 *    we are content that our request is served, and we can go
-	 *    help migrate.
-	 *
-	 * 2) If we are a shrink and we see a bigger shrink, we are
-	 *    content that our request is served, and we go help
-	 *    migrate.
-	 *
-	 * Otherwise, we try to install our desired target size again.
-	 */
+    } while (!CAS(&store->array_size, &array_size, index));
 
-	if (index > store->store_size) {
-	    if ((next_expected.next_size < store->store_size) ||
-		(next_expected.next_size >= index)) {
-		flexarray_migrate(store, self);
-		mmm_end_op();
-		return;
-	    }
-	}
-	else {
-	    if (next_expected.next_size <= index) {
-		flexarray_migrate(store, self);
-		mmm_end_op();
-		return;
-	    }
-	}
+
+    if (index > store->store_size) {
+	flexarray_migrate(store, self);		
     }
     
     mmm_end_op();
-    
     return;
 }
+
+void
+flexarray_shrink(flexarray_t *self, uint64_t index)
+{
+    flex_store_t *store;
+    uint64_t      array_size;
+
+    index |= FLEX_ARRAY_SHRINK;
+    
+    mmm_start_basic_op();
+    
+    do {
+	store      = atomic_read(&self->store);
+	array_size = atomic_read(&store->array_size);
+	
+	if (index > array_size) {
+	    return;
+	}
+    } while (!CAS(&store->array_size, &array_size, index));
+
+    flexarray_migrate(store, self);		
+    
+    mmm_end_op();
+    return;
+}
+
 
 flex_view_t *
 flexarray_view(flexarray_t *self)
@@ -432,22 +391,21 @@ flexarray_new_store(uint64_t array_size, uint64_t store_size)
 static void
 flexarray_migrate(flex_store_t *store, flexarray_t *top)
 {
-    flex_next_t   expected_next;
-    flex_next_t   candidate_next;
     flex_store_t *next_store;
+    flex_store_t *expected_next;
     flex_item_t   expected_item;
     flex_item_t   candidate_item;
     uint64_t      i;
-    uint64_t      num_buckets;
-    uint64_t      new_size;
+    uint64_t      new_array_len;
+    uint64_t      new_store_len;
     
     if (atomic_read(&top->store) != store) {
 	return;
     }
 
-    expected_next = atomic_read(&store->next);
-    if (expected_next.next_store) {
-	next_store = expected_next.next_store;
+    next_store = atomic_read(&store->next);
+    
+    if (next_store) {
 	goto help_move;
     }
 
@@ -474,43 +432,27 @@ flexarray_migrate(flex_store_t *store, flexarray_t *top)
     }
 
     // Now, fight to install the store.
-
-    expected_next = atomic_read(&store->next);
-
-    while (!expected_next.next_store) {
-	
-	num_buckets = hatrack_round_up_to_power_of_2(expected_next.next_size);
-	
-	if (num_buckets < (1 << FLEXARRAY_MIN_STORE_SZ_LOG)) {
-	    num_buckets = 1 << FLEXARRAY_MIN_STORE_SZ_LOG;
-	}
-	
-	next_store = flexarray_new_store(expected_next.next_size, num_buckets);
-	
-	candidate_next.next_store = next_store;
-	candidate_next.next_size  = expected_next.next_size;
-
-	if (CAS(&store->next, &expected_next, candidate_next)) {
-	    goto help_move;
-	}
-
+    
+    expected_next = 0;
+    new_array_len = store->array_size;
+    new_store_len = hatrack_round_up_to_power_of_2(new_array_len) << 1;
+    next_store    = flexarray_new_store(new_store_len, new_store_len);
+    
+    if (!CAS(&store->next, &expected_next, next_store)) {
 	mmm_retire_unused(next_store);
+	next_store = expected_next;
     }
-
-    next_store = expected_next.next_store;
-
+    
     // Now, help move items that are moving.
  help_move:
 
-    new_size = expected_next.next_size;
-    
     for (i = 0; i < store->store_size; i++) {
 	candidate_item = atomic_read(&store->cells[i]);
 	if (candidate_item.state & FLEX_ARRAY_MOVED) {
 	    continue;
 	}
 	
-	if (i < new_size) {
+	if (i < new_array_len) {
 	    expected_item.item   = NULL;
 	    expected_item.state  = 0;
 	    candidate_item.state = FLEX_ARRAY_USED;

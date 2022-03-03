@@ -28,5 +28,6 @@ examples/oldqx
 examples/qtest
 examples/ring
 examples/logringex
+examples/array
 docs/~*
 #*

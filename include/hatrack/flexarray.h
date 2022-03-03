@@ -52,18 +52,13 @@ typedef struct {
     flex_callback_t eject_callback;
 } flex_view_t;
     
-typedef struct {
-    uint64_t      next_size;
-    flex_store_t *next_store;
-} flex_next_t;
-
 struct flex_store_t {
     alignas(8)
-    uint64_t              store_size;
-    _Atomic uint64_t      array_size;
-    _Atomic flex_next_t   next;
-    _Atomic bool          claimed;
-    flex_cell_t           cells[];
+    uint64_t                store_size;
+    _Atomic uint64_t        array_size;
+    _Atomic (flex_store_t *)next;
+    _Atomic bool            claimed;
+    flex_cell_t             cells[];
 };
 
 typedef struct {
@@ -80,13 +75,15 @@ void         flexarray_cleanup           (flexarray_t *);
 void         flexarray_delete            (flexarray_t *);
 void        *flexarray_get               (flexarray_t *, uint64_t, int *);
 bool         flexarray_set               (flexarray_t *, uint64_t, void *);
-void         flexarray_set_size          (flexarray_t *, uint64_t);
+void         flexarray_grow              (flexarray_t *, uint64_t);
+void         flexarray_shrink            (flexarray_t *, uint64_t);
 uint32_t     flexarray_len               (flexarray_t *);
 flex_view_t *flexarray_view              (flexarray_t *);
 void        *flexarray_view_next         (flex_view_t *, bool *);
 void         flexarray_view_delete       (flex_view_t *);
 
 enum64(flex_enum_t,
+       FLEX_ARRAY_SHRINK = 0x8000000000000000,
        FLEX_ARRAY_MOVING = 0x4000000000000000,
        FLEX_ARRAY_MOVED  = 0x2000000000000000,
        FLEX_ARRAY_USED   = 0x1000000000000000);
