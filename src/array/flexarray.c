@@ -122,6 +122,7 @@ flexarray_get(flexarray_t *self, uint64_t index, int *status)
 	if (status) {
 	    *status = FLEX_OOB;
 	}
+	mmm_end_op();
 	return NULL;
     }
 
@@ -130,6 +131,7 @@ flexarray_get(flexarray_t *self, uint64_t index, int *status)
 	if (status) {
 	    *status = FLEX_UNINITIALIZED;
 	}
+	mmm_end_op();	
 	return NULL;
     }
     
@@ -140,6 +142,7 @@ flexarray_get(flexarray_t *self, uint64_t index, int *status)
 	if (status) {
 	    *status = FLEX_UNINITIALIZED;
 	}
+	mmm_end_op();	
 	return NULL;
     }
     
@@ -172,6 +175,7 @@ flexarray_set(flexarray_t *self, uint64_t index, void *item)
     read_index = atomic_read(&store->array_size) & ~FLEX_ARRAY_SHRINK;
 	
     if (index >= read_index) {
+	mmm_end_op();	
 	return false;
     }
 
@@ -244,6 +248,7 @@ flexarray_grow(flexarray_t *self, uint64_t index)
 	}
 	
 	if (index < array_size) {
+	    mmm_end_op();	    
 	    return;
 	}
     } while (!CAS(&store->array_size, &array_size, index));
@@ -272,6 +277,7 @@ flexarray_shrink(flexarray_t *self, uint64_t index)
 	array_size = atomic_read(&store->array_size);
 	
 	if (index > array_size) {
+	    mmm_end_op();	    
 	    return;
 	}
     } while (!CAS(&store->array_size, &array_size, index));
