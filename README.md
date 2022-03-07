@@ -10,9 +10,13 @@ Hatrack provides a number of data structures for parallel programming, currently
 6. **Flex arrays** (i.e., resizable arrays, via `flexarray_*`; see `include/flexarray.h`)
 7. **A "debug ring"**, a ring buffer that trades off correctness in favor of speed (see `include/debug.h`)
 
-Additionally, before the 1.0 release, there will be:
+By 1.0 the vector will be done; there's an initial implementation there, but it's not fully tested, and undoubtedly has some bugs in it. The idea behind the vector class is to be a flexarray that is almost as fast as a traditional flexarray for most accesses, but also supports push and pop operations. The push and pop operations are much slower than for our stack, though-- basically with vectors, anything that changes the size of the array is put onto a queue so that the operations are explicitly ordered.
 
-1. A `vector`: a flex array, but with additional `push()` and `pop()` operations, so that you can switch between using a single data structure as a stack or as a random-access array, interchangably.
+This is done with a new FIFO I put together and am calling a 'CAPQ', where 'capq' stands for 'compare-and-pop' queue. The basic idea is that multiple threads look at the 'top' item that's next to be dequeued (which, for vectors, represents an operation that needs to be performed). When threads notice the job is done, they call capq_cap() to dequeue the top item, but only if it is still the top item.  This prevents us from accidentally dequeuing work that isn't done yet.
+
+Note that `capq` could be used as a general-purpose queue, and I do provide a dequeue mechanism built on capq_top() and capq_cap(), though this operation is only lock-free, not wait-free.  The queue `hq` should still be the all aroun best for general purpose use.
+
+Unlike the vector, I've tested the capq pretty thoroughly.
 
 ## Status
 

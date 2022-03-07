@@ -278,6 +278,10 @@
 #define HATRACK_THREADS_MAX 4096
 #endif
 
+#if HATRACK_THREADS_MAX > 32768
+#error "Vector assumes HATRACK_THREADS_MAX is no higher than 32768"
+#endif
+
 /* HATRACK_RETIRE_FREQ_LOG
  *
  * Each thread goes through its list of retired objects periodically,

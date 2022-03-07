@@ -242,6 +242,72 @@ hatrack_debug2(void *addr, void *addr2, char *msg)
     return;
 }
 
+static inline void
+hatrack_debug3(void *addr, void *addr2, void *addr3, char *msg)
+{
+    char buf[HATRACK_PTR_CHRS + HATRACK_PTR_FMT_CHRS + 1] = {
+        '0',
+        'x',
+    };
+    
+    char                   *p = buf + HATRACK_PTR_CHRS + HATRACK_PTR_FMT_CHRS;
+    uint64_t                i;
+    uintptr_t               n = (uintptr_t)addr;
+    char                   *where;
+    char                   *end;
+    uint64_t                mysequence;
+    hatrack_debug_record_t *record_ptr;
+
+    mysequence = atomic_fetch_add(&__hatrack_debug_sequence, 1);
+    record_ptr = &__hatrack_debug[mysequence & HATRACK_DEBUG_RING_LAST_SLOT];
+    end        = record_ptr->msg + HATRACK_DEBUG_MSG_SIZE;
+
+    record_ptr->sequence = mysequence;
+    record_ptr->thread   = mmm_mytid;
+
+    *--p = ' ';
+    *--p = ':';
+
+    for (i = 0; i < HATRACK_PTR_CHRS; i++) {
+        *--p = __hatrack_hex_conversion_table[n & 0xf];
+        n >>= 4;
+    }
+    strcpy(record_ptr->msg, buf);
+
+    p = buf + HATRACK_PTR_CHRS + HATRACK_PTR_FMT_CHRS;
+    n = (uintptr_t)addr2;
+
+    *--p = ' ';
+    *--p = ':';
+
+    for (i = 0; i < HATRACK_PTR_CHRS; i++) {
+        *--p = __hatrack_hex_conversion_table[n & 0xf];
+        n >>= 4;
+    }
+
+    where = record_ptr->msg + HATRACK_PTR_CHRS + HATRACK_PTR_FMT_CHRS;
+    strncpy(where, buf, end - where);
+
+    p = buf + HATRACK_PTR_CHRS + HATRACK_PTR_FMT_CHRS;
+    n = (uintptr_t)addr3;
+
+    *--p = ' ';
+    *--p = ':';
+
+    for (i = 0; i < HATRACK_PTR_CHRS; i++) {
+        *--p = __hatrack_hex_conversion_table[n & 0xf];
+        n >>= 4;
+    }
+
+    where = where + HATRACK_PTR_CHRS + HATRACK_PTR_FMT_CHRS;
+    strncpy(where, buf, end - where);
+
+    where = where + HATRACK_PTR_CHRS + HATRACK_PTR_FMT_CHRS;
+    strncpy(where, msg, end - where);
+	    
+    return;
+}
+
 /* hatrack_debug_assert()
  *
  * This is meant to be called either through the ASSERT() macro, which
@@ -333,6 +399,7 @@ hatrack_debug_assert_w_params(bool        expression_result,
 #define DEBUG(x)        hatrack_debug(x)
 #define DEBUG_PTR(x, y) hatrack_debug_ptr((void *)(x), y)
 #define DEBUG2(x, y, m) hatrack_debug2((void *)(x), (void *)(y), m)
+#define DEBUG3(x,y,z,m) hatrack_debug3((void *)(x),(void *)(y),(void *)(z),m)
 #define ASSERT(x)       hatrack_debug_assert(x, #x, __FUNCTION__, __FILE__, __LINE__)
 #define XASSERT(x, n, b)                                                       \
     hatrack_debug_assert_w_params(x, #x, __FUNCTION__, __FILE__, __LINE__, n, b)
@@ -342,6 +409,7 @@ hatrack_debug_assert_w_params(bool        expression_result,
 #define DEBUG(x)
 #define DEBUG_PTR(x, y)
 #define DEBUG2(x, y, m)
+#define DEBUG3(x, y, z, m)
 #define ASSERT(x)
 #define XASSERT(x, n, b)
 #endif

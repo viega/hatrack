@@ -5,7 +5,7 @@
 
 // clang-format off
 const    uint64_t num_ops       = 1 << 21;
-const    uint64_t fail_multiple = 100000;
+const    uint64_t fail_multiple = 1000;
 _Atomic  uint64_t successful_dequeues;
 __thread uint64_t cur_dequeues;
 _Atomic  uint64_t write_total;
@@ -103,6 +103,22 @@ static queue_impl_t algorithms[] = {
 	.can_prealloc = true
     },
     {
+	.name         = "capq",
+	.new          = (new_func)capq_new_size,
+	.enqueue      = (enqueue_func)capq_enqueue,
+	.dequeue      = (dequeue_func)capq_dequeue,
+	.del          = (del_func)capq_delete,
+	.can_prealloc = true
+    },
+    {
+	.name         = "vector",
+	.new          = (new_func)vector_new,
+	.enqueue      = (enqueue_func)vector_push,
+	.dequeue      = (dequeue_func)vector_pop,
+	.del          = (del_func)vector_delete,
+	.can_prealloc = true
+    },
+    {
         0,
     },
 };
@@ -168,7 +184,6 @@ enqueue_thread(void *info)
     atomic_fetch_add(&write_total, my_total);
 
     gate_thread_done(gate);
-    
     mmm_clean_up_before_exit();
     free(enqueue_info);
 
@@ -213,7 +228,7 @@ dequeue_thread(void *info)
             }
         }
 
-        atomic_fetch_add(&successful_dequeues, consecutive_dequeues);
+	atomic_fetch_add(&successful_dequeues, consecutive_dequeues);
 	
         if (atomic_fetch_add(&failed_dequeues, 1) >= max_fails) {
             printf("Reached failure threshold :(\n");
@@ -418,6 +433,6 @@ main(void)
     }
 
     format_results(tests, n, row_size);
-
+    
     return 0;
 }

@@ -48,9 +48,13 @@
 #include <hatrack/hash.h>
 #include <hatrack/queue.h>
 #include <hatrack/hq.h>
+#include <hatrack/capq.h>
+#include <hatrack/helpmanager.h>
 #include <hatrack/flexarray.h>
 #include <hatrack/llstack.h>
 #include <hatrack/stack.h>
 #include <hatrack/hatring.h>
 #include <hatrack/logring.h>
+#include <hatrack/vector.h>
+
 #endif
