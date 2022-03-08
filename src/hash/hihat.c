@@ -698,7 +698,7 @@ hihat_store_put(hihat_store_t   *self,
 	 */
 	old_item       = NULL;
 	new_item       = true;
-	candidate.info = top->next_epoch++;
+	candidate.info = HIHAT_F_INITED | top->next_epoch++;
     }
 
     candidate.item = item;
@@ -781,7 +781,7 @@ hihat_store_replace(hihat_store_t   *self,
 	return hihat_store_replace(self, top, hv1, item, found);
     }
 
-    if (!record.info) {
+    if (!(record.info & HIHAT_EPOCH_MASK)) {
 	goto not_found;
     }
 
@@ -814,7 +814,7 @@ hihat_store_replace(hihat_store_t   *self,
 	    goto migrate_and_retry;
 	}
 	
-	if (!record.info) {
+	if (!(record.info & HIHAT_EPOCH_MASK)) {
 	    goto not_found;
 	}
     }
@@ -886,12 +886,12 @@ found_bucket:
 	goto migrate_and_retry;
     }
     
-    if (record.info) {
+    if (record.info & HIHAT_EPOCH_MASK) {
         return false;
     }
 
     candidate.item = item;
-    candidate.info = top->next_epoch++;
+    candidate.info = HIHAT_F_INITED | top->next_epoch++;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_REC_INSTALL)) {
 	atomic_fetch_add(&top->item_count, 1);
@@ -965,7 +965,7 @@ found_bucket:
 	return hihat_store_remove(self, top, hv1, found);
     }
     
-    if (!record.info) {
+    if (!(record.info & HIHAT_EPOCH_MASK)) {
         if (found) {
             *found = false;
         }
@@ -975,7 +975,7 @@ found_bucket:
 
     old_item       = record.item;
     candidate.item = NULL;
-    candidate.info = 0;
+    candidate.info = HIHAT_F_INITED;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_DEL)) {
         atomic_fetch_sub(&top->item_count, 1);
@@ -1144,30 +1144,9 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
         record                = atomic_read(&bucket->record);
         candidate_record.item = record.item;
 
-        do {
-            if (record.info & HIHAT_F_MOVING) {
-                break;
-            }
-	    /* Note that, if record.info is zero, the bucket is either
-	     * deleted, or not written to yet. We can declare the
-	     * migration of this bucket successful now, instead of 
-	     * doing a second value check later on, saving everyone
-	     * a small bit of work.
-	     */
-	    if (record.info) {
-		candidate_record.info = record.info | HIHAT_F_MOVING;
-	    } else {
-		candidate_record.info = HIHAT_F_MOVING | HIHAT_F_MOVED;
-	    }
-        } while (!LCAS(&bucket->record,
-                       &record,
-                       candidate_record,
-                       HIHAT_CTR_F_MOVING));
-
-	/* Here, whether we installed our record or not, we look at
-	 * the old record to count how many items we're going to
-	 * migrate, so we can try to install the value in the new
-	 * store when we're done, as used_count.
+	/* Here, we look at the old record to count how many items
+	 * we're going to migrate, so we can try to install the value
+	 * in the new store when we're done, as used_count.
 	 *
 	 * Since used_count is part of our resize metric, we want this
 	 * to stay as accurate as possible, which is why we don't just
@@ -1178,6 +1157,21 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
         if (record.info & HIHAT_EPOCH_MASK) {
             new_used++;
         }
+	
+	if (record.info & HIHAT_F_MOVING) {
+	    continue;
+	}
+	/* Note that, if the below test is zero, the bucket is either
+	 * deleted, or not written to yet. We can declare the
+	 * migration of this bucket successful now, instead of doing a
+	 * second value check later on, saving everyone a small bit of
+	 * work.
+	 */
+	if (record.info & HIHAT_EPOCH_MASK) {
+	    OR2X64L(&bucket->record, HIHAT_F_MOVING);
+	} else {
+	    OR2X64L(&bucket->record, HIHAT_F_MOVING | HIHAT_F_MOVED);
+	}
     }
 
     new_store = atomic_read(&self->store_next);
@@ -1272,9 +1266,10 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
             break;
         }
 
-	// Set up the value we want to install, as well as the
-	// value we expect to see in the target bucket, if our
-	// thread succeeds in doing the move.
+	/* Set up the value we want to install, as well as the
+	 * value we expect to see in the target bucket, if our
+	 * thread succeeds in doing the move.
+	 */
         candidate_record.info = record.info & HIHAT_EPOCH_MASK;
         candidate_record.item = record.item;
         expected_record.info  = 0;
@@ -1287,11 +1282,11 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
 	     candidate_record,
 	     HIHAT_CTR_MIG_REC);
 
-	// Whether we won or not, assume the winner might have
-	// stalled.  Every thread attempts to update the source
-	// bucket, to denote that the move was successful.
-        candidate_record.info = record.info | HIHAT_F_MOVED;
-        LCAS(&bucket->record, &record, candidate_record, HIHAT_CTR_F_MOVED2);
+	/* Whether we won or not, assume the winner might have
+	 * stalled.  Every thread updates the source
+	 * bucket, to denote that the move was successful.
+	 */
+	OR2X64L(&bucket->record, HIHAT_F_MOVED);
     }
 
     /* All buckets are migrated. Attempt to write to the new table how

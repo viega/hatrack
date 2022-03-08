@@ -1055,49 +1055,23 @@ woolhat_store_migrate(woolhat_store_t *self, woolhat_t *top)
         cur  = &self->hist_buckets[i];
         head = atomic_read(&cur->head);
 
-        /* This loop is the final place where lohat is only
-         * lock-free-- it's possible that we could spin forever
-         * waiting to lock a bucket, telling other writers to migrate.
-         * For instance, we might be the only thread adding new
-         * content, and other threads might all be trying to update
-         * the same bucket with new values as fast as they can. It's
-         * possible (though not likely in practice, due to fair
-         * scheduling), that we'd effectively get starved, spinning
-         * here forever.
-         *
-         * Woolhat addresses this problem by having writers who
-         * MODIFY the contents of a bucket help migrate, but only
-         * after their modification operation succeeds. This prevents
-         * any one thread from unbounded starving others in this loop
-         * due to modifications-- the upper bound is the number of
-         * threads performing updates.
-         *
-         * Note that it's only necessary to do that check on updates
-         * of existing values (including removes), not on inserts.
-         */
-        do {
-            if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
-                goto didnt_win;
-            }
+	if (hatrack_pflag_test(head, WOOLHAT_F_MOVING)) {
+	    goto skip_some;
+	}
+	if (head && !head->deleted) {
+	    ORPTR(&cur->head, WOOLHAT_F_MOVING);
+	}
+	else {
+	    ORPTR(&cur->head, WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
+	}
 
-            if (head && !head->deleted) {
-                candidate = hatrack_pflag_set(head, WOOLHAT_F_MOVING);
-            }
-            else {
-                candidate
-                    = hatrack_pflag_set(head,
-                                        WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
-            }
-
-        } while (!LCAS(&cur->head, &head, candidate, WOOLHAT_CTR_F_MOVING));
-
-        if (head && hatrack_pflag_test(candidate, WOOLHAT_F_MOVED)) {
+        if (head && hatrack_pflag_test(head, WOOLHAT_F_MOVED)) {
             mmm_help_commit(head);
             mmm_retire(head);
             continue;
         }
 
-didnt_win:
+    skip_some:
         head = hatrack_pflag_clear(head, WOOLHAT_F_MOVING | WOOLHAT_F_MOVED);
 
         if (head && !head->deleted) {
@@ -1179,10 +1153,7 @@ didnt_win:
         expected_head = NULL;
 
         LCAS(&bucket->head, &expected_head, candidate, WOOLHAT_CTR_MIG_REC);
-        LCAS(&cur->head,
-             &head,
-             hatrack_pflag_set(head, WOOLHAT_F_MOVED),
-             WOOLHAT_CTR_F_MOVED3);
+	ORPTR(&cur->head, WOOLHAT_F_MOVED);
     }
 
     expected_used = 0;

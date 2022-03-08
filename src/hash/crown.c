@@ -374,7 +374,7 @@ crown_view_fast(crown_t *self, uint64_t *num, bool sort)
 	    continue;
 	}
 	
-        p->item       = record.item;
+        p->item = record.item;
 	
         p++;
         cur++;
@@ -804,7 +804,7 @@ crown_store_put(crown_store_t  *self,
 	
 	old_item       = NULL;
 	new_item       = true;
-	candidate.info = top->next_epoch++;
+	candidate.info = CROWN_F_INITED | top->next_epoch++;
     }
 
     candidate.item = item;
@@ -918,7 +918,7 @@ crown_store_replace(crown_store_t    *self,
 	return crown_store_replace(self, top, hv1, item, found, count);
     }
 
-    if (!record.info) {
+    if (!(record.info & CROWN_EPOCH_MASK)) {
 	goto not_found;
     }
 
@@ -1067,12 +1067,12 @@ found_bucket:
 	goto migrate_and_retry;
     }
     
-    if (record.info) {
+    if (record.info & CROWN_EPOCH_MASK) {
         return false;
     }
 
     candidate.item = item;
-    candidate.info = top->next_epoch++;
+    candidate.info = CROWN_F_INITED | top->next_epoch++;
 
     if (CAS(&bucket->record, &record, candidate)) {
 	atomic_fetch_add(&top->item_count, 1);
@@ -1168,13 +1168,13 @@ found_bucket:
 	return crown_store_remove(self, top, hv1, found, count);
     }
     
-    if (!record.info) {
+    if (!(record.info & CROWN_EPOCH_MASK)) {
 	goto not_found;
     }
 
     old_item       = record.item;
     candidate.item = NULL;
-    candidate.info = 0;
+    candidate.info = CROWN_F_INITED;
 
     if (CAS(&bucket->record, &record, candidate)) {
         atomic_fetch_sub(&top->item_count, 1);
@@ -1258,22 +1258,20 @@ crown_store_migrate(crown_store_t *self, crown_t *top)
         record                = atomic_read(&bucket->record);
         candidate_record.item = record.item;
 
-        do {
-            if (record.info & CROWN_F_MOVING) {
-                break;
-            }
-	    
-	    if (record.info) {
-		candidate_record.info = record.info | CROWN_F_MOVING;
-	    }
-	    else {
-		candidate_record.info = CROWN_F_MOVING | CROWN_F_MOVED;
-	    }
-        } while (!CAS(&bucket->record, &record, candidate_record));
-
         if (record.info & CROWN_EPOCH_MASK) {
             new_used++;
         }
+	
+	if (record.info & CROWN_F_MOVING) {
+	    continue;
+	}
+	    
+	if (record.info & CROWN_EPOCH_MASK) {
+	    OR2X64L(&bucket->record, CROWN_F_MOVING);
+	}
+	else {
+	    OR2X64L(&bucket->record, CROWN_F_MOVING | CROWN_F_MOVED); 
+	}
     }
 
     new_store = atomic_read(&self->store_next);
@@ -1368,8 +1366,7 @@ crown_store_migrate(crown_store_t *self, crown_t *top)
 	     candidate_record
 	   );
 
-        candidate_record.info = record.info | CROWN_F_MOVED;
-        CAS(&bucket->record, &record, candidate_record);
+	OR2X64L(&bucket->record, CROWN_F_MOVED);
     }
 
     expected_used = 0;

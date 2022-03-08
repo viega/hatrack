@@ -196,9 +196,6 @@ test_basic(func_test_info_t *info)
     uint32_t i;
 
     for (i = 0; i < info->range; i++) {
-	if (i == 9) {
-	    printf("break here.\n");
-	}
         test_put(info->dict, i + 1, i + 1);
         if (test_get(info->dict, i + 1) != i + 1) {
             fprintf(stderr,

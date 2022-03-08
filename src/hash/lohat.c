@@ -1038,35 +1038,32 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
         cur  = &self->hist_buckets[i];
         head = atomic_read(&cur->head);
 
-        do {
-            if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-                goto didnt_win;
-            }
-            /* If the head pointer is a deletion record, we can also
-             * set LOHAT_F_MOVED, since there's no actual work to do
-             * to migrate. However, there we need to know if we won
-             * the CAS, because if we do, we're responsible for the
-             * memory management. That's why the exit from this loop
-             * above is is a GOTO... we need to be able to do the
-             * memory management and just move on to the nex item if
-             * we've got a successful CAS on a delete record.
-             */
-            if (head && !head->deleted) {
-                candidate = hatrack_pflag_set(head, LOHAT_F_MOVING);
-            }
-            else {
-                candidate
-                    = hatrack_pflag_set(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
-            }
-        } while (!LCAS(&cur->head, &head, candidate, LOHAT_CTR_F_MOVING));
-
-        if (head && hatrack_pflag_test(candidate, LOHAT_F_MOVED)) {
+	if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+	    goto skip_some;
+	}
+	/* If the head pointer is a deletion record, we can also set
+	 * LOHAT_F_MOVED, since there's no actual work to do to
+	 * migrate. However, there we need to know if we won the CAS,
+	 * because if we do, we're responsible for the memory
+	 * management. That's why the exit from this loop above is is
+	 * a GOTO... we need to be able to do the memory management
+	 * and just move on to the nex item if we've got a successful
+	 * CAS on a delete record.
+	 */
+	if (head && !head->deleted) {
+	    ORPTR(&cur->head, LOHAT_F_MOVING);
+	}
+	else {
+	    ORPTR(&cur->head, LOHAT_F_MOVING | LOHAT_F_MOVED);
+	}
+	
+        if (head && hatrack_pflag_test(head, LOHAT_F_MOVED)) {
             mmm_help_commit(head);
             mmm_retire_fast(head);
             continue;
         }
-
-didnt_win:
+	
+    skip_some:
         head = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
         if (head && !head->deleted) {
             new_used++;
@@ -1164,13 +1161,11 @@ didnt_win:
         // so we don't need to concern ourselves with the return value.
         LCAS(&bucket->head, &expected_head, candidate, LOHAT_CTR_MIG_REC);
 
-        // Whether we won or not, assume the winner might have
-        // stalled.  Every thread attempts to update the source
-        // bucket, to denote that the move was successful.
-        LCAS(&cur->head,
-             &head,
-             hatrack_pflag_set(head, LOHAT_F_MOVED),
-             LOHAT_CTR_F_MOVED3);
+        /* Whether we won or not, assume the winner might have
+	 * stalled.  Every thread updates the source bucket, to denote
+	 * that the move was successful.
+	 */
+	ORPTR(&cur->head, LOHAT_F_MOVED);
     }
 
     /* All buckets are migrated. Attempt to write to the new table how

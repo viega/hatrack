@@ -198,7 +198,7 @@ flexarray_set(flexarray_t *self, uint64_t index, void *item)
     candidate.state = FLEX_ARRAY_USED;
 
     if (CAS(cellptr, &current, candidate)) {
-	if (self->eject_callback && current.state == FLEX_ARRAY_USED) {
+	if (self->eject_callback && (current.state == FLEX_ARRAY_USED)) {
 	    (*self->eject_callback)(current.item);
 	}
 	mmm_end_op();
@@ -419,26 +419,17 @@ flexarray_migrate(flex_store_t *store, flexarray_t *top)
     for (i = 0; i < store->store_size; i++) {
 	expected_item = atomic_read(&store->cells[i]);
 
-	while (true) {
-	    if (expected_item.state & FLEX_ARRAY_MOVING) {
-		break;
-	    }
+	if (!(expected_item.state & FLEX_ARRAY_MOVING)) {
 	    if (expected_item.state & FLEX_ARRAY_USED) {
-		candidate_item.state = FLEX_ARRAY_MOVING | FLEX_ARRAY_USED;
-		candidate_item.item  = expected_item.item;
+		OR2X64L(&store->cells[i], FLEX_ARRAY_MOVING);
 	    }
 	    else {
-		candidate_item.state = FLEX_ARRAY_MOVING | FLEX_ARRAY_MOVED;
-		candidate_item.item  = NULL;
-	    }
-	    if (CAS(&store->cells[i], &expected_item, candidate_item)) {
-		break;
+		OR2X64L(&store->cells[i], FLEX_ARRAY_MOVING | FLEX_ARRAY_MOVED);
 	    }
 	}
     }
 
     // Now, fight to install the store.
-    
     expected_next = 0;
     new_array_len = store->array_size;
     new_store_len = hatrack_round_up_to_power_of_2(new_array_len) << 1;
@@ -451,7 +442,6 @@ flexarray_migrate(flex_store_t *store, flexarray_t *top)
     
     // Now, help move items that are moving.
  help_move:
-
     for (i = 0; i < store->store_size; i++) {
 	candidate_item = atomic_read(&store->cells[i]);
 	if (candidate_item.state & FLEX_ARRAY_MOVED) {
@@ -462,15 +452,16 @@ flexarray_migrate(flex_store_t *store, flexarray_t *top)
 	    expected_item.item   = NULL;
 	    expected_item.state  = 0;
 	    candidate_item.state = FLEX_ARRAY_USED;
+	    
 	    CAS(&next_store->cells[i], &expected_item, candidate_item);
-	    expected_item.item   = candidate_item.item;
-	    expected_item.state  = FLEX_ARRAY_USED|FLEX_ARRAY_MOVING;
-	    CAS(&store->cells[i], &expected_item, candidate_item);
+	    OR2X64L(&store->cells[i], FLEX_ARRAY_MOVED);
 	    continue;
 	}
 
-	// If there are any items left in the current array, we
-	// eject them, if the callback is set, and we win the CAS.
+	/* If there are any items left in the current array, we eject
+	 * them, which requires us CASing in FLEX_ARRAY_MOVED, so that
+	 * we can decide upon a thread to call the ejection handler.
+	 */
 	expected_item         = candidate_item;
 	candidate_item.state |= FLEX_ARRAY_MOVED;
 

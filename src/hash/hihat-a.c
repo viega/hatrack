@@ -400,7 +400,7 @@ hihat_a_store_put(hihat_store_t *self,
 	
 	old_item       = NULL;
 	new_item       = true;
-	candidate.info = top->next_epoch++;
+	candidate.info = HIHAT_F_INITED | top->next_epoch++;
     }
 
     candidate.item = item;
@@ -468,7 +468,7 @@ hihat_a_store_replace(hihat_store_t *self,
 	return hihat_a_store_replace(self, top, hv1, item, found);
     }
 
-    if (!record.info) {
+    if (!(record.info & HIHAT_EPOCH_MASK)) {
 	goto not_found;
     }
 
@@ -480,7 +480,7 @@ hihat_a_store_replace(hihat_store_t *self,
 	    goto migrate_and_retry;
 	}
 	
-	if (!record.info) {
+	if (!(record.info & HIHAT_EPOCH_MASK)) {
 	    goto not_found;
 	}
     }
@@ -541,12 +541,12 @@ found_bucket:
 	goto migrate_and_retry;
     }
     
-    if (record.info) {
+    if (record.info & HIHAT_EPOCH_MASK) {
         return false;
     }
 
     candidate.item = item;
-    candidate.info = top->next_epoch++;
+    candidate.info = HIHAT_F_INITED | top->next_epoch++;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_REC_INSTALL)) {
 	atomic_fetch_add(&top->item_count, 1);
@@ -608,7 +608,7 @@ found_bucket:
 	return hihat_a_store_remove(self, top, hv1, found);
     }
     
-    if (!record.info) {
+    if (!(record.info & HIHAT_EPOCH_MASK)) {
         if (found) {
             *found = false;
         }
@@ -618,7 +618,7 @@ found_bucket:
 
     old_item       = record.item;
     candidate.item = NULL;
-    candidate.info = 0;
+    candidate.info = HIHAT_F_INITED;
 
     if (LCAS(&bucket->record, &record, candidate, HIHAT_CTR_DEL)) {
         atomic_fetch_sub(&top->item_count, 1);
@@ -728,24 +728,19 @@ hihat_a_store_migrate(hihat_store_t *self, hihat_t *top)
         record                = atomic_read(&bucket->record);
         candidate_record.item = record.item;
 
-        do {
-            if (record.info & HIHAT_F_MOVING) {
-                break;
-            }
-	    
-	    if (record.info) {
-		candidate_record.info = record.info | HIHAT_F_MOVING;
-	    } else {
-		candidate_record.info = HIHAT_F_MOVING | HIHAT_F_MOVED;
-	    }
-        } while (!LCAS(&bucket->record,
-                       &record,
-                       candidate_record,
-                       HIHAT_CTR_F_MOVING));
-
         if (record.info & HIHAT_EPOCH_MASK) {
             new_used++;
         }
+	
+	if (record.info & HIHAT_F_MOVING) {
+	    continue;
+	}
+	    
+	if (record.info & HIHAT_EPOCH_MASK) {
+	    OR2X64L(&bucket->record, HIHAT_F_MOVING);
+	} else {
+	    OR2X64L(&bucket->record, HIHAT_F_MOVING | HIHAT_F_MOVED);
+	}
     }
 
     new_store = atomic_read(&self->store_next);
@@ -817,7 +812,8 @@ hihat_a_store_migrate(hihat_store_t *self, hihat_t *top)
             break;
         }
 
-        candidate_record.info = record.info & HIHAT_EPOCH_MASK;
+        candidate_record.info = (record.info & HIHAT_EPOCH_MASK) |
+	                        HIHAT_F_INITED;
         candidate_record.item = record.item;
         expected_record.info  = 0;
         expected_record.item  = NULL;
@@ -827,9 +823,7 @@ hihat_a_store_migrate(hihat_store_t *self, hihat_t *top)
 	     candidate_record,
 	     HIHAT_CTR_MIG_REC);
 
-        candidate_record.info = record.info | HIHAT_F_MOVED;
-	
-        LCAS(&bucket->record, &record, candidate_record, HIHAT_CTR_F_MOVED2);
+	OR2X64L(&bucket->record, HIHAT_F_MOVED);
     }
 
     expected_used = 0;

@@ -23,6 +23,15 @@
  *                  algorithm that requires only a single
  *                  compare-and-swap per core operation.
  *
+ *                  Note that this is not full-featured relative to
+ *                  some of our other hash algorithms. For instance,
+ *                  we don't use a bool * to pass information about
+ *                  whether an item is present or not.
+ *
+ *                  Similarly, as we've moved to an atomic OR for
+ *                  setting migration flags, we've not updated that
+ *                  here.
+ *
  *  Author:         John Viega, john@zork.org
  *
  */
@@ -464,7 +473,7 @@ tiara_store_remove(tiara_store_t *self, tiara_t *top, uint64_t hv)
 	}
 
 	candidate.hv   = hv;
-	candidate.item = NULL;
+	candidate.item = hatrack_pflag_clear(record.item, TIARA_F_USED);
     
 	if (CAS(&self->buckets[bix], &record, candidate)) {
 	    return hatrack_pflag_clear(record.item, TIARA_F_ALL);

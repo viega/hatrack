@@ -924,28 +924,25 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
     while (cur < store_end) {
         head = atomic_read(&cur->head);
 	
-        do {
-            if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-                goto didnt_win;
-            }
+	if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+	    goto skip_a_bit;
+	}
 	    
-            if (head && !head->deleted) {
-                candidate = hatrack_pflag_set(head, LOHAT_F_MOVING);
-            }
-            else {
-                candidate
-                    = hatrack_pflag_set(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
-            }
-        } while (!LCAS(&cur->head, &head, candidate, LOHATa_CTR_F_MOVING));
-
-        if (head && hatrack_pflag_test(candidate, LOHAT_F_MOVED)) {
+	if (head && !head->deleted) {
+	    ORPTR(&cur->head, LOHAT_F_MOVING);
+	}
+	else {
+	    ORPTR(&cur->head, LOHAT_F_MOVING | LOHAT_F_MOVED);
+	    
+	    if (head) {
             // Then it was a delete record; retire it.
-            mmm_help_commit(head);
-            mmm_retire_fast(head);
-            continue;
-        }
+		mmm_help_commit(head);
+		mmm_retire_fast(head);
+		continue;
+	    }
+	}
 
-didnt_win:
+    skip_a_bit:
         head = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
 	
         if (head && !head->deleted) {
@@ -1057,13 +1054,11 @@ didnt_win:
         expected_ptr = NULL;
         LCAS(&ptr_bucket->ptr, &expected_ptr, target, LOHATa_CTR_NEW_PTR);
 
-        // Okay, this bucket is properly set up in the destination
-        // table.  We need to make sure the old bucket is updated
-        // properly, by trying to add LOHAT_F_MOVED.
-        LCAS(&cur->head,
-             &head,
-             hatrack_pflag_set(head, LOHAT_F_MOVED),
-             LOHATa_CTR_F_MOVED3);
+        /* Okay, this bucket is properly set up in the destination
+	 * table.  We need to make sure the old bucket is updated
+	 * properly, by adding LOHAT_F_MOVED.
+	 */
+	ORPTR(&cur->head, LOHAT_F_MOVED);
 	
         target++;
         cur++;

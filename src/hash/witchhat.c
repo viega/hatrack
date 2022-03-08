@@ -445,7 +445,7 @@ witchhat_store_put(witchhat_store_t *self,
 	
 	old_item       = NULL;
 	new_item       = true;
-	candidate.info = top->next_epoch++;
+	candidate.info = WITCHHAT_F_INITED | top->next_epoch++;
     }
 
     candidate.item = item;
@@ -542,7 +542,7 @@ witchhat_store_replace(witchhat_store_t *self,
 	return witchhat_store_replace(self, top, hv1, item, found, count);
     }
 
-    if (!record.info) {
+    if (!(record.info & WITCHHAT_EPOCH_MASK)) {
 	goto not_found;
     }
 
@@ -662,12 +662,12 @@ found_bucket:
 	goto migrate_and_retry;
     }
     
-    if (record.info) {
+    if ((record.info & WITCHHAT_EPOCH_MASK)) {
         return false;
     }
 
     candidate.item = item;
-    candidate.info = top->next_epoch++;
+    candidate.info = WITCHHAT_F_INITED | top->next_epoch++;
 
     if (LCAS(&bucket->record, &record, candidate, WITCHHAT_CTR_REC_INSTALL)) {
 	atomic_fetch_add(&top->item_count, 1);
@@ -741,7 +741,7 @@ found_bucket:
 	return witchhat_store_remove(self, top, hv1, found, count);
     }
     
-    if (!record.info) {
+    if (!(record.info & WITCHHAT_EPOCH_MASK)) {
         if (found) {
             *found = false;
         }
@@ -751,7 +751,7 @@ found_bucket:
 
     old_item       = record.item;
     candidate.item = NULL;
-    candidate.info = 0;
+    candidate.info = WITCHHAT_F_INITED;
 
     if (LCAS(&bucket->record, &record, candidate, WITCHHAT_CTR_DEL)) {
         atomic_fetch_sub(&top->item_count, 1);
@@ -815,45 +815,21 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
         record                = atomic_read(&bucket->record);
         candidate_record.item = record.item;
 
-	/* This loop is the final place where hihat is only
-	 * lock-free-- it's possible that we could spin forever
-	 * waiting to lock a bucket, telling other writers to migrate.
-	 * For instance, we might be the only thread adding new
-	 * content, and other threads might all be trying to update
-	 * the same bucket with new values as fast as they can. It's
-	 * possible (though not likely in practice, due to fair
-	 * scheduling), that we'd effectively get starved, spinning
-	 * here forever.
-	 *
-	 * Witchhat addresses this problem by having writers who
-	 * MODIFY the contents of a bucket help migrate, but only
-	 * after their modification operation succeeds. This prevents
-	 * any one thread from unbounded starving others in this loop
-	 * due to modifications-- the upper bound is the number of
-	 * threads performing updates.
-	 *
-	 * Note that it's only necessary to do that check on updates
-	 * of existing values (including removes), not on inserts.
-	 */
-        do {
-            if (record.info & WITCHHAT_F_MOVING) {
-                break;
-            }
-	    
-	    if (record.info) {
-		candidate_record.info = record.info | WITCHHAT_F_MOVING;
-	    }
-	    else {
-		candidate_record.info = WITCHHAT_F_MOVING | WITCHHAT_F_MOVED;
-	    }
-        } while (!LCAS(&bucket->record,
-                       &record,
-                       candidate_record,
-                       WITCHHAT_CTR_F_MOVING));
-
         if (record.info & WITCHHAT_EPOCH_MASK) {
             new_used++;
         }
+	
+	if (record.info & WITCHHAT_F_MOVING) {
+	    continue;
+	}
+	    
+	if (record.info & WITCHHAT_EPOCH_MASK) {
+	    OR2X64L(&bucket->record, WITCHHAT_F_MOVING);
+	}
+	else {
+	    OR2X64L(&bucket->record, WITCHHAT_F_MOVING |
+		    WITCHHAT_F_MOVED);
+	}
     }
 
     new_store = atomic_read(&self->store_next);
@@ -941,8 +917,7 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
 	     candidate_record,
 	     WITCHHAT_CTR_MIG_REC);
 
-        candidate_record.info = record.info | WITCHHAT_F_MOVED;
-        LCAS(&bucket->record, &record, candidate_record, WITCHHAT_CTR_F_MOVED2);
+	OR2X64L(&bucket->record, WITCHHAT_F_MOVED);
     }
 
     expected_used = 0;

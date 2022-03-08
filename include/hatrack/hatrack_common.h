@@ -380,6 +380,45 @@ hatrack_not_found_w_mmm(bool *found)
 }
 
 
+typedef struct
+{
+    uint64_t h;
+    uint64_t l;
+} generic_2x64_t;
+
+typedef union {
+    generic_2x64_t      st;
+    _Atomic __uint128_t atomic_num;
+    __uint128_t         num;
+} generic_2x64_u;
+
+static inline generic_2x64_t
+hatrack_or2x64(generic_2x64_u *s1, generic_2x64_u s2)
+{
+    return ((generic_2x64_u)atomic_fetch_or(&s1->atomic_num, s2.num)).st;
+}
+
+static inline generic_2x64_t
+hatrack_or2x64l(generic_2x64_u *s1, uint64_t l)
+{
+    generic_2x64_u n = { .st = {.h = 0, .l = l } };
+
+    return ((generic_2x64_u)atomic_fetch_or(&s1->atomic_num, n.num)).st;
+}
+
+static inline generic_2x64_t
+hatrack_or2x64h(generic_2x64_u *s1, uint64_t h)
+{
+    generic_2x64_u n = { .st = { .h = h, .l = 0 } };
+
+    return ((generic_2x64_u)atomic_fetch_or(&s1->atomic_num, n.num)).st;
+}
+
+#define OR2X64(s1, s2) hatrack_or2x64((generic_2x64_u *)(s1), s2)
+#define OR2X64L(s1, s2) hatrack_or2x64l((generic_2x64_u *)(s1), s2)
+#define OR2X64H(s1, s2) hatrack_or2x64h((generic_2x64_u *)(s1), s2)
+#define ORPTR(s1, s2) atomic_fetch_or((_Atomic uint64_t *)(s1), s2)
+
 #define hatrack_cell_alloc(container_type, cell_type, n)                       \
     (container_type *)calloc(1, sizeof(container_type) + sizeof(cell_type) * n)
 
