@@ -10,5 +10,5 @@ This API documentation is limited to algorithms that are both compiled into hatr
 Coming soon.
 
 ## Algorithm Documentation
-[The core store migration operation](migration.md)
-[Wait-free O(1) dictionaries](dicts.md)
+- [The core store migration operation](migration.md)
+- [Wait-free O(1) dictionaries](dicts.md)
