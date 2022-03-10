@@ -55,7 +55,7 @@ typedef struct {
 
 enum64(crown_flag_t,
        CROWN_F_MOVING   = 0x8000000000000000,
-       CROWN_F_MOVED    = 040000000000000000,
+       CROWN_F_MOVED    = 0x4000000000000000,
        CROWN_F_INITED   = 0x2000000000000000,            
        CROWN_EPOCH_MASK = 0x1fffffffffffffff);
 

@@ -112,7 +112,7 @@ To that end, our algorithm require that all writes during a migration operation 
 
 We can meet this requirement by having a single bit in our state field that indicates whether the cell has ever been written to in its lifetime.
 
-However, our algorithms generally write some articficial, monotonically increasing timestamp (which we generally refer to as an epoch; when an item is present in the array, we also use this epoch if we wish to recover the approximate insertion order), and then use a bit to signify whether the item has been deleted.
+We can also write an articficial, monotonically increasing timestamp (which we generally refer to as an epoch; when an item is present in the array, we also use this epoch if we wish to recover the approximate insertion order), and then use a bit to signify whether the item has been deleted.  We use both of these approaches, depending on the algorithm.
 
 ### Correctness for hash table stores
 
@@ -128,7 +128,7 @@ As a result of those considerations, the copying operation for our hash table im
 
 2. For each cell in the source array, load the hash value associated with that cell, and the current value/state in that cell.  Note that, in most of our implementations, the hash value is a 128-bit value, and the value/state fields are combined into another 128-bit value.  The semantics of the value and state field differs depending on the algorithm, but the migration approach is the same.
 
-3. If there is no hash value associated with the cell, or if the state of the cell is flagged as DELETED, then the cell does not need migration.  Note that no hash value may repeat in S1, so if a hash value is skipped for not being present, it will not appear anywhere in the initial state of S2.
+3. If there is no hash value associated with the cell, or if the state of the cell is flagged as deleted, then the cell does not need migration.  Note that no hash value may repeat in S1, so if a hash value is skipped for not being present, it will not appear anywhere in the initial state of S2.
 
 4. Otherwise, we use our hash function to determine the initial cell we'd like to hash into in S2, given the size of S2.  This may or may not be the same cell in S1. Note that, since all threads have the same information, all threads will compute the same result.
 
