@@ -150,7 +150,7 @@ However, since R0 was written before the time that R1 was read (due to sequentia
 
 To be clear, if we write out our reservation and read R1 very late in epoch 102, there may be a memory allocation with epoch 102 as a retirement epoch, but we are guaranteed that it will still be live.
 
-The epoch R1 is the epoch that we will use to linearize our view operation. We are essentially going to go through each bucket, load the head, and scan until we find the record that was current in the epoch to which we were linearizing ourself.
+The epoch R1 is the epoch that we will use to linearize our view operation[^1]. We are essentially going to go through each bucket, load the head, and scan until we find the record that was current in the epoch to which we were linearizing ourself.
 
 Our read of epoch R1 is the linearization point for the view operation. We will return every cell that was both in the table at epoch R1, and has a committment epoch of R1 or lower.
 
@@ -204,6 +204,12 @@ That covers every case, and therefore the algorithm will never descend into cell
 
 Once the view operation has visited every cell, and copied out all information it needs to return in the view, then it calls `end_op()`, yielding its reservation.
 
+This algorithm clearly maps mutations to a specific linearization point that we can use for views, in the face of all our core operations. It's worth considering how well the algorithm linearizes if there is also a migration in progress at an point in parallel with the view operation.
+
+The view operation acquires the store pointer either during the epoch R1, or after.  If we acquire the OLD store, then there is no issue; we will see history from the lifetime of the store we've acquired, through at least R1.
+
+If we acquire the new store, then our linearization point will actually map not to the epoch R1, but to the end of the migration process-- we will yield the contents of the store directly after the completion of the view operation.
+
 ## The **view2** operation
 
 The **view2** operation is straightforward.  First, it reserves an epoch, then reads the current value of the epoch to use for linearization (R1). Since the reservation array is global, both tables will preserve all records needed to linearize to epoch R1.
@@ -211,3 +217,33 @@ The **view2** operation is straightforward.  First, it reserves an epoch, then r
 The algorithm then copies out a view for each table, per the **view** algorithm above.
 
 Then, the reservation can be yielded, and operations (including set operations), can be done based on the linearized views.
+
+## Other modifications
+
+This section describes slight modifications we can make to the algorithm, depending on our goals.
+
+### History modifications
+
+This algorithm essentially allows us to keep a history of all hash table modifications,from the present back through the a particular period of time, defined by the time at which the oldest epoch reservation took effect (that is, not the epoch of the reservation, but the epoch where the reservation's write into the array took effect).
+
+We can use this approach to allow for iterators that are aware of changes to a table since the last item was yielded, depending on whatever semantics we like. For instance, we could imagine yielding items from the 'moment-in-time' view, then produce up-to-date deltas when the array depletes, or always yielding an item 'currently' in the array at a given epoch, but never one that has already been yielded.
+
+Obviously, this has implications to any system using the memory manager, but we can have our reservations array be global only to sets where we might want this kind of view, not all our data structures.
+
+We can also naturally support time-based replay history by extending our memory management system to not only wait until a particular epoch has passed since retirement, but to wait a particular amount of wall-clock time, then allow views and get operations to take a timestamp parameter.
+
+For these schemes to be robust, they do require us to also copy deletion records during a migration, whenever the cells below the deletion record might be needed for such an operation.
+
+### Faster sorting
+
+We can keep a two-tier bucket structure, where bucket acquisition consists of first writing data in an array where cell indexes are given out first come, first served, via fetch-and-add, and then the hashed bucket location stores only a pointer to the associated cell index.  We write the hash key into the appropriate cell in both arrays.
+
+This allows us to keep the cells in an order that will be much closer to the actual sort order than random. In fact, if there are no deletions, and no contention during writes, then the two would be identical.
+
+This would allow us to use an insertion sort, whose complexity approaches O(n) the closer the array gets to sorted.
+
+We implemented this in a version of this algorithm without the wait-free additions (called lohat-a in the repository).  The sort times are definitely better for small tables, and possibly for incredibly large tables, but the low-level optimzations around the system-supplied sort implementation makes it clearly faster for most table sizes once you get above about 2000 items (on my laptop anyway).  It argues that the constant multiple is much lower on the built-in O(n log n) average case sort than the sort that should approach O(n).  This was even true in lohat-b (since removed from the repo) where we had re-insertions acquire new buckets in the 'nearly ordered' array.
+
+--
+
+[^1]: Actually, as described below, we also need to acquire a pointer to the current store, so if a migration is happening in parallel, our linearization point may not map to the epoch R1. Specifically, if we acquire the migrated store, our linearization point will be the point that the migration linearizes to.
