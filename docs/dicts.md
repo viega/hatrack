@@ -94,13 +94,13 @@ Hatrack addresses this problem by allowing users to register two callbacks on a 
 
 The way these callbacks are implemented removes the race condition.  Here's how it works:
 
-1) When an ejection handler is registered, the dictionary wraps every store S by creating a new data object (S'), using our epoch-based memory management system.  The hash table actually stores S'.
+1. When an ejection handler is registered, the dictionary wraps every store S by creating a new data object (S'), using our epoch-based memory management system.  The hash table actually stores S'.
 
-2) When an object is being overwritten or otherwise deleted (for instance, when the hash table itself is deleted, and we are cleaning up items remaining in the table), we call our 'retire' function on the memory management wrapper.  Importantly, we do NOT notify the calling thread that the object is ready to be considered ejected from the hash table.
+2. When an object is being overwritten or otherwise deleted (for instance, when the hash table itself is deleted, and we are cleaning up items remaining in the table), we call our 'retire' function on the memory management wrapper.  Importantly, we do NOT notify the calling thread that the object is ready to be considered ejected from the hash table.
 
-3) At some point when our epoch-based memory management system determines that no other thread could possibly be accessing S', it will go to free S', at which point, it will also call the 'ejection' callback, passing in S as a parameter.  The intention is that users should be able to safely decrease their reference count or free at this point (or do any other appropriate memory management).
+3. At some point when our epoch-based memory management system determines that no other thread could possibly be accessing S', it will go to free S', at which point, it will also call the 'ejection' callback, passing in S as a parameter.  The intention is that users should be able to safely decrease their reference count or free at this point (or do any other appropriate memory management).
 
-4) When a value is about to be returned from the table to the user (e.g., via a get() operation, or a view() operation), we call the 'return' callback, passing in S.  We do this before we call end_op() in our epoch-based memory manager, which we do before returning S from the get() function.
+4. When a value is about to be returned from the table to the user (e.g., via a get() operation, or a view() operation), we call the 'return' callback, passing in S.  We do this before we call end_op() in our epoch-based memory manager, which we do before returning S from the get() function.
 
 This scheme ensures that any get() operation has a safe oportunity to take appropriate action on data obejcts, such as by increasing a reference count, before the data structure will ever notify a competing thread about the object being ejected.
 
