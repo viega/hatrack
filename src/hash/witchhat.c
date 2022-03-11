@@ -814,21 +814,24 @@ witchhat_store_migrate(witchhat_store_t *self, witchhat_t *top)
         bucket                = &self->buckets[i];
         record                = atomic_read(&bucket->record);
         candidate_record.item = record.item;
-
-        if (record.info & WITCHHAT_EPOCH_MASK) {
-            new_used++;
-        }
 	
 	if (record.info & WITCHHAT_F_MOVING) {
+	    if (record.info & WITCHHAT_EPOCH_MASK) {
+		new_used++;
+	    }
+	    
 	    continue;
 	}
-	    
+
+	OR2X64L(&bucket->record, WITCHHAT_F_MOVING);
+	
+	record = atomic_read(&bucket->record);
+	
 	if (record.info & WITCHHAT_EPOCH_MASK) {
-	    OR2X64L(&bucket->record, WITCHHAT_F_MOVING);
+	    new_used++;
 	}
 	else {
-	    OR2X64L(&bucket->record, WITCHHAT_F_MOVING |
-		    WITCHHAT_F_MOVED);
+	    OR2X64L(&bucket->record, WITCHHAT_F_MOVED);
 	}
     }
 

@@ -1258,19 +1258,22 @@ crown_store_migrate(crown_store_t *self, crown_t *top)
         record                = atomic_read(&bucket->record);
         candidate_record.item = record.item;
 
-        if (record.info & CROWN_EPOCH_MASK) {
-            new_used++;
-        }
-	
 	if (record.info & CROWN_F_MOVING) {
+	    
+	    if (record.info & CROWN_EPOCH_MASK) {
+		new_used++;
+	    }
 	    continue;
 	}
 	    
+	OR2X64L(&bucket->record, CROWN_F_MOVING);
+
+	record = atomic_read(&bucket->record);
+
 	if (record.info & CROWN_EPOCH_MASK) {
-	    OR2X64L(&bucket->record, CROWN_F_MOVING);
-	}
-	else {
-	    OR2X64L(&bucket->record, CROWN_F_MOVING | CROWN_F_MOVED); 
+	    new_used++;
+	} else {
+	    OR2X64L(&bucket->record, CROWN_F_MOVED); 
 	}
     }
 

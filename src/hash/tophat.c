@@ -1284,6 +1284,7 @@ tophat_migrate_to_woolhat(tophat_t *self)
     hatrack_hash_t      hv;
     tophat_st_record_t  cur_record;
     woolhat_record_t   *new_record;
+    woolhat_state_t     new_state;
     uint64_t            n, i, bix, record_len;
 
     ctx                      = self->st_table;
@@ -1317,12 +1318,14 @@ tophat_migrate_to_woolhat(tophat_t *self)
 	    if (hatrack_bucket_unreserved(hv)) {
 		new_record
 		    = (woolhat_record_t *)mmm_alloc_committed(record_len);
-		new_record->item   = cur_record.item;
-		new_record->next   = NULL;
+		new_record->item = cur_record.item;
+		new_record->next = NULL;
+		new_state.head   = new_record;
+		new_state.flags  = 0;
 		
 		mmm_set_create_epoch(new_record, cur_record.epoch);
 		atomic_store(&new_bucket->hv, cur_bucket->hv);
-		atomic_store(&new_bucket->head, new_record);
+		atomic_store(&new_bucket->state, new_state);
 		
 		break;
 	    }

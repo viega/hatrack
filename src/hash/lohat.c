@@ -512,10 +512,7 @@ lohat_store_get(lohat_store_t *self, hatrack_hash_t hv1, bool *found)
         goto found_history_bucket;
     }
 not_found:
-    if (found) {
-        *found = false;
-    }
-    return NULL;
+    return hatrack_not_found(found);
 
 found_history_bucket:
     /* The reader doesn't care if we're migrating; it needs
@@ -530,11 +527,10 @@ found_history_bucket:
      * which stores that information.
      */
     if (head && !head->deleted) {
-        if (found) {
-            *found = true;
-        }
 
-        return head->item;
+	mmm_help_commit(head);
+	
+        return hatrack_found(found, head->item);
     }
     goto not_found;
 }
@@ -941,30 +937,22 @@ migrate_and_retry:
         goto empty_bucket;
     }
 
-    /* At this moment, there's an item there to delete. Create a
-     * deletion record, and try to add it on. If we "fail", we look at
-     * the record that won. If it is itself a deletion, then that
-     * record did the delete, and we act like we came in after it.  If
-     * it's an overwrite, then the overwrite was responsible for
-     * returning the old item for memory management purposes, so we
-     * return NULL and set *found to false (if requested), to indicate
-     * that there's no memory management work to do.
-     */
     candidate          = mmm_alloc(sizeof(lohat_record_t));
     candidate->next    = head;
     candidate->item    = NULL;
     candidate->deleted = true;
 
-    if (!LCAS(&bucket->head, &head, candidate, LOHAT_CTR_DEL)) {
-        mmm_retire_unused(candidate);
+    while (!LCAS(&bucket->head, &head, candidate, LOHAT_CTR_DEL)) {
 
         // Moving flag got set before our CAS.
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+	    mmm_retire_unused(candidate);
             goto migrate_and_retry;
         }
 
         if (head->deleted) {
             // We got beat to the delete;
+	    mmm_retire_unused(candidate);
             goto empty_bucket;
         }
 
@@ -1022,6 +1010,7 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
     }
 
     new_used = 0;
+
     /* Quickly run through every history bucket, and mark any bucket
      * that doesn't already have F_MOVING set.  Note that the CAS
      * could fail due to some other updater, so we keep CASing until
@@ -1038,32 +1027,35 @@ lohat_store_migrate(lohat_store_t *self, lohat_t *top)
         cur  = &self->hist_buckets[i];
         head = atomic_read(&cur->head);
 
-	if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-	    goto skip_some;
-	}
-	/* If the head pointer is a deletion record, we can also set
-	 * LOHAT_F_MOVED, since there's no actual work to do to
-	 * migrate. However, there we need to know if we won the CAS,
-	 * because if we do, we're responsible for the memory
-	 * management. That's why the exit from this loop above is is
-	 * a GOTO... we need to be able to do the memory management
-	 * and just move on to the nex item if we've got a successful
-	 * CAS on a delete record.
-	 */
-	if (head && !head->deleted) {
-	    ORPTR(&cur->head, LOHAT_F_MOVING);
-	}
-	else {
-	    ORPTR(&cur->head, LOHAT_F_MOVING | LOHAT_F_MOVED);
-	}
-	
-        if (head && hatrack_pflag_test(head, LOHAT_F_MOVED)) {
+        do {
+            if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+                goto didnt_win;
+            }
+            /* If the head pointer is a deletion record, we can also
+             * set LOHAT_F_MOVED, since there's no actual work to do
+             * to migrate. However, there we need to know if we won
+             * the CAS, because if we do, we're responsible for the
+             * memory management. That's why the exit from this loop
+             * above is is a GOTO... we need to be able to do the
+             * memory management and just move on to the nex item if
+             * we've got a successful CAS on a delete record.
+             */
+            if (head && !head->deleted) {
+                candidate = hatrack_pflag_set(head, LOHAT_F_MOVING);
+            }
+            else {
+                candidate
+                    = hatrack_pflag_set(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
+            }
+        } while (!LCAS(&cur->head, &head, candidate, LOHAT_CTR_F_MOVING));
+
+        if (head && hatrack_pflag_test(candidate, LOHAT_F_MOVED)) {
             mmm_help_commit(head);
             mmm_retire_fast(head);
             continue;
         }
-	
-    skip_some:
+
+didnt_win:
         head = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
         if (head && !head->deleted) {
             new_used++;

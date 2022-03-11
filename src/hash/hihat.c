@@ -1154,23 +1154,22 @@ hihat_store_migrate(hihat_store_t *self, hihat_t *top)
 	 * suspended before bumping the count, leading us to under-count
 	 * the items in the next table.
 	 */
-        if (record.info & HIHAT_EPOCH_MASK) {
-            new_used++;
-        }
 	
 	if (record.info & HIHAT_F_MOVING) {
+	    if (record.info & HIHAT_EPOCH_MASK) {
+		new_used++;
+	    }
 	    continue;
 	}
-	/* Note that, if the below test is zero, the bucket is either
-	 * deleted, or not written to yet. We can declare the
-	 * migration of this bucket successful now, instead of doing a
-	 * second value check later on, saving everyone a small bit of
-	 * work.
-	 */
+
+	OR2X64L(&bucket->record, HIHAT_F_MOVING);
+
+	record = atomic_read(&bucket->record);
+
 	if (record.info & HIHAT_EPOCH_MASK) {
-	    OR2X64L(&bucket->record, HIHAT_F_MOVING);
+	    new_used++;
 	} else {
-	    OR2X64L(&bucket->record, HIHAT_F_MOVING | HIHAT_F_MOVED);
+	    OR2X64L(&bucket->record, HIHAT_F_MOVED);
 	}
     }
 

@@ -34,16 +34,23 @@ struct woolhat_record_st {
     bool              deleted;
 };
 
-enum64(woolhat_flag_t,
-       WOOLHAT_F_MOVING = 0x0000000000000001,
-       WOOLHAT_F_MOVED  = 0x0000000000000002);
+enum {
+    WOOLHAT_F_MOVING      = 0x0000000000000001,
+    WOOLHAT_F_MOVED       = 0x0000000000000002,
+    WOOLHAT_F_DELETE_HELP = 0x0000000000000004
+};
 
 // clang-format off
 
 typedef struct {
+    woolhat_record_t  *head;
+    uint64_t           flags;
+} woolhat_state_t;
+    
+typedef struct {
     alignas(16)
-    _Atomic hatrack_hash_t      hv;
-    _Atomic(woolhat_record_t *) head;
+    _Atomic hatrack_hash_t  hv;
+    _Atomic woolhat_state_t state;
 } woolhat_history_t;
 
 typedef struct woolhat_store_st woolhat_store_t;

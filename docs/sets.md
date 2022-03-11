@@ -18,24 +18,27 @@ As another challenge, applications may want the items in their sets to reflect t
 
 The Hatrack set addresses these problems both with some changes to our dictionary, and with some changes to our memory management system.
 
-First, all records that may live in a bucket are stored in dynamically allocated memory. Records still contain 64-bit value for the item, and a 'nonce', though in this scheme the nonce will end up reflecting the linearized mutation ordering.  In this scheme, we call it the `committment epoch`, not a nonce. The flags involved in a migration are not part of the record in this scheme.  In addition, we add the following fields:
+First, all records that may live in a bucket are stored in dynamically allocated memory. Records still contain 64-bit value for the item, and a 'nonce', though in this scheme the nonce will end up reflecting the linearized mutation ordering.  In this scheme, we call it the `committment epoch`, not a nonce. In this scheme, the flags involved in a migration are not part of the record.  In addition, we add the following fields:
 
 - A `next` pointer, showing the previous record that occupied a bucket, if any.
-- A `deleted` field, which we will use to distinguish between deletions and uninitialized buckets.
+- A `deleted` field.
 - A `creation epoch`, that reflects the epoch in which a key was last added into the dictionary.  The intent is to capture Python semantics for dictionary and set sort ordering.  Specifically, if you insert a key X into a dictionary, then overwrite the value associated with X, the insertion ordering should not change.  However, if you insert X, delete it, then re-insert it, the creation epoch should get reset on the second insertion.
 
 In the scheme for our sets, the *committment epoch* and *creation epoch* are part of our miniature memory manager (MMM), and so these fields actually live in a hidden accounting field, along with the *retirement epoch*.
 
 Essentially, we keep a history of each bucket's contents in a linked list of records, but we only keep as much history as we might need to recover a consistent view in a particular epoch, as we will describe below.
 
-We still need a state bit for migration (and ideally two, to help optimize the migration).  Instead of living in the record, these live in the bucket, which consists of the following fields:
+We still need a state bit for migration (and ideally two, to help optimize the migration).  We also will use a state bit to make sure that item removal operations are wait-free.[^1]
+
+Instead of living in the record, these live in the bucket, which consists of the following fields:
 
 - The 128-bit hash value `hv`, per our other dictionary.
 - The 64-bit `head` value, which is a pointer to our topmost record for the bucket.
 - A single bit `MOVING` to indicate that a migration is in progress.
 - An optional bit `MOVED`, to indicate to migrators, that work on this bucket is completed, and doesn't need to be tried.
+- A bit `HELP_REMOVE`, that we will use to make sure we can both preserve insertion ordering semantics and making deletions wait-free.
 
-Note that we will apply atomic operations to the hash value, and to the remainder of the bucket. The two state bits can be stored in a 64-bit value while using a 128-bit compare-and-swap, or we can safely 'steal' the lowest two bits from our pointer to the top record.
+Note that we will apply atomic operations to the hash value, and to the remainder of the bucket. The two state bits can be stored in a 64-bit value while using a 128-bit compare-and-swap, or we can safely 'steal' the lowest three bits from our pointer to the top record.
 
 ## Changes to core operations
 
@@ -43,7 +46,7 @@ Our core operations stay as close to the semantics of our dictionary implementat
 
 For instance, our bucket acquisition operations are completely identical to those in our core dictionary class.
 
-The set migration algorithm is nearly identical. Even though our set's bucket contains a pointer to a record, instead of the actual value, the migration simply copies the pointer from the old store to the new store. The only difference is in how we process records we are NOT copying due to them being deleted from the table. There, the thread that successfully sets the 'MOVING' bit in the bucket is responsible for calling the `retire` operation on the deletion record (ensuring bucket contents only get freed once).
+The set migration algorithm is nearly identical. Even though our set's bucket contains a pointer to a record, instead of the actual value, the migration simply copies the pointer from the old store to the new store. The only difference is in how we process records we are NOT copying due to them being deleted from the table. There, the thread that successfully sets the `MOVING` bit in the bucket is responsible for calling the `retire` operation on the deletion record (ensuring bucket contents only get freed once).
 
 Remember that retirement will put the record on a list of cells to free later, but will keep the record available until there are no more threads that care about the epoch in which the record was retired.
 
@@ -69,21 +72,21 @@ The set's **get** function is nearly identical as well, except that, instead of 
 
 1. If it finds a record, and there is no committment epoch set in the record, it calls `commit_write(record)`.  This action is taken for any record, even if it is a deletion record.
 2. It returns ⊥ if there is no record, or if the record is marked as a deletion record; and
-3. After we atomically read the (non-hash value) contents of the bucket, we return bottom if the head pointer is NULL (no item has been inserted yet), or if the top record is a deletion record (i.e., has the deletion flag set).
+3. After we atomically read the (non-hash value) contents of the bucket, we return ⊥ if the head pointer is NULL (no item has been inserted yet), or if the top record is a deletion record (i.e., has the deletion flag set).
 4. Otherwise, we return the item field of the top record.
 
-The linearization point for the **get** operation is still the atomic read of the contents, which in this version is bucket's head pointer (and flags). For this to be the case, it's important to know that, once a record is committed, its contents are non-mutable until it's retirement, at which point the only change will be in adding a retirement epoch.
+The linearization point for the **get** operation is still the atomic read of the contents, which in this version is bucket's head pointer (and flags). For this to be the case, it's important to know that, once a record is fully committed, its item and deletion status are non-mutable.
 
 This algorithm is clearly still wait-free.
 
 ### The **put** operation 
-Bucket acquisition is again the same as with our dictionaries, but otherwise mutation operations are more complicated, in order to support view operations. Particularly, our linearization point is different.
+Bucket acquisition is again the same as with our dictionaries, but otherwise mutation operations are more complicated, in order to support view operations, and to support sorting view operations by insertion-time. Particularly, our linearization point is different, and we may need to 'help' a delete operation.
 
 Here are the semantics of the **put** operation, after a bucket is required:
 
 1. We atomically load the current state of both the flags and the head pointer.
 
-2. If record stored in the current head pointer does not yet have a committment epoch, we call `commit_write(record)`.
+2. If the record stored in the current head pointer is non-`NULL` and does not yet have a committment epoch, we call `commit_write(record)`.
 
 3. If a migration is in progress, we help with that, then retry in the newer store.
 
@@ -97,13 +100,15 @@ Here are the semantics of the **put** operation, after a bucket is required:
 
 8. If the compare-and-swap fails due to a migration being in progress, we `retire` the unused memory cell, complete our migration, then retry the operation from the beginning.
 
-9. If the compare-and-swap fails due to another thread succeeding, we take the same approach we did with our dictionary, in that we consider ourself to have been installed RIGHT before the thread that won.  Here, we must also `retire` the unused memory cell.
+9. If the compare-and-swap fails due to another thread succeeding, we take the same approach we did with our dictionary, in that we consider ourself to have been installed RIGHT before the thread that won, but replaced so fast that no other thread will ever get to read our value.  Here, we must also `retire` the unused memory cell[^1].
 
 10. If our compare-and-swap succeeded, we call `commit_write()` on our own record.
 
-11. We call the `set_creation_epoch()` helper on our own record.
+11. If, prior to the compare and swap, the `HELP_REMOVE` flag was set in the state, then we set our creation epoch based on the time of our write committment.
 
-12. Finally, we call the `retire()` operation on that previous record.
+12. Otherwise, we call the `set_creation_epoch()` helper on our own record, which will ensure the record below has its creation epoch set, if necessary.
+
+13. Finally, we call the `retire()` operation on that previous record, if there was a previous record.
 
 In this scheme, the compare-and-swap operation where we install our record is **not** our linearization point. The linearization point is when some thread successfully installs a write committment into the record.
 
@@ -111,7 +116,7 @@ This requires every thread that might want to look at this record to make sure t
 
 The fact that no item can be added to the linked list before the item below it has committed to an epoch, along with the fact that `commit_write()` always starts a new epoch, ensures that items on the list will be sorted from highest epoch, to lowest epoch.
 
-The additional complexity in this algorithm relative to the algorithm for our dictionary is due to our desire to support a linearized view across sets, along with a sort order that maps to that linearization. However, our analysis is not vastly different.
+The additional complexity in this algorithm relative to the algorithm for our dictionary is largely due to our desire to support a linearized view across sets, along with a sort order that maps to that linearization. However, our analysis is not vastly different.
 
 Specifically:
 - There are no additional loops in the algorithm.
@@ -123,15 +128,64 @@ As a result, we can consider the algorithm both wait-free (as long as we use the
 
 One thing that's important to note is that our 'committment epoch' is not ever the same as the epoch in which the cell was allocated, nor is the it ever same as when the CAS completes.
 
-### Other mutation operations
+### The **add** operation
 
-The changes we make to **add** and **replace** should be fairly straightforward, given the semantics of the **put** operation.  The only things worth noting is that the *add* operation does not ever help with committment; if it determines there is a record in the bucket that isn't a deletion record, it returns ⊥.
+The changes we make to **add** should be fairly straightforward, given the semantics of the **put** operation.
 
-The **replace** and **delete** operations return ⊥ if, when they read the bucket contents, the head pointer is null, or if the top record is a deletion record.
+There are some things worth noting:
 
-The **replace** and **delete** operations do help with epoch committments if needed.  The **delete** operation does not mutate any data in the record it replaces, it simply creates an otherwise empty record marked as a deletion, and commits to that.  Essentially, we treat **delete** as a replace operation, that writes out a record consisting of ⊥.
+1. If add sees a non-deletion record, but the `HELP_REMOVE` bit was set, then the add function proceeds as if it is a **put** overwriting a **remove** function.
 
-Note that the deletion record must also 'help' set the `creation` epoch for any cell that it replaces, to prevent use-after-free bugs (described below).
+2. The *add* operation will still help with write committments when there is a record below it that it is overwriting, but not if it determines the previous state of the bucket that it would be replacing isn't empty. In this case, the operation returns ⊥ and no committment help is given.
+
+3. If the *add* loses its compare-and-swap operation, any attempt to offer help failed (but will have been serviced by some other thread). In that case, the *add* is considered to have linearized behind whatever operation DID succeed, and we are responsible for retiring our own cell.
+
+Specifically, the CAS that linearizes our **add** operation either succeeds, or fails for one of the following reasons:
+
+- A migration, in which case the operation gets retired.
+- We were attempting to overwrite a deletion record, but some other thread managed to overwrite it for us.  We linearize to the CAS that managed to re-insert over the deletion; an add would not be appropriate.
+- The `HELP_REMOVE` bit was set, and we were attempting to 'help' by adding ourselves, but some thread managed to 'help' and installed a deletion record. In this case, we again linearize ourself to immediately after the deletion. Note that we may not see a deletion record ourselves. If we're slow enough, we may have missed other operations on this bucket.
+- The `HELP_REMOVE` bit was set, and another thread succeeded in 'helping' by writing out a new insertion.  In this case, we linearize ourselves BEFORE the concpeptual deletion, when an add would not have been appropriate.
+
+That is, the state was S at epoch N, we competed, and some other thread CAS'd in their own value S' at epoch N+M, which is conceptually ordered after a phandom deletion occuring immediately before it.  We linearize ourselves at that CAS that successfully installed a record... AFTER the deletion, and BEFORE the re-insertion.
+
+All that to say, if the CAS fails here, either we are migrating, or we consider our CAS a failure by linearizing ourselves to whichever side of the CAS had an item in the bucket.
+
+### The **replace** operation
+
+This operation will return ⊥ if, when they read the bucket contents, the head pointer is null, or if the top record is a deletion record.
+
+However, if the read bucket state otherwise has the `HELP_REMOVE` bit set, **replace** will INSTEAD try to write a deletion record.  If that succeeds, then we consider the **replace** operation as having come in *after* the deletion, in which case we return ⊥.  If it fails, then we look at what beat us to the CAS. If we see a migration, then we help with the migration and retry.
+
+Otherwise, we know the deletion happened somehow, in which case we linearize ourselves to CAS where there was a successful deletion.
+
+Note that, whenever we successfully load a record we might want to replace, we will attempt to help with its write committment.
+
+## The **remove** operation.
+
+The **remove** and operation returns ⊥ if, when it reads the bucket contents, the head pointer is null, or if the top record is already deletion record.
+
+If we see another thread is asking for help with deletion, then we will help, knowing that we plan to linearize ourselves to the CAS that successfully helps with this deletion, but AFTER the deletion occurs.  That is, if the help bit is ever set before we attempt our own operation, we will return ⊥ (unless we notice a migration and retry before we can confirm that the deletion occured).
+
+If we are not helping another thread, then we try to write a deletion record some finite number of times before asking for help. If we ever fail due to a deletion record being installed by some other thread, then we return failure.
+
+Once we decide that we need help, then we set the bucket's `HELP_REMOVE` bit via an atomic OR operation.  The cell we're modifying might have changed since we last looked at it, so we need to check the return value of the atomic OR operation, which shows us the value of the state immediately preceeding our change.
+
+If we OR'd ourselves into state that already had the `MOVING` flag set, then we consider our request for help to be unsuccessful.  We help with the migration, then retry the operation.
+
+If we OR'd ourselves into state that already hat the `HELP_REMOVE` flag set, then we help the other thread, but linearize ourselves to the point where the other thread's remove succeeds, meaning we will return ⊥, because we will linearize ourselves to a point in time where the cell is empty.
+
+If we OR'd ourselves into a deletion record, then we don't need to help anything, and we can return ⊥. No thread provides help if the `HELP_REMOVE` bit is set, but the associated record is a deletion record.
+
+Then, we attempt one more CAS operation. If it succeeds, we managed to help ourselves!
+
+Otherwise, there are two cases:
+
+1. The top record is in the state we excepted during our CAS, except that the migration bit is set.  In this case, our help request is not being serviced; we help with the migration and retry.
+
+2. Any other case, even if we see a different record with a migration bit set, indicates our deletion was 'helped' and that our deletion was successful!
+
+Note that, as with all our mutation operations, the **remove** operation must also 'help' set the `creation` epoch for any cell that it replaces, to prevent use-after-free bugs (described below).
 
 ## The new *view* operation
 As with all our operations, the *view* operation starts by registering a epoch reservation R0 with the memory management system.
@@ -150,7 +204,7 @@ However, since R0 was written before the time that R1 was read (due to sequentia
 
 To be clear, if we write out our reservation and read R1 very late in epoch 102, there may be a memory allocation with epoch 102 as a retirement epoch, but we are guaranteed that it will still be live.
 
-The epoch R1 is the epoch that we will use to linearize our view operation[^1]. We are essentially going to go through each bucket, load the head, and scan until we find the record that was current in the epoch to which we were linearizing ourself.
+The epoch R1 is the epoch that we will use to linearize our view operation[^2]. We are essentially going to go through each bucket, load the head, and scan until we find the record that was current in the epoch to which we were linearizing ourself.
 
 Our read of epoch R1 is the linearization point for the view operation. We will return every cell that was both in the table at epoch R1, and has a committment epoch of R1 or lower.
 
@@ -246,4 +300,9 @@ We implemented this in a version of this algorithm without the wait-free additio
 
 --
 
-[^1]: Actually, as described below, we also need to acquire a pointer to the current store, so if a migration is happening in parallel, our linearization point may not map to the epoch R1. Specifically, if we acquire the migrated store, our linearization point will be the point that the migration linearizes to.
+[^1]: Other mutation operations that get beat to a CAS can linearize themselves to a straightforward place without much issue.  Deletes cannot if we want to be able get insertion ordering right.  If we don't are about insertion ordering, there is no challenge making deletes wait-free.
+
+[^2]: And make sure it eventually triggers our cleanup handler when it is safe, if appropriate.
+
+[^3]: Actually, as described below, we also need to acquire a pointer to the current store, so if a migration is happening in parallel, our linearization point may not map to the epoch R1. Specifically, if we acquire the migrated store, our linearization point will be the point that the migration linearizes to.
+

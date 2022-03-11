@@ -392,26 +392,26 @@ typedef union {
     __uint128_t         num;
 } generic_2x64_u;
 
-static inline generic_2x64_t
+static inline generic_2x64_u
 hatrack_or2x64(generic_2x64_u *s1, generic_2x64_u s2)
 {
-    return ((generic_2x64_u)atomic_fetch_or(&s1->atomic_num, s2.num)).st;
+    return (generic_2x64_u)atomic_fetch_or(&s1->atomic_num, s2.num);
 }
 
-static inline generic_2x64_t
+static inline generic_2x64_u
 hatrack_or2x64l(generic_2x64_u *s1, uint64_t l)
 {
     generic_2x64_u n = { .st = {.h = 0, .l = l } };
 
-    return ((generic_2x64_u)atomic_fetch_or(&s1->atomic_num, n.num)).st;
+    return (generic_2x64_u)atomic_fetch_or(&s1->atomic_num, n.num);
 }
 
-static inline generic_2x64_t
+static inline generic_2x64_u
 hatrack_or2x64h(generic_2x64_u *s1, uint64_t h)
 {
     generic_2x64_u n = { .st = { .h = h, .l = 0 } };
 
-    return ((generic_2x64_u)atomic_fetch_or(&s1->atomic_num, n.num)).st;
+    return (generic_2x64_u)atomic_fetch_or(&s1->atomic_num, n.num);
 }
 
 #define OR2X64(s1, s2) hatrack_or2x64((generic_2x64_u *)(s1), s2)

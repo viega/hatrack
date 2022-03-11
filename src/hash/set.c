@@ -74,7 +74,7 @@ hatrack_set_cleanup(hatrack_set_t *self)
     woolhat_store_t   *store;
     woolhat_history_t *bucket;
     hatrack_hash_t     hv;
-    woolhat_record_t  *record;
+    woolhat_state_t    state;
     hatrack_mem_hook_t handler;
 
     if (self->free_handler) {
@@ -89,12 +89,12 @@ hatrack_set_cleanup(hatrack_set_t *self)
                 continue;
             }
 
-            record = atomic_load(&bucket->head);
+            state = atomic_load(&bucket->state);
 
-            if (!record || record->deleted) {
+            if (!state.head || state.head->deleted) {
                 continue;
             }
-            (*handler)(self, record->item);
+            (*handler)(self, state.head->item);
         }
     }
 

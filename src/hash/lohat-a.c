@@ -388,12 +388,7 @@ lohat_a_store_get(lohat_a_store_t *self,
         hv2       = atomic_read(&ptrbucket->hv);
 	
         if (hatrack_bucket_unreserved(hv2)) {
-not_found:
-            if (found) {
-                *found = false;
-            }
-	    
-            return NULL;
+	    return hatrack_not_found(found);
         }
 	
         if (!hatrack_hashes_eq(hv1, hv2)) {
@@ -410,13 +405,13 @@ not_found:
          */
 
         if (!bucket) {
-            goto not_found;
+	    return hatrack_not_found(found);
         }
 	
         goto found_history_bucket;
     }
     
-    goto not_found;
+    return hatrack_not_found(found);
 
     /* Otherwise, we've found the history bucket, and the rest of the
      * logic should look exactly like with lohat.
@@ -424,16 +419,15 @@ not_found:
 found_history_bucket:
     head = hatrack_pflag_clear(atomic_read(&bucket->head),
                                LOHAT_F_MOVING | LOHAT_F_MOVED);
-    
+
     if (head && !head->deleted) {
-        if (found) {
-            *found = true;
-        }
+
+	mmm_help_commit(head);
 	
-        return head->item;
+        return hatrack_found(found, head->item);
     }
     
-    goto not_found;
+    return hatrack_not_found(found);
 }
 
 static void *
@@ -856,14 +850,15 @@ migrate_and_retry:
     candidate->item    = NULL;
     candidate->deleted = true;
     
-    if (!LCAS(&bucket->head, &head, candidate, LOHATa_CTR_DEL)) {
-        mmm_retire_unused(candidate);
+    while (!LCAS(&bucket->head, &head, candidate, LOHATa_CTR_DEL)) {
 
         if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+	    mmm_retire_unused(candidate);
             goto migrate_and_retry;
         }
 	
         if (head->deleted) {
+	    mmm_retire_unused(candidate);	    
             goto empty_bucket;
         }
 	
@@ -924,25 +919,28 @@ lohat_a_store_migrate(lohat_a_store_t *self, lohat_a_t *top)
     while (cur < store_end) {
         head = atomic_read(&cur->head);
 	
-	if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
-	    goto skip_a_bit;
-	}
+        do {
+            if (hatrack_pflag_test(head, LOHAT_F_MOVING)) {
+                goto didnt_win;
+            }
 	    
-	if (head && !head->deleted) {
-	    ORPTR(&cur->head, LOHAT_F_MOVING);
-	}
-	else {
-	    ORPTR(&cur->head, LOHAT_F_MOVING | LOHAT_F_MOVED);
-	    
-	    if (head) {
-            // Then it was a delete record; retire it.
-		mmm_help_commit(head);
-		mmm_retire_fast(head);
-		continue;
-	    }
-	}
+            if (head && !head->deleted) {
+                candidate = hatrack_pflag_set(head, LOHAT_F_MOVING);
+            }
+            else {
+                candidate
+                    = hatrack_pflag_set(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
+            }
+        } while (!LCAS(&cur->head, &head, candidate, LOHATa_CTR_F_MOVING));
 
-    skip_a_bit:
+        if (head && hatrack_pflag_test(candidate, LOHAT_F_MOVED)) {
+            // Then it was a delete record; retire it.
+            mmm_help_commit(head);
+            mmm_retire_fast(head);
+            continue;
+        }
+
+didnt_win:
         head = hatrack_pflag_clear(head, LOHAT_F_MOVING | LOHAT_F_MOVED);
 	
         if (head && !head->deleted) {

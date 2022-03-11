@@ -268,11 +268,15 @@ test_ordering(func_test_info_t *info)
         k = (uint32_t)(((uint64_t)view[i].item) >> 32);
         v = (uint32_t)(((uint64_t)view[i].item) & 0xffffffff);
         if (k != v) {
+	    printf("k(%d) != v(%d)\n", k, v);
             free(view);
             return false;
         }
 
         if (((i + (info->range / 2) + 1) % info->range) != (k % info->range)) {
+	    printf("%d != %d\n",
+		   (i + (info->range / 2) + 1) % info->range,
+		   k % info->range);
             free(view);
             return false;
         }

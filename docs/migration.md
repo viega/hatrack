@@ -36,7 +36,7 @@ Generally, when a size modification is required, our basic approach is as follow
 
 7. The thread that successfully managed to install the new store enqueues the old store for deferred reclaimation, where the reclaimation will not occur until we can guarantee that no other threads have a reference to that store. There are plenty of techniques to implement this requirement, including hazard pointers. All of Hatrack's algorithms use an epoch-based memory management system, which tends to be much faster and less error prone.
 
-8. As an optional optimization, when cells are successfully moved (or if we see they do not need to be moved), we may mark the cell in the source store as 'MOVED', telling other migrating threads that they do not need to perform work on that cell. They do need to update any accounting appropriately, however.
+8. As an optional optimization, when cells are successfully moved (or if we see they DEFINITELY do not need to be moved after the MOVING bit is set), we may mark the cell in the source store as 'MOVED', telling other migrating threads that they do not need to perform work on that cell. They do need to update any accounting appropriately, however.
 
 9. As a further optimization, we may choose to check the top-level data structure on entry (or at any point, really), to make sure that it is still current. If it is not, then we know we are a late migrator, and that the entire operation is already completed.
 
