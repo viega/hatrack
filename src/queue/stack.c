@@ -126,6 +126,10 @@ hatstack_init(hatstack_t *self, uint64_t prealloc)
     prealloc = hatrack_round_up_to_power_of_2(prealloc);
 
     atomic_store(&self->store, hatstack_new_store(prealloc));
+
+#ifdef HATSTACK_WAIT_FREE
+    atomic_store(&self->push_help_shift, 0);
+#endif    
     
     return;
 }
@@ -160,6 +164,7 @@ hatstack_push(hatstack_t *self, void *item)
 
 #ifdef HATSTACK_WAIT_FREE
     uint32_t       retries = 0;
+    uint32_t       tosub   = 0;
 #endif    
     
     candidate      = proto_item_pushed;
@@ -179,21 +184,24 @@ hatstack_push(hatstack_t *self, void *item)
 	
 	epoch                 = head_get_epoch(head_state);
 	ix                    = head_get_index(head_state);
-	expected              = proto_item_empty;
 	candidate.valid_after = epoch - 1;
 
+#ifndef HATSTACK_SKIP_UNINITIALIZED
+	expected              = proto_item_empty;
+	
 	if (CAS(&store->cells[ix], &expected, candidate)) {
 	    mmm_end_op();
 
 #ifdef HATSTACK_WAIT_FREE
-	    if (retries >= HATSTACK_RETRY_THRESHOLD) {
-		atomic_fetch_sub(&self->push_help_shift,
-				 retries / HATSTACK_RETRY_THRESHOLD);
+	    if (tosub) {
+		atomic_fetch_sub(&self->push_help_shift, tosub);
 	    }
 #endif	    
-	    
 	    return;
 	}
+#else
+	expected = atomic_load(&store->cells[ix]);
+#endif	
 
 	if (state_is_moving(expected.state)) {
 	    store = hatstack_grow_store(store, self);
@@ -215,13 +223,13 @@ hatstack_push(hatstack_t *self, void *item)
 	// Usually this will be uncontested, and if so, we are done.
 	if (CAS(&store->cells[ix], &expected, candidate)) {
 	    mmm_end_op();
-
+	    
 #ifdef HATSTACK_WAIT_FREE
-	    if (retries >= HATSTACK_RETRY_THRESHOLD) {
-		atomic_fetch_sub(&self->push_help_shift,
-				 retries / HATSTACK_RETRY_THRESHOLD);
+	    if (tosub) {
+		atomic_fetch_sub(&self->push_help_shift, tosub);
 	    }
 #endif	    
+	    
 	    return;
 	}
 
@@ -236,11 +244,13 @@ hatstack_push(hatstack_t *self, void *item)
 	 */
 #ifdef HATSTACK_WAIT_FREE
 	if (!(++retries % HATSTACK_RETRY_THRESHOLD)) {
+	    tosub++;
 	    atomic_fetch_add(&self->push_help_shift, 1);
 	}
 #endif	
 	continue;
     }
+    abort();
 }
 
 void *
@@ -256,28 +266,16 @@ hatstack_pop(hatstack_t *self, bool *found)
 
 #ifdef HATSTACK_WAIT_FREE
     uint64_t        incr;
-    int64_t        wait_time;
-    struct timespec sleep_time;
+    uint64_t        i;
 
 	/* If pushers need help pushing, we need to slow down our
 	 * invalidation popping.
 	 */
-	wait_time = atomic_read(&self->push_help_shift);
-
-	if (wait_time) {
-	    sleep_time.tv_sec = 0;
-
-	    incr = HATSTACK_BACKOFF_INCREMENT;
-	    
-	    if (wait_time > HATSTACK_MAX_BACKOFF_LOG) {
-		sleep_time.tv_nsec = incr << HATSTACK_MAX_BACKOFF_LOG;
-	    }
-	    else {
-		sleep_time.tv_nsec = incr << wait_time;
-	    }
-
-	    nanosleep(&sleep_time, NULL);
+	incr = atomic_read(&self->push_help_shift);
+	if (incr > HATSTACK_MAX_BACKOFF) {
+	    incr = HATSTACK_MAX_BACKOFF;
 	}
+	incr = 1 << incr;
 #endif	
     
     mmm_start_basic_op();
@@ -314,22 +312,9 @@ hatstack_pop(hatstack_t *self, bool *found)
 	    return hatrack_not_found_w_mmm(found);
 	}
 
-	ix = ix - 1;
-		
-	/* First, let's assume the top of the stack is clean, and that
-	 * we're racing pushes.  We can use proto_item_empty for
-	 * expected and blindly try to swap.  After that finally
-	 * fails, when we move to new cells we should read from them
-	 * before trying to swap into them, since we won't be in a
-	 * great position to guess the state.
-	 */
-	while (CAS(&store->cells[ix], &expected, candidate)) {
-	    if (ix--) {
-		continue;
-	    }
-	    return hatrack_not_found_w_mmm(found);
-	}
-	
+	ix       = ix - 1;
+	expected = atomic_read(&store->cells[ix]);
+
 	/* Go down the stack trying to swap in pops (updating epochs
 	 * where needed), until:
 	 *
@@ -344,13 +329,19 @@ hatstack_pop(hatstack_t *self, bool *found)
 	 * bet that the cell below has the same state.
 	 */
 	while (true) {
+#ifdef HATSTACK_WAIT_FREE
+	    i = 0;
+#endif
+	    
 	    if (state_is_moving(expected.state)) {
 		goto top_loop;
 	    }
 
 	    if (!state_is_pushed(expected.state)) {
 		if (expected.valid_after >= epoch) {
-		    // We are very slow!
+		    /* We are very slow, no need to try to invalidate
+		     * a pusher, we can just keep going.
+		     */
 		    if (ix--) {
 			expected = atomic_read(&store->cells[ix]);
 			continue;
@@ -358,6 +349,13 @@ hatstack_pop(hatstack_t *self, bool *found)
 		    return hatrack_not_found_w_mmm(found);
 		}
 
+#ifdef HATSTACK_WAIT_FREE		
+		if (++i < incr) {
+		    expected = atomic_read(&store->cells[ix]);
+		    continue;
+		}
+#endif		
+		
 		if (CAS(&store->cells[ix], &expected, candidate)) {
 		    expected = atomic_read(&store->cells[ix]);
 		    continue;
@@ -567,7 +565,11 @@ hatstack_grow_store(stack_store_t *store, hatstack_t *top)
 
     expected_store = NULL;
 
+#ifdef HATSTACK_WAIT_FREE
+    if ((j < (store->num_cells >> 1)) && !top->push_help_shift) {
+#else    
     if (j < (store->num_cells >> 1)) {
+#endif
 	next_store     = hatstack_new_store(store->num_cells);	
     }
     else {
@@ -614,7 +616,7 @@ hatstack_grow_store(stack_store_t *store, hatstack_t *top)
      * either of the status bits set when we're done.
      */
     target_state = HATSTACK_HEAD_INITIALIZING;
-    head_state   = j;
+    head_state   = head_candidate_new_epoch(0, j);
     
 
     CAS(&next_store->head_state, &target_state, head_state);
