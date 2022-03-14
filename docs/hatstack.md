@@ -156,6 +156,28 @@ We can do this with two primitives:
 
 Essentially, if our head state is atomically updatable, and consists not only of a head pointer, but also the nonce value, then our popping thread can 'expect' that the nonce will not have changed, nor will have the head pointer, since its operation began, and set its desired value such that the nonce is incremented by one, and the head pointer is contracted to the desired state.
 
+The question is, how to figure out where to swing the head pointer, given the fact that:
+
+1. Slow writes could be in progress; when they complete, the next pop should see them, and no push should push over it.
+2. Since we are able to re-use cells, popped cells will need to know when a 'popped' cell has been handed out to a push operation or not, so that it can prevent updating the head pointer before this point.
+3. Pop threads can fail to remove space, if a push operation happens before the pop successfully changes the head state.
+
+Towards address this scenario, we will also write the current value of the nonce, whenever we pop a slot.  Let's imagine that a pop operation reads the nonce value N, then scans backward from index I-1, where I represents the head index of the stack (where the next push will go) at the time the pop operation begins.
+
+If, at I-1, we see a nonce equal to N, then we know there was a successful pop in the 'epoch' of this nonce, and that, if the nonce hasn't changed, no push could ever happen here.
+
+But if, at cell I - 2, we see a nonce equal to N - 2, it could be that we have a slow pusher, or it could mean that, while we previously shrunk the stack, we did not shrink it past I - 1, due to an item being on the stack at that time.
+
+We can make a conservative guess using a reservation system, much like our epoch-based system. Each thread that comes in to push can write the nonce it saw to a special array when it starts its operation, and remove the value when it ends its operation.
+
+Poppers can first read the current nonce, then scan the array of nonces; if it sees any values lower than its own read of N, it will assume any nonce less than N but greater to or equal to the minimum value it saw represents a slow writer (even though it may not).
+
+The downside here is that the extra time spent scanning the reservations array will add overhead that lowers the number of successful head resets when a stack is particularly busy.
+
+As a popper walks down the stack, if it sees a pushed item, it attempts to swap in a POPPED, with its read value of N. It does not attempt to update epoch values within cells.
+
+Once the popper successfully manages to complete its core operation (even if that is by learning that the stack is empty), it can now attempt to update the head state via compare-and-swap, comparing with the original state that it saw.
+
 If such an update fails, then either new items have been pushed, or some other popper was competing, and faster in setting the head state. Either way, the attempting thread can ignore the failure, and the only consequence of the failure is resulting 'dead space' on the stack.
 
 The 'dead space' may go away with additional head resets, or it may not. We will consider other compression techniques, but a simple approach would be to use the simple head reset as much as possible, but resort to our store migration algorithm whenever a push operation is assigned a slot outside the bounds of an array.
@@ -175,7 +197,7 @@ This forces pushes to always write out in a way that their push order (as seen b
 
 This approach definitely is not necessary, and introduces between the push and the pop, where pushes may need to retry if a pop operation invalidates them. Without some additional helping mechanism, this approach is obviously *not* wait-free.
 
-The advantage to this would be that it allows us to swing the head pointer farther when there are suspended threads.  However, swinging the head below stalled pushes can create a situation where multiple threads can be attempting to push into the same cell, at the same time.
+The advantage to this would be that it allows us to swing the head pointer farther when there are suspended threads, and would make it easier for us to ensure that, if there are suspended threads waiting for a slot, they will not get to write where they are waiting to write.  However, swinging the head below stalled pushes can create a situation where multiple threads can be attempting to push into the same cell, at the same time.
 
 Meaning, we need to support a scenario where the stalled push will fail, and the most recent push will succeed.
 
