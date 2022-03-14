@@ -29,5 +29,6 @@ examples/qtest
 examples/ring
 examples/logringex
 examples/array
+examples/qperf
 docs/~*
 #*

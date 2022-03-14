@@ -1,5 +1,5 @@
 check_PROGRAMS = tests/test
-noinst_PROGRAMS = examples/basic examples/set1 examples/hashable examples/oldqx examples/qtest examples/ring examples/logringex examples/array
+noinst_PROGRAMS = examples/basic examples/set1 examples/hashable examples/oldqx examples/qtest examples/qperf examples/ring examples/logringex examples/array 
 
 # 64-bit systems will complain up the wazoo about the 128-bit CAS operations.
 # Yes, they won't be lock free, but they will be sufficiently fast, thanks.
@@ -27,9 +27,13 @@ examples_oldqx_SOURCES = examples/old_queue_ex.c
 examples_oldqx_CFLAGS = -Wall -Wextra -I./include
 examples_oldqx_LDADD = ./libhatrack.a
 
-examples_qtest_SOURCES = examples/test_queues.c
+examples_qtest_SOURCES = examples/qtest.c
 examples_qtest_CFLAGS = -Wall -Wextra -I./include
 examples_qtest_LDADD = ./libhatrack.a
+
+examples_qperf_SOURCES = examples/qperf.c
+examples_qperf_CFLAGS = -Wall -Wextra -I./include
+examples_qperf_LDADD = ./libhatrack.a
 
 examples_ring_SOURCES = examples/ring.c
 examples_ring_CFLAGS = -Wall -Wextra -I./include

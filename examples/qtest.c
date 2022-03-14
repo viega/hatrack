@@ -70,7 +70,6 @@ queue_new_proxy(uint64_t len) {
 
 // clang-format off
 static queue_impl_t algorithms[] = {
-    /*
     {
 	.name         = "llstack",
 	.new          = (new_func)llstack_new_proxy,
@@ -95,7 +94,6 @@ static queue_impl_t algorithms[] = {
 	.del          = (del_func)queue_delete,
 	.can_prealloc = true
     },
-    */
     {
 	.name         = "hq",
 	.new          = (new_func)hq_new_size,
@@ -111,8 +109,7 @@ static queue_impl_t algorithms[] = {
 	.dequeue      = (dequeue_func)capq_dequeue,
 	.del          = (del_func)capq_delete,
 	.can_prealloc = true
-    },
-    /*
+	},
     {
 	.name         = "vector",
 	.new          = (new_func)vector_new,
@@ -121,7 +118,6 @@ static queue_impl_t algorithms[] = {
 	.del          = (del_func)vector_delete,
 	.can_prealloc = true
     },
-    */
     {
         0,
     },
@@ -384,9 +380,7 @@ main(void)
     int          row_size;
     int          i, j;
     test_info_t *tests;
-
-    int x;
-
+    
     gate = gate_new();
 	
     printf("Warning: llstack can get VERY slow when there's lots of "
@@ -434,14 +428,13 @@ main(void)
         }
     }
 
-    for (x = 0; x < 100; x++) {
     for (i = 0; i < n; i++) {
         test_queue(&tests[i]);
     }
+    
     printf(LINE);
-    }
-
-    //    format_results(tests, n, row_size);
+    
+    format_results(tests, n, row_size);
     
     return 0;
 }
