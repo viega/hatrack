@@ -2,11 +2,11 @@
 
 The default Hatrack dictionary is a fast, wait-free hash table, supporting multiple concurent readers and writers.
 
-It is the first wait-free hash table backed by an array in the way. Previous work in this space provided a wait-free associative interface[^1], but kept an internal tree structure that gives the algorithm an O(log n) lower bound on inserts and lookups.
+It is the first wait-free hash table fully backed by a single resizable array, without any sort of tree structure. Previous work in this space provided a wait-free associative interface[^1], but kept an internal tree structure that gives the algorithm an O(log n) lower bound on inserts and lookups. A more recent paper [^2] provides a wait-free hash table based on a universal construction, using extendible hashing, which does allow for O(1) operations, but keeps two tiers of buckets, a trie and 'actual' buckets.  Unfortunately, besides the extra indirection, the buckets in this scheme generally will not maintain memory locality as the hash table grows (the original use case for extendible hashing was file systems[^3]).
 
 An unpublished hash table by Cliff Click from 2007 is nevertheless widely adopted in the Java standard library. It is lock-free, despite an early claim of wait freedom that was retracted.
 
-However, Click's hash table is backed by an array, making it a true hash table. Hash tables benefit from amortized O(1) operations as long as their load factor (the ratio of records to table size) remains below 1, because the cost of operations can be bounded by a function of the load factor, independent of the values of n and m [^2].
+However, Click's hash table is backed by an array, making it a true hash table. Hash tables benefit from amortized O(1) operations as long as their load factor (the ratio of records to table size) remains below 1, because the cost of operations can be bounded by a function of the load factor, independent of the values of n and m [^4].
 
 The Hatrack dictionary is a true hash table like Click's, giving amortized O(1) operations. Yet, it is simple and truly wait-free, and address memory management issues for languages without full automatic garbage collection.
 
@@ -29,7 +29,7 @@ In non-garbage collected languages, we have two different concerns for memory ma
 
 ### Internal store safety
 
-The first problem, memory safety for data structures, is well addressed in the literature. We use a simple epoch-based memory reclaimation scheme internally[^3], as it simple, easy to implement correctly, and far more efficient than popular alternatives (e.g., Hazard Pointers and reference counting).
+The first problem, memory safety for data structures, is well addressed in the literature. We use a simple epoch-based memory reclaimation scheme internally[^5], as it simple, easy to implement correctly, and far more efficient than popular alternatives (e.g., Hazard Pointers and reference counting).
 
 First note that the only dynamic allocation in our dictionary is for the underlying backing store. When we migrate to a different backing store (for instance, when growing the table), slow threads may still have references to the old store, and we need those references to stay live through the life of their operation (Additionally, we also need to ensure correct semantics when multiple stores are being used in parallel, but we consider that problem below).
 
@@ -144,7 +144,7 @@ We will assume that operations work out of the store variable, except during res
 
 Note that every core operation consists of two phases.  The first we call 'bucket acquisition', which here means identifying the appropriate cell in the array for performing the second half of the operation.  The second phase is the 'core operation', which may be a 'get', or a mutation operation.
 
-For bucket acquisition, we rely upon 'lazy deletions'[^2], in the case where buckets are deleted, as opposed to re-arranging buckets to minimize probing.
+For bucket acquisition, we rely upon 'lazy deletions'[^4], in the case where buckets are deleted, as opposed to re-arranging buckets to minimize probing.
 
 Particularly, we impose a constraint that, in any given backing store, once a bucket (cell) has been 'acquired' by a particular hash key, the bucket may never be associated with any other hash key.
 
@@ -154,7 +154,7 @@ However, deleted cells are considered in part of the table's load factor, and ca
 
 This lazy deletion approach was also taken by Click in his hash table, and is in many respects an "obvious" approach for two reasons:
 
-1. A lock-free or wait-free implementation that moves buckets in an active hash table is possible, but it is clearly complicated to do in a safe manner.[^4]
+1. A lock-free or wait-free implementation that moves buckets in an active hash table is possible, but it is clearly complicated to do in a safe manner.[^6]
 
 2. When hash keys cannot move, there will be very little contention among threads operating on buckets (there will only be contention when such threads are operating on the same bucket at the same time). That seems far preferable to the potential contention that would come from having to syncrhonize moves across multiple cells.
 
@@ -245,7 +245,7 @@ First, we will look at the variant of operation used for when we might insert an
 
 The bucket acquisition operation takes a hash value H and table size S as an input, and then does the following:
 
-1. Computes I, an initial index into the array by computing the H % S (as is standard with hash tables).[^5]
+1. Computes I, an initial index into the array by computing the H % S (as is standard with hash tables).[^7]
 
 2. Reads the hash value stored in bucket I.
 
@@ -337,7 +337,7 @@ Our get operation is exceptionally simple:
 
 4. We ignore the flags, and check the nonce. If the nonce is zero, this indicates that the item has either not been written yet, or has been written and subsequently deleted.  Either way, the item is not present in the table, and we return  ⊥.
 
-5. Otherwise, we return the item found during the atomic read.[^6]
+5. Otherwise, we return the item found during the atomic read.[^8]
 
 When a bucket has been acquired, the linearization point for this operation is the atomic read of the other 128 bits of data.
 
@@ -369,12 +369,12 @@ The put operation takes as inputs a hash value, as well as an item to store, and
     - Our nonce
     - The INITIALIZED flag.
 
-6. If the CAS operation is successful, we are done, and return[^7]
+6. If the CAS operation is successful, we are done, and return[^9]
 
 7. If the CAS operation fails, we check the read value:
 
     a. If the MOVING bit is set, we help migrate and then retry the entire operation, again invoking our help mechanism if necessary.
-    b. Otherwise, some other operation mutated the bucket.  We consider ourselves to have been successfully 'installed', but immediately overwritten-- placing our insertion on our imaginary 'timeline' to the moment in time immediately preceding the success of the competing operation.[^8]
+    b. Otherwise, some other operation mutated the bucket.  We consider ourselves to have been successfully 'installed', but immediately overwritten-- placing our insertion on our imaginary 'timeline' to the moment in time immediately preceding the success of the competing operation.[^10]
 
 Our bucket acquisition algorithm requires that each hash value get a unique, consistent bucket, and that no bucket get reused for a different value throughout the life of the store.  Therefore, our operation must be changing the right bucket, so we only need worry ourselves with linearizability of mutations to the bucket.
 
@@ -437,16 +437,20 @@ In our implementation, we do allow a much faster view operation that will not ne
 
 [^1]: P. Laborde, S. Feldman, D. Dechev. A Wait-Free Hash Map. International Journal of Parallel Programming, 46(3) 2017.
 
-[^2]: P. Celis, J. Franco. The Analysis of Hashing with Lazy Deletions. Information Sciences: an International Journal 62(1-2) 1992.
+[^2]: P. Fatourou, N. Kallimanis, T. Ropars. An Efficient Wait-free Resizable Hash Table. Symposium on Parallelism in Algorithms and Architectures, July 2018.
 
-[^3]: K Fraser. Practical Lock-Freedom. PhD Thesis, University of Cambridge 2004.
+[^3]: R. Fagnin, J. Nievergelt, N. Pippenger, H.R. Strong. Extendible Hashing -- A Fast Access Method for Dynamic Files. ACM Transactions on Database Systems 4(3). Sept. 1979.
 
-[^4]: Particularly, we could use a variant of our migration scheme where we first mark any relevent buckets involved in a move, so that they cannot be accessed without first helping to carry out the operation. To protect against late / slow threads, it would need to use an epoch scheme to ensure that no spurious operations occur.
+[^4]: P. Celis, J. Franco. The Analysis of Hashing with Lazy Deletions. Information Sciences: an International Journal 62(1-2) 1992.
 
-[^5]: We actually add an additional constraint that table stores are always a power-of-two in size, particularly so that we can cheaply compute the modulus of H % S using H & (S-1). This is also a common optimization in hash tables.
+[^5]: K Fraser. Practical Lock-Freedom. PhD Thesis, University of Cambridge 2004.
 
-[^6]: In our higher-level interface, we will also invoke the return callback, per above, to ensure callers get a chance to handle memory management.
+[^6]: Particularly, we could use a variant of our migration scheme where we first mark any relevent buckets involved in a move, so that they cannot be accessed without first helping to carry out the operation. To protect against late / slow threads, it would need to use an epoch scheme to ensure that no spurious operations occur.
 
-[^7]: In our higher-level interface, we also do the dynamic memory management noted above, to make sure that an ejection callback will be invoked, when it is safe to do so.
+[^7]: We actually add an additional constraint that table stores are always a power-of-two in size, particularly so that we can cheaply compute the modulus of H % S using H & (S-1). This is also a common optimization in hash tables.
 
-[^8]: When dealing with dynamic memory management, we still need to treat the input item as data that needs to be ejected.
+[^8]: In our higher-level interface, we will also invoke the return callback, per above, to ensure callers get a chance to handle memory management.
+
+[^9]: In our higher-level interface, we also do the dynamic memory management noted above, to make sure that an ejection callback will be invoked, when it is safe to do so.
+
+[^10]: When dealing with dynamic memory management, we still need to treat the input item as data that needs to be ejected.

@@ -100,7 +100,7 @@ Here are the semantics of the **put** operation, after a bucket is required:
 
 8. If the compare-and-swap fails due to a migration being in progress, we `retire` the unused memory cell, complete our migration, then retry the operation from the beginning.
 
-9. If the compare-and-swap fails due to another thread succeeding, we take the same approach we did with our dictionary, in that we consider ourself to have been installed RIGHT before the thread that won, but replaced so fast that no other thread will ever get to read our value.  Here, we must also `retire` the unused memory cell[^1].
+9. If the compare-and-swap fails due to another thread succeeding, we take the same approach we did with our dictionary, in that we consider ourself to have been installed RIGHT before the thread that won, but replaced so fast that no other thread will ever get to read our value.  Here, we must also `retire` the unused memory cell[^2].
 
 10. If our compare-and-swap succeeded, we call `commit_write()` on our own record.
 
@@ -204,7 +204,7 @@ However, since R0 was written before the time that R1 was read (due to sequentia
 
 To be clear, if we write out our reservation and read R1 very late in epoch 102, there may be a memory allocation with epoch 102 as a retirement epoch, but we are guaranteed that it will still be live.
 
-The epoch R1 is the epoch that we will use to linearize our view operation[^2]. We are essentially going to go through each bucket, load the head, and scan until we find the record that was current in the epoch to which we were linearizing ourself.
+The epoch R1 is the epoch that we will use to linearize our view operation[^3]. We are essentially going to go through each bucket, load the head, and scan until we find the record that was current in the epoch to which we were linearizing ourself.
 
 Our read of epoch R1 is the linearization point for the view operation. We will return every cell that was both in the table at epoch R1, and has a committment epoch of R1 or lower.
 
