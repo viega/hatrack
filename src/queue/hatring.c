@@ -135,7 +135,7 @@ hatring_enqueue(hatring_t *self, void *item)
 	 *  with the tail lagging. The enqueue side is responsible for
 	 *  keeping the tail close; if we're having a problem doing
 	 *  that, then we are competing either with dequeuers who are
-	 *  overwhelmed by the enqueues.
+	 *  overwhelmed by the enqueues, or with other enqueuers.
 	 *
 	 *  In this kind of case, we want to slow things down some, to
 	 *  give dequeuers a bit of time to finish an operation.
@@ -265,7 +265,11 @@ hatring_dequeue(hatring_t *self, bool *found)
 			hatring_is_enqueued(expected.state)) {
 			(*self->drop_handler)(expected.item);
 		    }
-		    return hatrack_not_found(found);
+
+		    if ((read_epoch + 1) == write_epoch) {
+			return hatrack_not_found(found);
+		    }
+		    break; // Go back to the top-level loop.
 		}
 	    }
 	    else {

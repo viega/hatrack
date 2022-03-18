@@ -18,6 +18,8 @@ Note that `capq` could be used as a general-purpose queue, and I do provide a de
 
 Unlike the vector, I've tested the capq pretty thoroughly.
 
+Note that none of our algorithms use architecture-specific optimizations; the algorithms should be portable to any place a C11 compiler is available, although for some algorithms, the wait-free versions of algorithms will generally require the underlying platform to support a 128-bit compare-and-swap operation, which modern 64-bit architectures do. On other architectures, C11 will emulate the 128-bit compare-and-swap, but using fine-grained locking. In general, that doesn't appear to be a major issue in terms of how these algorithms perform, though!
+
 ## Status
 
 For the most part, these algorithms seem to be a huge improvement over the state of the art for lock-free parallel programming. I originally started this because it was impossible to find a good O(1) multi-producer, multi-consumer hash table, despite a bit of promising work that was unfortunately about 15 years old. I've since found it easy to improve greatly on the state of the art in almost all areas.

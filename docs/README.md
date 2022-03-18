@@ -13,4 +13,6 @@ Coming soon.
 - [The core store migration operation](migration.md)
 - [Wait-free O(1) dictionaries](dicts.md)
 - [Fast, wait-free sets](sets.md)
-
+- [Hatstack](hatstack.md)
+- [Faster wait-free queues](queue.md)
+- [Ring buffers, including one suitable for large entries](ring.md)

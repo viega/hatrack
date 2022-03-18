@@ -336,10 +336,11 @@ hq_dequeue(hq_t *self, bool *found)
 	cur_ix    = atomic_fetch_add(&store->dequeue_index, 1);
 	
 	if (cur_ix & HQ_MOVING) {
+	    cur_ix &= ~HQ_MOVING;
+	    
 	migrate_then_possibly_dequeue:
 	    
-	    epoch   = hq_migrate(store, self);
-	    cur_ix &= ~HQ_MOVING;
+	    epoch = hq_migrate(store, self);
 	    
 	    if (epoch <= cur_ix) {
 		store = atomic_read(&self->store);		
@@ -517,8 +518,8 @@ hq_migrate(hq_store_t *store, hq_t *top)
 
 
     atomic_fetch_or_explicit(&store->dequeue_index,
-			     HQ_MOVING,
-			     memory_order_relaxed);
+    			     HQ_MOVING,
+    			     memory_order_relaxed);
 				     
     highest = 0;
     

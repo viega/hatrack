@@ -205,13 +205,35 @@ We can do this simply by having all push and pop operations (including invalidat
 
 Then, as push operations happen, they will check the stored epoch in the cell before they attempt to compare-and-swap their value into the cell; if they see either a higher epoch, or a successful push from an earlier epoch, then they need to retry and re-linearize.
 
-However, this now introduces some contention not just between pushes and pops, but across pushes.  As a result, being able to swing the head pointer further may not be worth the additional contention.
+This *does* introduce some contention not just between pushes and pops, but across pushes.
 
-My current algorithm *does* implement this approach. And, we add an additional helping mechanism to slow down pops when there is contention, using an exponential backoff scheme that makes the operation wait-free. However, I now suspect that the first presented solution will be better, even if changing the linear mapping can maximize the compression we get from a head reset.
+In my testing, however, this approach seems to be much faster in practice than the naive approach, and makes it much more clear that every operation on ever instance of our stack will have a straightforward linear mapping.
+
+### Making the stack wait-free
+
+Our core algorithm has the following contention points where threads conceptually have no upper bound on retires:
+
+1. Both pushes and pops have contention from store resizes; if they notice one in progress, they will restart after the resize ends.
+
+2. Pushes additionally have contention due to pops invalidating them, and having them re-push. This can cascade into pushes interfering with each other as well.
+
+For problem #1, we address this issue the same way we have for other algorithms. If an operation fails a fixed number of times, it signals for 'help'. When any threads have signaled for help, the resize operation will only double the size of the store, never keep it the same or shrink it.
+
+This means, that there will be some small (logarithmic) number of resizes before the store is big enough to hold more data than we could write out in the time it takes for the struggling thread to run, even if including time that it is not scheduled.
+
+For problem #2, we address this problem by using the same help mechanism, but whenever a popper sees it invoked, it slows down its writes of invalidation pops using an exponential slowdown technique.
+
+Our data-structure wide help counter H gets incremented by 1 if a thread fails to complete its operation T times, where T is some arbitrary threshold.  If a thread fails 2*T times, then it increments H again, and so on.
+
+When a pop operation starts, it loads the value of the counter, and treats it as a base 2 logarithm (i.e., it computes 1 << H).  This value, C, indicates how many times a thread will read a memory cell that might be waiting for a push, before invalidating it.
+
+Eventually, C will be finite, but large enough so that any pusher neededing help at the time the pop operation read the value of C will have ample time to complete.
+
+Again, getting rid of the invalidation algorithm would also address this problem, but emperically seems to result in a slower algorithm.
 
 ### In-place compression
 
-It would be straightforward to use our migration technique to 'compress' the stack (and the current implementation does that).
+It is straightforward to use our migration technique to 'compress' the stack (and the current implementation does that).
 
 However, if a stack is sparsely populated, that could involve touching every cell, in order to move very few cells. Here too, we can use a nonce in order to compress stacks in-place.
 
@@ -238,4 +260,4 @@ Also note that this algorithm also introduces contention that makes the algorith
 
 The challenge with in-place compression is that it is clearly has to do more accounting and checking on a per-cell basis, than a basic algorithm. And, if compressions are frequent, the constant overhead could end up being high.
 
-At some point I may implement this to see if we get any improvements, but I think it won't be necessary.
+At some point I am skeptical that this will improve performance. The stack already has reasonably similar performance to our FIFO. Still, I may give it a try at some point.
