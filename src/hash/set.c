@@ -489,7 +489,7 @@ hatrack_set_difference(hatrack_set_t *set1, hatrack_set_t *set2)
             break;
         }
 
-        if (hatrack_hashes_eq(view1[i].hv, view2[i].hv)) {
+        if (hatrack_hashes_eq(view1[i].hv, view2[j].hv)) {
             i++;
             j++;
             continue; // Not in result set.
