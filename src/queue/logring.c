@@ -192,6 +192,7 @@ logring_dequeue(logring_t *self, void *output, uint64_t *len)
     }
 }
 
+
 logring_view_t *
 logring_view(logring_t *self, bool lax_view)
 {
@@ -369,9 +370,7 @@ logring_view_help_if_needed(logring_t *self)
     view_info_t           candidate_vi;
     logring_view_t       *view;
     uint64_t              vid;
-    uint64_t              ring_epoch_info;
     uint64_t              vix;
-    uint64_t              new_epoch;
     uint64_t              offset_entry_ix;
     uint64_t              entry_ix;
     uint64_t              exp_len;
@@ -402,7 +401,6 @@ logring_view_help_if_needed(logring_t *self)
 
     while (rix < end_ix) {
 	cur_view_entry = &view->cells[vix++];
-	new_epoch      = atomic_read(&self->ring->epochs);
 	end_ix         = hatring_enqueue_epoch(view->start_epoch);
 
 	if (atomic_read(&cur_view_entry->value)) {
@@ -573,7 +571,6 @@ logring_view_help_if_needed(logring_t *self)
 	CAS(&data_entry->info, &exp_de_info, cand_de_info);
 	    
     next_cell:
-	ring_epoch_info = atomic_read(&self->ring->epochs);
 	end_ix          = hatring_enqueue_epoch(view->start_epoch);
 	rix             = rix + 1;
 	continue;
