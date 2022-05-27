@@ -670,7 +670,13 @@
  */
 #define HATSTACK_MIN_STORE_SZ_LOG 6
 
-
+/*
+ * HATSTACK_TEST_LLSTACK
+ *
+ * A linked list stack can be compiled into queue example apps.  But
+ * it often performs very poorly, so it's off by default.
+ */
+#undef HATSTACK_TEST_LLSTACK
 
 
 #ifndef FLEXARRAY_DEFAULT_GROW_SIZE_LOG

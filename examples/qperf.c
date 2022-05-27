@@ -62,6 +62,7 @@ queue_new_proxy(uint64_t len) {
 
 // clang-format off
 static queue_impl_t algorithms[] = {
+#ifdef HATRACK_TEST_LLSTACK    
     {
 	.name         = "llstack",
 	.new          = (new_func)llstack_new_proxy,
@@ -70,6 +71,7 @@ static queue_impl_t algorithms[] = {
 	.del          = (del_func)llstack_delete,
 	.can_prealloc = false
     },
+#endif    
     {
 	.name         = "hatstack",
 	.new          = (new_func)hatstack_new,

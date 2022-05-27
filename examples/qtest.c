@@ -70,6 +70,7 @@ queue_new_proxy(uint64_t len) {
 
 // clang-format off
 static queue_impl_t algorithms[] = {
+#ifdef HATRACK_TEST_LLSTACK
     {
 	.name         = "llstack",
 	.new          = (new_func)llstack_new_proxy,
@@ -78,6 +79,7 @@ static queue_impl_t algorithms[] = {
 	.del          = (del_func)llstack_delete,
 	.can_prealloc = false
     },
+#endif    
     {
 	.name         = "hatstack",
 	.new          = (new_func)hatstack_new,
@@ -382,10 +384,12 @@ main(void)
     test_info_t *tests;
     
     gate = gate_new();
-	
+
+#ifdef HATRACK_TEST_LLSTACK    
     printf("Warning: llstack can get VERY slow when there's lots of "
 	   "enqueue contention.\n");
     printf("Give it some time.\n\n");
+#endif    
 	   
     num_algos  = 0;
     num_params = 0;
