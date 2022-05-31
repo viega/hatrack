@@ -106,7 +106,7 @@ So we might cause a bit of unnecessary work to occur, but can guarantee wait fre
 
 Currently, we've not yet implemented this enhancement to the `top()` operation.
 
-## The `cap()` dequeue operation.
+## The `cap()` dequeue operation
 
 This operation is relatively straightforward, in that the input here is an epoch returned by `top()`, which means that, at some point, that epoch referred to a queued item that lived at the front of the queue (i.e., would be the next thing to dequeue).
 

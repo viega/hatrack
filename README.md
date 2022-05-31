@@ -10,13 +10,9 @@ Hatrack provides a number of data structures for parallel programming, currently
 6. **Flex arrays** (i.e., resizable arrays, via `flexarray_*`; see `include/flexarray.h`)
 7. **A "debug ring"**, a ring buffer that trades off correctness in favor of speed (see `include/debug.h`)
 
+Initial algorithm documentation is available via the [docs directory](docs/README.md).
+
 By 1.0 the vector will be done; there's an initial implementation there, but it's not fully tested, and undoubtedly has some bugs in it. The idea behind the vector class is to be a flexarray that is almost as fast as a traditional flexarray for most accesses, but also supports push and pop operations. The push and pop operations are much slower than for our stack, though-- basically with vectors, anything that changes the size of the array is put onto a queue so that the operations are explicitly ordered.
-
-This is done with a new FIFO I put together and am calling a 'CAPQ', where 'capq' stands for 'compare-and-pop' queue. The basic idea is that multiple threads look at the 'top' item that's next to be dequeued (which, for vectors, represents an operation that needs to be performed). When threads notice the job is done, they call capq_cap() to dequeue the top item, but only if it is still the top item.  This prevents us from accidentally dequeuing work that isn't done yet.
-
-Note that `capq` could be used as a general-purpose queue, and I do provide a dequeue mechanism built on capq_top() and capq_cap(), though this operation is only lock-free, not wait-free.  The queue `hq` should still be the all aroun best for general purpose use.
-
-Unlike the vector, I've tested the capq pretty thoroughly.
 
 Note that none of our algorithms use architecture-specific optimizations; the algorithms should be portable to any place a C11 compiler is available, although for some algorithms, the wait-free versions of algorithms will generally require the underlying platform to support a 128-bit compare-and-swap operation, which modern 64-bit architectures do. On other architectures, C11 will emulate the 128-bit compare-and-swap, but using fine-grained locking. In general, that doesn't appear to be a major issue in terms of how these algorithms perform, though!
 
@@ -24,22 +20,18 @@ Note that none of our algorithms use architecture-specific optimizations; the al
 
 For the most part, these algorithms seem to be a huge improvement over the state of the art for lock-free parallel programming. I originally started this because it was impossible to find a good O(1) multi-producer, multi-consumer hash table, despite a bit of promising work that was unfortunately about 15 years old. I've since found it easy to improve greatly on the state of the art in almost all areas.
 
-For instance, with ring buffers, (an admittedly cursory) search has only turned up single-producer / single-consumer buffers, and a recent buffer that isn't actually a ring-buffer by my definition-- it can get full, where the correct behavior should be to safely overwrite old entries. So to me, judging it by the interface, that's a fixed-size FIFO, not a ring buffer (I'm sure it keeps a ring internally as part of its implementation).
+For instance, with ring buffers, a literature search has only turned up single-producer / single-consumer buffers, and a recent buffer that was labeled a ring buffer, but fails when the buffer fills, instead of overwriting the oldest entries (I would label this a fixed-size FIFO).
 
-The algorithms that I've pushed have been pretty rigorously tested (with the exception of flex arrays, which I'll do when I am also ready to test my vector). There's a pretty thorough hash table benchmarking program if you run 'make check'.  For the many queues, the examples directory focuses on both correctness testing (by checking to see if the inputs match the outputs), along with some timing that tends to _underestimate_ the throughput of algorithms, because I do not yet pre-fill queues to avoid lots of dequeue misses (so they are overhead not counted as ops, but factor into the denominator when calculating ops/sec).
+The algorithms that I've pushed I've generally made a big effort to test. There's a pretty thorough hash table benchmarking program if you run 'make check'.  For the many queues, the examples directory focuses on both correctness testing (by checking to see if the inputs match the outputs), along with some timing that tends to _underestimate_ the throughput of algorithms, because I do not yet pre-fill queues to avoid lots of dequeue misses (so they are overhead not counted as ops, but factor into the denominator when calculating ops/sec).
 
-I'm currently targeting being feature complete for a 1.0 release by mid-april of 2022. Beyond the remaining algorithms above, I also intend to do the following:
+Currently, I'm not intending on adding any more algorithms before a 1.0 release. I'd like to get the vector finished for that release, but may ship without it, if time is tight. Before releasing, I also intend to do at least the following:
 
-1. Evolve the queue and array examples into more well-rounded performance testing programs, the way I've done for hash tables.
-2. Do a significant amount of minor cleanup and normalization.
-3. Do better cross-platform testing (right now, I'm developing mainly on a mac, and occasionally testing on a Linux box).
-4. Improve the packaging (for instance, generate shared objects, not just a static lib)
-5. Provide significant developer documentation.
-6. Reorganize the source tree.
+1. Do a significant amount of minor cleanup and normalization.
+2. Do better cross-platform testing (right now, I'm developing mainly on a mac, and occasionally testing on a Linux box).
+3. Improve the packaging (for instance, generate shared objects, not just a static lib)
+4. Provide significant developer documentation.
 
-Currently, the source tree hints at the fact that this started out as a bunch of hash table algorithms-- several new approaches, and other reference/ pedagalogical examples, which currently all live in the `src` directory.  The other algorithms currently live in the `bonus` directory.  Soon each class of algorithm will get its own directory.
-
-Note that, certainly for hash tables, but also for various kinds of queues, there are multiple algorithms implemented. Occasionally I've implemented someone else's algorithm (right now, I think it's actually just the basic linked list stack), but often I've come up with multiple approaches, and then done comparative testing. For instance, my first queue (currently in `bonus/queue.c`) does not perform as well as my second, at least in my environment (`hq`), but I leave it around for comparative testing, learning, etc.
+Note that, certainly for hash tables, but also for various kinds of queues, there are multiple algorithms implemented. Occasionally I've implemented someone else's algorithm (right now, I think it's actually just the basic linked list stack), but often I've come up with multiple approaches, and then done comparative testing. For instance, my first queue (`src/queue/queue.c`) does not perform as well as my second, at least in my environment (`src/queue/hq.c`), but I leave it around for comparative testing, learning, etc.
 
 ## Performance
 
