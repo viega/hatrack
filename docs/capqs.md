@@ -15,7 +15,7 @@ To that end, we decided that a first pass on the problem could allow random acce
 1. When a thread has an operation it would like to perform on the vector, it first enqueues it in an ordered FIFO.
 2. It then looks at the last element in the FIFO (the next one to be removed), which may be a different operation.  The current thread attempts to execute this operation (other threads may be attempting to complete the same operation in parallel).
 3. When the top queued operation is completed, it must be dequeued.
-4. The The current thread stops servicing operations in the queue once the item it originally enqueued completes successfully.
+4. The current thread stops servicing operations in the queue once the item it originally enqueued completes successfully.
 
 This approach makes it easy for threads to agree on a linearized order of operations, but is not without its challenges:
 
