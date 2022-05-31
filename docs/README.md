@@ -16,3 +16,4 @@ Coming soon.
 - [Hatstack](hatstack.md)
 - [Faster wait-free queues](queue.md)
 - [Ring buffers, including one suitable for large entries](ring.md)
+- [Compare-And-Pop queues](capqs.md)

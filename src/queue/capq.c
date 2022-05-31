@@ -359,14 +359,16 @@ capq_migrate(capq_store_t *store, capq_t *top)
     capq_item_t   candidate_item;
     capq_item_t   old_item;
     uint64_t      i, n;
-    uint64_t      highest_ix  = 0;
-    uint64_t      highest_epoch = 0;
+    uint64_t      highest_ix;
+    uint64_t      highest_epoch;
     uint64_t      lowest;    
     uint64_t      move_ctr;
     uint64_t      epoch;
     unholy_u      u;
 
-
+    highest_ix    = 0;
+    highest_epoch = 0;
+    
     move_ctr = (store->dequeue_index & 0xffffffff00000000) + 0x0000000100000000;
     
     for (i = 0; i < store->size; i++) {
