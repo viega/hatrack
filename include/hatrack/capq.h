@@ -83,11 +83,12 @@ typedef struct {
 
 enum {
     CAPQ_EMPTY              = 0x0000000000000000,
+    CAPQ_DEQUEUED           = 0x0800000000000000,
     CAPQ_TOOSLOW            = 0x1000000000000000,
     CAPQ_USED               = 0x2000000000000000,
     CAPQ_MOVED              = 0x4000000000000000,
     CAPQ_MOVING             = 0x8000000000000000,
-    CAPQ_FLAG_MASK          = 0xf000000000000000,
+    CAPQ_FLAG_MASK          = 0xf800000000000000,
     CAPQ_STORE_INITIALIZING = 0xffffffffffffffff
 };
 
@@ -138,6 +139,18 @@ capq_is_queued(uint64_t state)
     return state & CAPQ_USED;
 }
 
+static inline bool
+capq_is_dequeued(uint64_t state)
+{
+    return state & CAPQ_DEQUEUED;
+}
+
+static inline bool
+capq_is_invalidated(uint64_t state)
+{
+    return state & CAPQ_TOOSLOW;
+}
+
 static inline uint64_t
 capq_add_moving(uint64_t state)
 {
@@ -166,6 +179,21 @@ static inline uint64_t
 capq_ix(uint64_t seq, uint64_t sz)
 {
     return seq & (sz-1);
+}
+
+// Precondition-- we are looking at the right epoch.
+static inline bool
+capq_should_return(uint64_t state, uint64_t retries)
+{
+    if (capq_is_queued(state)) {
+	return true;
+    }
+
+    if (capq_is_dequeued(state) && retries >= CAPQ_TOP_CONTEND_THRESHOLD) {
+	return true;
+    }
+
+    return false;
 }
 
 #endif

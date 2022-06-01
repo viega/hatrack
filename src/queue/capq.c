@@ -149,6 +149,7 @@ capq_enqueue(capq_t *self, void *item)
     uint64_t      max;
     uint64_t      step;
     uint64_t      sz;
+    uint64_t      epoch;
     capq_cell_t  *cell;    
     
     mmm_start_basic_op();
@@ -165,6 +166,44 @@ capq_enqueue(capq_t *self, void *item)
 	    cur_ix = atomic_fetch_add(&store->enqueue_index, step);
 	    end_ix = atomic_load(&store->dequeue_index);
 
+	    /* We are going to write in the buffer in a circular
+	     * fashion until it seems to be full. However, the
+	     * enqueue_index and dequeue_index fields are not absolute
+	     * indicies into the underlying array, they are
+	     * essentially epoch values, and we will effectively take
+	     * the epoch modulo the backing store size to get the
+	     * index (via the macro capq_ix()).
+	     *
+	     * Given that, we test whether we're approximately full by
+	     * adding the size to the dequeue epoch. If this value is
+	     * larger than (or equal to) the enqueue epoch, the write
+	     * is nominally safe.  Otherwise, we need to resize.
+	     *
+	     * Do note that, if enqueues and dequeues are both
+	     * happening quickly, we might encounter one of these
+	     * problems when we try to write:
+	     *
+	     * 1) If a dequeue or top operation gets to this slot
+	     *    before we finish writing, it will invalidate this
+	     *    cell; we might see our epoch with CAPQ_TOOSLOW set.
+	     *
+             * 2) When we're REALLY slow, not only may our slot be
+             *    invalidated, but another enqueuer may have since
+             *    been assigned the slot, and written to it, in which
+	     *    case we will see some future epoch.
+	     *
+	     * 3) Before we finish our write, some thread may have
+	     * determined that the backing store needs to grow, and
+	     * may have set CAPQ_MOVING.
+	     *
+	     * In all these cases, we will retry our enqueue
+	     * operation.  In the first two cases, we double the value
+	     * of 'step' to make sure our enqueue stays wait free.
+	     *
+	     * In the third case, we first help with the migration
+	     * before we retry.
+	     */
+	    
 	    max = end_ix + sz;
 	    
 	    if (cur_ix >= max) {
@@ -172,8 +211,28 @@ capq_enqueue(capq_t *self, void *item)
 	    }
 
 	    cell            = &store->cells[capq_ix(cur_ix, sz)];
-	    expected        = empty_cell;
+	    expected        = atomic_read(cell);
 	    candidate.state = capq_set_used(cur_ix);
+
+	    if (capq_is_moving(expected.state)) {
+		break;
+	    }
+	    
+	    /* On a successful write, *we* should be writing our
+	     * epoch into this cell. If it's already there, then
+	     * a dequeuer invalidated us.
+	     *
+	     * If the epoch is above ours, then we were really slow.
+	     *
+	     * Either way, we need to try again.
+	     */
+	    
+	    epoch = capq_extract_epoch(expected);
+
+	    if (epoch >= cur_ix) {
+		step <<= 1;
+		continue;
+	    }
 
 	    if (CAS(cell, &expected, candidate)) {
 		atomic_fetch_add(&self->len, 1);
@@ -186,14 +245,79 @@ capq_enqueue(capq_t *self, void *item)
 		break;
 	    }
 
-	    assert(!(expected.state & CAPQ_USED));
-
+	    // Otherwise, we got invalidated.
 	    step <<= 1;
+	    continue;
 	}
 	
 	capq_migrate(store, self);
     }
 }
+
+/*
+ * The basic idea here is to get the current value of the dequeue
+ * index, and return the value that's stored there. However, a lot of
+ * things can go wrong for us, here:
+ *
+ * 1. The queue might be empty at the point where we attempt to look
+ *    at the top.
+ *
+ * 2. The slot we look in might have been skipped, due to an enqueue
+ *    operation needing to skip slots (part of making the queue wait
+ *    free).
+ *
+ * 3. We might end up very slow to read, causing us to see a dequeued
+ *    item.
+ *
+ * 4. We might end up very slow to read, causing us to see an item
+ *    that was enqueued later, which probably isn't a valid,
+ *    linearizable item to return, yet. 
+ *
+ * 5. The slot we look in might not yet be written to, due to a slow
+ *    writer.
+ *
+ *
+ * Since the primary purpose of the CAPQ is to support building other
+ * wait-free data structures, we want to support a bounded number of
+ * retries, ideally with a small bound. And, we want to be able to
+ * maintain a proper linearization, so we can show correctness (so we
+ * cannot return as if we're empty if there are actually items in the
+ * queue, but we're just having a hard time getting the top).
+ *
+ * For #1, we can easily tell when the queue seems to be empty before
+ * we go look at a cell, and just bail.
+ *
+ * For #2, we expect a bounded number of skips, so this is no problem.
+ *
+ * For #3, we count the number of times we fail because we were too
+ * slow. If we hit CAPQ_TOP_THRESHOLD, then we return the first valid
+ * DEQUEUED value we see, which has the effect of linearizing the
+ * top() operation BEFORE the competing dequeue.
+ *
+ * The caller will never be able to tell it got stale data, but it
+ * does guarantee that any subsequent cap() operation will fail.
+ *
+ * Case #4 is similar to case #3, except that we cannot know if there
+ * was a valid dequeued value.
+ *
+ * Note that we could have such bad luck that we always find ourselves
+ * waking up to new epochs.  As a result, if we're above our retry
+ * threshold, we'll kick off a migration to make sure we stay wait
+ * free.
+ *
+ * For case #5, We attempt to invalidate cells is they're not yet
+ * written, and then try again. This starves writers, not readers; we
+ * can return 'empty' if we happen to know that there was some point
+ * where the queue was empty, otherwise we can keep scanning.  We'll
+ * eventually find something written, or we'll eventually get down to
+ * one contending writer, where we can know that the queue is empty on
+ * contention. When we see written, yet dequeued items, we take the
+ * same strategy as with #3, thus ensuring that we keep a small bound.
+ *
+ * Note that capq_top() being a read-only operation, it can ignore
+ * migrations; even if we're slow, it's fine for us to linearize to
+ * the moment before the migration completes.
+ */
 
 capq_top_t
 capq_top(capq_t *self, bool *found)
@@ -203,18 +327,25 @@ capq_top(capq_t *self, bool *found)
     uint64_t      end_ix;
     uint64_t      candidate_ix;
     uint64_t      sz;
+    uint64_t      contention_retries;
+    uint64_t      suspension_retries;
+    uint64_t      epoch;
     capq_cell_t  *cell;
     capq_item_t   item;
+    capq_item_t   marker;
     
     mmm_start_basic_op();
 
-    store = atomic_read(&self->store);
+    contention_retries = 0;
+    suspention_retries = 0;
+    store              = atomic_read(&self->store);
 
     while (true) {
 	sz     = store->size;
 	cur_ix = atomic_load(&store->dequeue_index);
 	end_ix = atomic_load(&store->enqueue_index);
 
+	// This covers case 1, above.
 	if (cur_ix >= end_ix) {
 	    if (found) {
 		*found = false;
@@ -224,36 +355,81 @@ capq_top(capq_t *self, bool *found)
 	    return empty_cell;
 	}
 
-	cell = &store->cells[capq_ix(cur_ix, sz)];
-	item = atomic_read(cell);
+	cell  = &store->cells[capq_ix(cur_ix, sz)];
+	item  = atomic_read(cell);
+	epoch = capq_extract_epoch(item.state);
 
-	// We're too slow.
-	if (capq_extract_epoch(item.state) > cur_ix) {
-	next_slot:
-	    candidate_ix = cur_ix + 1;
-	    CAS(&store->dequeue_index, &cur_ix, candidate_ix);
-	    continue; 
-	}
-
-	/* Cell could have been skipped, or could be a slow writer.
-	 * Attempt to CAS in TOO SLOW, and if that fails, try
-	 * again w/o bumping the dequeue ix.
+	/* First let's look at the case where the epoch is as we
+	 * expect it to be.  If the item is queued, or it's dequeued
+	 * and yet we've reached our threshold, we can return the item.
+	 *
+	 * Otherwise, the epoch would only be correct if some other
+	 * thread successfully invalidated this cell, so we move on,
+	 * bumping up our retry counter if the item was recently
+	 * dequeued.
 	 */
-	if (!capq_is_queued(item.state)) {
-	    if (!CAS(cell, &item, too_slow_marker)) {
-		continue; // Might now be in this slot.
+	if (epoch == cur_ix) {
+	    if (capq_should_return(item.state, contention_retries)) {
+		// This zeros out all flags in the state field.
+		item.state = capq_extract_epoch(item.state);
+
+		return hatrack_found_with_mmm(found, item);
 	    }
-	    goto next_slot;
+
+	    if (capq_is_dequeued(item.state)) {
+		contention_retries++;
+	    }
+	    
+	    next_slot:
+		candidate_ix = cur_ix + 1;
+		CAS(&store->dequeue_index, &cur_ix, candidate_ix);
+		continue; 
 	}
 
-	if (found) {
-	    *found = true;
+
+	/* If the epoch is smaller than our epoch (and we are not
+	 * migrating), then either the cell got skipped, or we have a
+	 * slow writer. Either way, we should make an attempt to
+	 * invalidate the cell. If we succeed, we can move on to the
+	 * next slot (jump to the next_slot target above). If we fail
+	 * to invalidate the cell, then we should try the loop again
+	 * w/o trying to swing the pointer, because there's some
+	 * chance that a slow writer still managed to beat us, and the
+	 * correct value is in this cell.
+	 */
+	
+	if (capq_extract_epoch(item.state) < cur_ix) {
+
+	    if (capq_is_moving(item.state)) {
+		// If we're migrating, we won't change cell state, but the
+		// dequeue index may not have caught up yet.
+		goto next_slot;
+	    }
+		
+	    marker = { .item = NULL, .state = CAPQ_TOOSLOW | cur_ix };
+
+	    if (CAS(cell, &item, marker)) {
+		goto next_slot;
+	    }
+	    
+	    continue;
 	}
 
-	mmm_end_op();
+	/* If we're here, the read epoch was AHEAD of the epoch we
+	 * were expecting, and so we were definitely too slow, and the
+	 * tail will have already been moved. There's no valid data
+	 * stored in the cell anymore, so we can only bump up
+	 * suspension_retries, grow the array if the number of retries
+	 * is too high, and then go through the loop again.
+	 */
 
-	item.state = capq_extract_epoch(item.state);
-	return item;
+	if (!(++suspension_retries % CAPQ_TOP_SUSPEND_THRESHOLD)) {
+	    capq_migrate(store, self);
+	    store = atomic_read(&self->store);
+	}
+	
+	continue;
+	
     }
 }
 
