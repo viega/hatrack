@@ -56,15 +56,12 @@ typedef union {
 } unholy_u;
 
 static const unholy_u moving_cell = { .cell = { NULL, CAPQ_MOVING } };
-static const unholy_u moved_cell = { .cell = { NULL, CAPQ_MOVING | CAPQ_MOVED } };
+static const unholy_u moved_cell  = { .cell = { NULL, CAPQ_MOVING | CAPQ_MOVED } };
 
 
 
 static capq_store_t *capq_new_store(uint64_t);
 static void          capq_migrate  (capq_store_t *, capq_t *);
-
-#define CAPQ_DEFAULT_SIZE 1024
-#define CAPQ_MINIMUM_SIZE 512
 
 void
 capq_init(capq_t *self)
@@ -318,7 +315,6 @@ capq_enqueue(capq_t *self, void *item)
  * migrations; even if we're slow, it's fine for us to linearize to
  * the moment before the migration completes.
  */
-
 capq_top_t
 capq_top(capq_t *self, bool *found)
 {
@@ -476,7 +472,6 @@ capq_top(capq_t *self, bool *found)
  * case we retry after the migration), or it's because the item is
  * already dequeued, in which case it's a fail.
  */
-
 bool
 capq_cap(capq_t *self, uint64_t epoch)
 {
@@ -556,6 +551,18 @@ capq_cap(capq_t *self, uint64_t epoch)
     }
 }
 
+/* 
+ * Note that this is a lock-free implementation, built on top of
+ * capq_top() and capq_cap().
+ *
+ * We could build a more efficient lock-free version of this easily
+ * using pieces of both those functions. And, with some extra work, we
+ * could make a wait-free version of this call.
+ *
+ * However, we don't expect capq to be used as a general-purpose
+ * queue; the point of the thing is to use compare-and-pop to dequeue.
+ * This is here primarily to hook into our test harness.
+ */
 void *
 capq_dequeue(capq_t *self, bool *found)
 {
@@ -620,8 +627,6 @@ capq_new_store(uint64_t size)
  * directly into the new backing store, everything will be right with
  * the cosmos.
  */
-
-
 static void
 capq_migrate(capq_store_t *store, capq_t *top)
 {
@@ -668,7 +673,6 @@ capq_migrate(capq_store_t *store, capq_t *top)
     }
 
     // Phase 2: agree on the new store.
-
     expected_store = NULL;
     next_store     = capq_new_store(store->size << 1);
 
@@ -689,7 +693,6 @@ capq_migrate(capq_store_t *store, capq_t *top)
      * until n equals num_items, where n counts the number of items
      * we have migrated successfully.
      */
-
     n = 0;
     
     for (i = lowest_ix; n < num_items; i = capq_ix(i+1, store->size)) {
@@ -716,7 +719,6 @@ capq_migrate(capq_store_t *store, capq_t *top)
     }
 
     // Phase 4: Install the new store.
-
     i       = CAPQ_STORE_INITIALIZING;
     new_dqi = (store->dequeue_index + 0x0000000100000000) & 0xffffffff00000000;
 	

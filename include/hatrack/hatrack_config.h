@@ -678,6 +678,23 @@
  */
 #undef HATSTACK_TEST_LLSTACK
 
+/* CAPQ_DEFAULT_SIZE
+ *
+ * Specifies the initial number of entries in a CAPQ store, if no size
+ * is provided.
+ */
+#define CAPQ_DEFAULT_SIZE 1024
+
+/* CAPQ_MINIMUM_SIZE
+ *
+ * Given the use of this for building wait-free algorithms, this is
+ * perhaps a bit higher than you might expect.  In early vector
+ * testing, this is the point where the performance impact is
+ * noticable; this value was originally set to 512, and maybe should
+ * go back there?
+ */
+
+#define CAPQ_MINIMUM_SIZE 256
 
 /* CAPQ_TOP_CONTEND_THRESHOLD
  * 
