@@ -323,7 +323,6 @@ capq_top(capq_t *self, bool *found)
     uint64_t      end_ix;
     uint64_t      candidate_ix;
     uint64_t      sz;
-    uint64_t      contention_retries;
     uint64_t      suspension_retries;
     uint64_t      epoch;
     capq_cell_t  *cell;
@@ -332,40 +331,30 @@ capq_top(capq_t *self, bool *found)
     
     mmm_start_basic_op();
 
-    contention_retries = 0;
     suspension_retries = 0;
     store              = atomic_read(&self->store);
-
-    while (true) {
-	sz     = store->size;
-	cur_ix = atomic_load(&store->dequeue_index);
-	end_ix = atomic_load(&store->enqueue_index);
-
-	// This covers case 1, above.
-	if (cur_ix >= end_ix) {
-	    if (found) {
-		*found = false;
-	    }
-
-	    mmm_end_op();
-	    return empty_cell;
-	}
-
+    sz                 = store->size;
+    cur_ix             = atomic_load(&store->dequeue_index);
+    end_ix             = atomic_load(&store->enqueue_index);
+    
+    while (cur_ix < end_ix) {
 	cell  = &store->cells[capq_ix(cur_ix, sz)];
 	item  = atomic_read(cell);
 	epoch = capq_extract_epoch(item.state);
 
 	/* First let's look at the case where the epoch is as we
-	 * expect it to be.  If the item is queued, or it's dequeued
-	 * and yet we've reached our threshold, we can return the item.
+	 * expect it to be.  If the item was queued at some point
+	 * since we started our operation, we can return the item,
+	 * linearizing to the read of the dequeue index.
 	 *
 	 * Otherwise, the epoch would only be correct if some other
 	 * thread successfully invalidated this cell, so we move on,
-	 * bumping up our retry counter if the item was recently
-	 * dequeued.
+	 * after trying to 'help' swing the dequeue index (just in
+	 * case a thread got stalled after invalidating but before the
+	 * bump occurred).
 	 */
 	if (epoch == cur_ix) {
-	    if (capq_should_return(item.state, contention_retries)) {
+	    if (capq_should_return(item.state)) {
 	    found_item:
 		// This zeros out all flags in the state field.
 		item.state = capq_extract_epoch(item.state);
@@ -379,23 +368,21 @@ capq_top(capq_t *self, bool *found)
 		return item;
 	    }
 
-	    if (capq_is_dequeued(item.state)) {
-		contention_retries++;
-	    }
-	    
 	    next_slot:
 		candidate_ix = cur_ix + 1;
-		CAS(&store->dequeue_index, &cur_ix, candidate_ix);
+		if (CAS(&store->dequeue_index, &cur_ix, candidate_ix)) {
+		    cur_ix = candidate_ix;
+		}
 		continue; 
 	}
-
 
 	/* If the epoch is smaller than our epoch (and we are not
 	 * migrating), then there are three possibilities:
 	 *
 	 * 1. There was a migration, and the epoch read constitutes a
-	 * REAL epoch.  Here, if the item is listed as ENQUEUED, then
-	 * we know it's still the valid next item to return.
+	 * REAL epoch.  Here, if the item is listed as ENQUEUED or
+	 * DEQUEUED, then we know it's still the valid next item to
+	 * return.
 	 *
 	 * 2. There was contention, and some enqueuer skipped the
 	 * enqueue index past this cell.
@@ -414,17 +401,22 @@ capq_top(capq_t *self, bool *found)
 	 * still managed to beat us, and the correct value is in this
 	 * cell.
 	 */
-	
 	if (capq_extract_epoch(item.state) < cur_ix) {
 
-	    if (capq_is_enqueued(item.state)) {
+	    if (capq_should_return(item.state)) {
 		goto found_item;
 	    }
 
 	    if (capq_is_moving(item.state)) {
-		// If we're migrating, we won't change cell state, but the
-		// dequeue index may not have caught up yet.
-		goto next_slot;
+		/* If we're migrating and the cell we're looking at
+		 * hasn't been written to yet, we don't need to
+		 * invalidate the cell; it's implicitly
+		 * invalid. However, since we're not modifying the
+		 * queue, we get to keep searching, by going to the
+		 * next slot.
+		 */
+		cur_ix++;
+		continue;
 	    }
 		
 	    marker.item  = NULL;
@@ -433,8 +425,15 @@ capq_top(capq_t *self, bool *found)
 	    if (CAS(cell, &item, marker)) {
 		goto next_slot;
 	    }
-	    
-	    continue;
+	    else {
+		/* 
+		 * Someone beat our write. It could have been another
+		 * thread invalidating this slot, or it could have
+		 * been a successful write. Re-try the loop, without
+		 * bumping the value cur_ix, so we can see what's up!
+		 */
+		continue;
+	    }
 	}
 
 	/* If we're here, the read epoch was AHEAD of the epoch we
@@ -442,17 +441,29 @@ capq_top(capq_t *self, bool *found)
 	 * tail will have already been moved. There's no valid data
 	 * stored in the cell anymore, so we can only bump up
 	 * suspension_retries, grow the array if the number of retries
-	 * is too high, and then go through the loop again.
+	 * is too high, and then start over, re-reading cur_ix and end_ix;
 	 */
 
 	if (!(++suspension_retries % CAPQ_TOP_SUSPEND_THRESHOLD)) {
 	    capq_migrate(store, self);
 	    store = atomic_read(&self->store);
 	}
+
+	cur_ix = atomic_load(&store->dequeue_index);
+	end_ix = atomic_load(&store->enqueue_index);
 	
 	continue;
 	
     }
+
+    // If we exit the loop, the store was empty at some point.
+    if (found) {
+	*found = false;
+    }
+
+    mmm_end_op();
+    
+    return empty_cell;
 }
 
 /*

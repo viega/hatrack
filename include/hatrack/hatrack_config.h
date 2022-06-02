@@ -696,21 +696,6 @@
 
 #define CAPQ_MINIMUM_SIZE 256
 
-/* CAPQ_TOP_CONTEND_THRESHOLD
- * 
- * On calls to capq_top(), how many times do we retry in the face of
- * dequeue contention, before we linearize ourselves behind a dequeue?
- * This is necessary to make capq_top() wait free, but means that we
- * might return KNOWING that a subsequent call to capq_cap() is going
- * to fail, causing the caller to do some unnecessary work.
- *
- * For most expected uses of CAPQ, it's probably better to minimize
- * contention, and keep this number low, but I don't have any strong
- * evidence yet.
- */
-
-#define CAPQ_TOP_CONTEND_THRESHOLD 4
-
 /* CAPQ_TOP_SUSPEND_THRESHOLD
  *
  * If calls to capq_top() find that the underlying backing store is

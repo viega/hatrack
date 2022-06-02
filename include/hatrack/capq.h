@@ -164,13 +164,9 @@ capq_clear_moving(uint64_t state)
 
 // Precondition-- we are looking at the right epoch.
 static inline bool
-capq_should_return(uint64_t state, uint64_t retries)
+capq_should_return(uint64_t state)
 {
-    if (capq_is_enqueued(state)) {
-	return true;
-    }
-
-    if (capq_is_dequeued(state) && retries >= CAPQ_TOP_CONTEND_THRESHOLD) {
+    if (capq_is_enqueued(state) || capq_is_dequeued(state)) {
 	return true;
     }
 
