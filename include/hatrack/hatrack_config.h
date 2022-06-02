@@ -679,6 +679,43 @@
 #undef HATSTACK_TEST_LLSTACK
 
 
+/* CAPQ_TOP_CONTEND_THRESHOLD
+ * 
+ * On calls to capq_top(), how many times do we retry in the face of
+ * dequeue contention, before we linearize ourselves behind a dequeue?
+ * This is necessary to make capq_top() wait free, but means that we
+ * might return KNOWING that a subsequent call to capq_cap() is going
+ * to fail, causing the caller to do some unnecessary work.
+ *
+ * For most expected uses of CAPQ, it's probably better to minimize
+ * contention, and keep this number low, but I don't have any strong
+ * evidence yet.
+ */
+
+#define CAPQ_TOP_CONTEND_THRESHOLD 4
+
+/* CAPQ_TOP_SUSPEND_THRESHOLD
+ *
+ * If calls to capq_top() find that the underlying backing store is
+ * small enough that we are often looping around before dequeuers have
+ * a chance to see what was in a cell (generally due to dequeuers
+ * getting suspended), then we force a resize of the backing store.
+ *
+ * This variable controls how many times a thread deals with this
+ * condition in a single call to capq_top() before kicking off a
+ * resize.
+ *
+ * This is also necessary for wait freedom.
+ *
+ * I recommend keeping this value greater than 1 (suspended threads
+ * happen), but not much higher, because if a thread hits the same
+ * situation multiple times in succession, there's probably going to
+ * be a lot of contention all around, and it's worth growing the
+ * backing store.
+ */
+
+#define CAPQ_TOP_SUSPEND_THRESHOLD 2
+
 #ifndef FLEXARRAY_DEFAULT_GROW_SIZE_LOG
 #define FLEXARRAY_DEFAULT_GROW_SIZE_LOG 8
 #endif

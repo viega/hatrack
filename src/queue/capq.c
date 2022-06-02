@@ -49,7 +49,6 @@
 
 
 static const capq_item_t empty_cell      = { NULL, CAPQ_EMPTY };
-static const capq_item_t too_slow_marker = { NULL, CAPQ_TOOSLOW };
 
 typedef union {
     capq_item_t cell;
@@ -185,7 +184,8 @@ capq_enqueue(capq_t *self, void *item)
 	     *
 	     * 1) If a dequeue or top operation gets to this slot
 	     *    before we finish writing, it will invalidate this
-	     *    cell; we might see our epoch with CAPQ_TOOSLOW set.
+	     *    cell; we might see our epoch set, but no item
+	     *    enqueued, and no item dequeued.
 	     *
              * 2) When we're REALLY slow, not only may our slot be
              *    invalidated, but another enqueuer may have since
@@ -212,7 +212,7 @@ capq_enqueue(capq_t *self, void *item)
 
 	    cell            = &store->cells[capq_ix(cur_ix, sz)];
 	    expected        = atomic_read(cell);
-	    candidate.state = capq_set_used(cur_ix);
+	    candidate.state = capq_set_enqueued(cur_ix);
 
 	    if (capq_is_moving(expected.state)) {
 		break;
@@ -227,7 +227,7 @@ capq_enqueue(capq_t *self, void *item)
 	     * Either way, we need to try again.
 	     */
 	    
-	    epoch = capq_extract_epoch(expected);
+	    epoch = capq_extract_epoch(expected.state);
 
 	    if (epoch >= cur_ix) {
 		step <<= 1;
@@ -337,7 +337,7 @@ capq_top(capq_t *self, bool *found)
     mmm_start_basic_op();
 
     contention_retries = 0;
-    suspention_retries = 0;
+    suspension_retries = 0;
     store              = atomic_read(&self->store);
 
     while (true) {
@@ -370,10 +370,17 @@ capq_top(capq_t *self, bool *found)
 	 */
 	if (epoch == cur_ix) {
 	    if (capq_should_return(item.state, contention_retries)) {
+	    found_item:
 		// This zeros out all flags in the state field.
 		item.state = capq_extract_epoch(item.state);
 
-		return hatrack_found_with_mmm(found, item);
+		if (found) {
+		    *found = true;
+		}
+		
+		mmm_end_op();
+		
+		return item;
 	    }
 
 	    if (capq_is_dequeued(item.state)) {
@@ -388,17 +395,35 @@ capq_top(capq_t *self, bool *found)
 
 
 	/* If the epoch is smaller than our epoch (and we are not
-	 * migrating), then either the cell got skipped, or we have a
-	 * slow writer. Either way, we should make an attempt to
-	 * invalidate the cell. If we succeed, we can move on to the
-	 * next slot (jump to the next_slot target above). If we fail
-	 * to invalidate the cell, then we should try the loop again
-	 * w/o trying to swing the pointer, because there's some
-	 * chance that a slow writer still managed to beat us, and the
-	 * correct value is in this cell.
+	 * migrating), then there are three possibilities:
+	 *
+	 * 1. There was a migration, and the epoch read constitutes a
+	 * REAL epoch.  Here, if the item is listed as ENQUEUED, then
+	 * we know it's still the valid next item to return.
+	 *
+	 * 2. There was contention, and some enqueuer skipped the
+	 * enqueue index past this cell.
+	 *
+	 * 3. There is a slow writer, who has not yet written to this
+	 * cell.
+	 *
+	 * In cases 2 and 3, the cell will NOT have the dequeue flag
+	 * set, but we won't necessarily be able to differentiate
+	 * between these two cases.  Therefore, if the item isn't
+	 * enqueued, we make an attempt to invalidate the cell. If we
+	 * succeed, we can move on to the next slot (jump to the
+	 * next_slot target above). If we fail to invalidate the cell,
+	 * then we should try the loop again w/o trying to swing the
+	 * pointer, because there's some chance that a slow writer
+	 * still managed to beat us, and the correct value is in this
+	 * cell.
 	 */
 	
 	if (capq_extract_epoch(item.state) < cur_ix) {
+
+	    if (capq_is_enqueued(item.state)) {
+		goto found_item;
+	    }
 
 	    if (capq_is_moving(item.state)) {
 		// If we're migrating, we won't change cell state, but the
@@ -406,7 +431,8 @@ capq_top(capq_t *self, bool *found)
 		goto next_slot;
 	    }
 		
-	    marker = { .item = NULL, .state = CAPQ_TOOSLOW | cur_ix };
+	    marker.item  = NULL;
+	    marker.state = cur_ix; // Neither enqueued nor dequeued flags set.
 
 	    if (CAS(cell, &item, marker)) {
 		goto next_slot;
@@ -433,39 +459,67 @@ capq_top(capq_t *self, bool *found)
     }
 }
 
+/*
+ * Our compare-and-pop operator has to worry about far fewer issues
+ * than the top() operation. First, we already have an epoch that is
+ * expected to be the 'top'. If we look at the dequeue index, and it's
+ * not the same, then the CAP couldn't possibly succeed. If it is the
+ * same, we just need to:
+ *
+ * 1) Load the cell to recover the item and flags.
+ * 2) Make sure the loaded copy is still considered enqueued at the time we 
+ *    loaded it.
+ * 3) Swap it out for a version that indicates 'dequeued'.
+ *
+ * If all three of these things succeed, then our CAP succeeds. If
+ * anything goes wrong, it is either because of a migration (in which
+ * case we retry after the migration), or it's because the item is
+ * already dequeued, in which case it's a fail.
+ */
+
 bool
 capq_cap(capq_t *self, uint64_t epoch)
 {
     capq_store_t *store;
     uint64_t      cur_ix;
-    uint64_t      end_ix;
+    uint64_t      candidate_ix;
     uint64_t      sz;    
     capq_cell_t  *cell;
     capq_item_t   expected;
+    capq_item_t   candidate;
     
     mmm_start_basic_op();
 
     store = atomic_read(&self->store);
 
     while (true) {
-	sz     = store->size;
-	cur_ix = atomic_read(&store->dequeue_index);
-	end_ix = atomic_read(&store->enqueue_index);
-
-	if (cur_ix >= end_ix) {
-	    mmm_end_op();
-	    return false;
-	}
-
+	sz       = store->size;
+	cur_ix   = atomic_read(&store->dequeue_index);
 	cell     = &store->cells[capq_ix(cur_ix, sz)];
 	expected = atomic_read(cell);
 
+	/* We can't compare against cur_ix because in a migration, the
+	 * migrated cells will have values that are different than
+	 * cur_ix-- they don't get re-written, partially because a
+	 * migration can happen while a cap() is in progress, and we
+	 * don't want to have to deal w/ the input epoch having to be
+	 * remapped.
+	 */
+	if (capq_extract_epoch(expected.state) != epoch) {
+	    mmm_end_op();
+	    return false;
+	}
+	
+	// If we were really slow to load, the epoch changed.
 	if (capq_extract_epoch(expected.state) != epoch) {
 	    mmm_end_op();	    
 	    return false;
 	}
 
-	if (!capq_is_queued(expected.state)) {
+	/* Equally, we could check capq_is_dequeued(), as we know
+	 * if top() returned an epoch, then that epoch was enqueued.
+	 */
+	if (!capq_is_enqueued(expected.state)) {
 	    mmm_end_op();	    
 	    return false;
 	}
@@ -476,10 +530,17 @@ capq_cap(capq_t *self, uint64_t epoch)
 	    continue;
 	}
 
-	if (CAS(cell, &expected, empty_cell)) {
+	candidate.item  = expected.item;
+	candidate.state = capq_set_state_dequeued(expected.state);
+	    
+	if (CAS(cell, &expected, candidate)) {
 	    /* We don't need to bump the tail; the next call to
-	     * capq_top() will do it for us.
+	     * capq_top() will do it for us.  However, let's do it
+	     * anyway, just to avoid unnecessary retries in top().
 	     */
+	    candidate_ix = cur_ix + 1;
+	    CAS(&store->dequeue_index, &cur_ix, candidate_ix);
+	    
 	    mmm_end_op();	    
 	    return true;
 	}
@@ -526,6 +587,41 @@ capq_new_store(uint64_t size)
     return ret;
 }
 
+/* 
+ * We start marking at the beginning of the backing store, not at the
+ * dequeue pointer, since that is potentially a moving target.  
+ *
+ * As we lock cells, we'll note the epochs we see of enqueued items,
+ * as well as the index in which we found those items, and when we're
+ * done, all threads should be able to agree on the starting index for
+ * migration.
+ *
+ * Note that we have to compare total lifetime using the epoch, but
+ * record the associated INDEX because it's possible to have multiple
+ * migrations without any dequeuing, so the epoch won't necessarily
+ * reduce to the slot in which it's stored.
+ *
+ * As we migrate, we compact items (particularly, where there were
+ * skips). The new 'epoch' we give out (via the enqueue pointer) is a
+ * value that's definitely higher than any old epoch, but is aligned
+ * to the slot.
+ *
+ * The dequeue pointer, really only strictly needs to point to the
+ * slot, and does not need to represent an epoch. However, our logic
+ * for top() is more straightforward if we keep the dequeue index
+ * aligned to the epoch whenever possible. Therefore, when we're
+ * finishing up a migration, we set the dequeue pointer to whatever
+ * value we *would* have given out for the current slot, had we always
+ * lived in this store, without migrating.
+ *
+ * The top() operation will behave okay when this value is higher than
+ * the extracted epoch, because CAPQ_ENQUEUED will still be set.  And
+ * once the pointer starts pointing at items that were enqueued
+ * directly into the new backing store, everything will be right with
+ * the cosmos.
+ */
+
+
 static void
 capq_migrate(capq_store_t *store, capq_t *top)
 {
@@ -535,64 +631,74 @@ capq_migrate(capq_store_t *store, capq_t *top)
     capq_item_t   candidate_item;
     capq_item_t   old_item;
     uint64_t      i, n;
-    uint64_t      highest_ix;
-    uint64_t      highest_epoch;
-    uint64_t      lowest;    
-    uint64_t      move_ctr;
+    uint64_t      lowest_ix;
+    uint64_t      lowest_epoch;
+    uint64_t      new_dqi;  // The new store's start value for dequeue_index.
     uint64_t      epoch;
+    uint64_t      num_items;
     unholy_u      u;
 
-    highest_ix    = 0;
-    highest_epoch = 0;
-    
-    move_ctr = (store->dequeue_index & 0xffffffff00000000) + 0x0000000100000000;
-    
+    num_items     = 0;
+    lowest_ix     = 0;
+    lowest_epoch  = 0xffffffffffffffff;
+
+    // Phase 1: mark for move, and search for the first cell to migrate.
     for (i = 0; i < store->size; i++) {
-	
 	u.num = atomic_fetch_or_explicit((_Atomic __uint128_t *)&store->cells[i],
 					 moving_cell.num,
 					 memory_order_relaxed);
 
 	expected_item = u.cell;
-	
-	if (!capq_is_queued(expected_item.state)) {
+
+	if (!capq_is_enqueued(expected_item.state)) {
 	    atomic_fetch_or_explicit((_Atomic __uint128_t *)&store->cells[i],
 				     moved_cell.num,
 				     memory_order_relaxed);
+	    continue;
 	}
+
+	num_items++;
+	
 	epoch = capq_extract_epoch(expected_item.state);
-	if (epoch > highest_epoch) {
-	    highest_epoch = epoch;
-	    highest_ix    = i;
+	
+	if (epoch < lowest_epoch) {
+	    lowest_epoch = epoch;
+	    lowest_ix    = i;
 	}
     }
+
+    // Phase 2: agree on the new store.
 
     expected_store = NULL;
     next_store     = capq_new_store(store->size << 1);
 
     atomic_store(&next_store->enqueue_index, CAPQ_STORE_INITIALIZING);
-    atomic_store(&next_store->dequeue_index, CAPQ_STORE_INITIALIZING);    
+    atomic_store(&next_store->dequeue_index, CAPQ_STORE_INITIALIZING);
 
     if (!CAS(&store->next_store, &expected_store, next_store)) {
 	mmm_retire_unused(next_store);
 	next_store = expected_store;
     }
 
-    n       = 0;
-    lowest      = store->dequeue_index & store->size;
-    highest_ix += store->size;
+    /*
+     * Phase 3: migrate enqueued cells, while compacting.
+     *
+     * Note that we want to loop from the index associated with the
+     * lowest enqueued epoch (lowest_ix), until we have found all
+     * enqueued items.  We do this by visiting every index in order
+     * until n equals num_items, where n counts the number of items
+     * we have migrated successfully.
+     */
+
+    n = 0;
     
-    if ((highest_ix > store->size) && (lowest <= (highest_ix - store->size))) {
-	lowest = (highest_ix - (int64_t)store->size + 1);
-    }
+    for (i = lowest_ix; n < num_items; i = capq_ix(i+1, store->size)) {
+	old_item = atomic_read(&store->cells[i]);
 
-    for (i = lowest; i <= highest_ix; i++) {
-	old_item = atomic_read(&store->cells[capq_ix(i, store->size)]);
-
-	if (!capq_is_queued(old_item.state)) {
+	if (!capq_is_enqueued(old_item.state)) {
 	    continue;
 	}
-	
+
 	if (capq_is_moved(old_item.state)) {
 	    n++;
 	    continue;
@@ -600,8 +706,8 @@ capq_migrate(capq_store_t *store, capq_t *top)
 
 	expected_item        = empty_cell;
 	candidate_item.item  = old_item.item;
-	candidate_item.state = old_item.state & (~(CAPQ_MOVING|CAPQ_MOVED));
-	
+	candidate_item.state = capq_clear_moving(old_item.state);
+
 	CAS(&next_store->cells[n++], &expected_item, candidate_item);
 
 	atomic_fetch_or((_Atomic __uint128_t *)
@@ -609,15 +715,21 @@ capq_migrate(capq_store_t *store, capq_t *top)
 			 moved_cell.num);
     }
 
-    i = CAPQ_STORE_INITIALIZING;
-    CAS(&next_store->dequeue_index, &i, move_ctr);
-    i = CAPQ_STORE_INITIALIZING;
-    CAS(&next_store->enqueue_index, &i, move_ctr | n);
+    // Phase 4: Install the new store.
 
+    i       = CAPQ_STORE_INITIALIZING;
+    new_dqi = (store->dequeue_index + 0x0000000100000000) & 0xffffffff00000000;
+	
+    CAS(&next_store->dequeue_index, &i, new_dqi);
+
+    i       = CAPQ_STORE_INITIALIZING;
+    
+    CAS(&next_store->enqueue_index, &i, new_dqi | n);
 
     if (CAS(&top->store, &store, next_store)) {
 	mmm_retire(store);
     }
-    
+
     return;
 }
+

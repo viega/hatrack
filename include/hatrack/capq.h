@@ -83,12 +83,11 @@ typedef struct {
 
 enum {
     CAPQ_EMPTY              = 0x0000000000000000,
-    CAPQ_DEQUEUED           = 0x0800000000000000,
-    CAPQ_TOOSLOW            = 0x1000000000000000,
-    CAPQ_USED               = 0x2000000000000000,
+    CAPQ_ENQUEUED           = 0x1000000000000000,
+    CAPQ_DEQUEUED           = 0x2000000000000000,
     CAPQ_MOVED              = 0x4000000000000000,
     CAPQ_MOVING             = 0x8000000000000000,
-    CAPQ_FLAG_MASK          = 0xf800000000000000,
+    CAPQ_FLAG_MASK          = 0xf000000000000000,
     CAPQ_STORE_INITIALIZING = 0xffffffffffffffff
 };
 
@@ -109,16 +108,10 @@ capq_top_t capq_top        (capq_t *, bool *);
 bool       capq_cap        (capq_t *, uint64_t);
 void      *capq_dequeue    (capq_t *, bool *);
 
-static inline bool
-capq_cell_too_slow(capq_item_t item)
-{
-    return (bool)(item.state & CAPQ_TOOSLOW);
-}
-		   
 static inline uint64_t
-capq_set_used(uint64_t ix)
+capq_set_enqueued(uint64_t ix)
 {
-    return CAPQ_USED | ix;
+    return CAPQ_ENQUEUED | ix;
 }
 
 static inline bool
@@ -134,9 +127,9 @@ capq_is_moved(uint64_t state)
 }
 
 static inline bool
-capq_is_queued(uint64_t state)
+capq_is_enqueued(uint64_t state)
 {
-    return state & CAPQ_USED;
+    return state & CAPQ_ENQUEUED;
 }
 
 static inline bool
@@ -145,34 +138,10 @@ capq_is_dequeued(uint64_t state)
     return state & CAPQ_DEQUEUED;
 }
 
-static inline bool
-capq_is_invalidated(uint64_t state)
-{
-    return state & CAPQ_TOOSLOW;
-}
-
-static inline uint64_t
-capq_add_moving(uint64_t state)
-{
-    return state | CAPQ_MOVING;
-}
-
-static inline uint64_t
-capq_add_moved(uint64_t state)
-{
-    return state | CAPQ_MOVED | CAPQ_MOVING;
-}
-
 static inline uint64_t
 capq_extract_epoch(uint64_t state)
 {
     return state & ~(CAPQ_FLAG_MASK);
-}
-
-static inline bool
-capq_can_enqueue(uint64_t state)
-{
-    return !(state & CAPQ_FLAG_MASK);
 }
 
 static inline uint64_t
@@ -181,11 +150,23 @@ capq_ix(uint64_t seq, uint64_t sz)
     return seq & (sz-1);
 }
 
+static inline uint64_t
+capq_set_state_dequeued(uint64_t state)
+{
+    return (state & ~CAPQ_ENQUEUED) | CAPQ_DEQUEUED;
+}
+
+static inline uint64_t
+capq_clear_moving(uint64_t state)
+{
+    return state & (~(CAPQ_MOVING|CAPQ_MOVED));
+}
+
 // Precondition-- we are looking at the right epoch.
 static inline bool
 capq_should_return(uint64_t state, uint64_t retries)
 {
-    if (capq_is_queued(state)) {
+    if (capq_is_enqueued(state)) {
 	return true;
     }
 
