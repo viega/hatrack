@@ -53,14 +53,16 @@ Therefore, the `top()` operation must return an epoch (in addition to the data i
 
 The four flags we use are straightforward, and should be familiar from our other algorithms:
 
-1. A TOOSLOW flag, that indicates the epoch recordered in the cell is invalid, and that no item is present. The epoch slot was given out to an enqueuer, who did not manage to complete the enqueue before a dequeuer came along.  The enqueuer will have retried its operation.
-2. A USED flag, indicating that there is an item enqueued, and that the current epoch is valid.  If this flag is NOT set, then the item associated with the epoch field has either been dequeued successfully, or was never enqueued (e.g., due to the enqueuer being too slow).
+1. An ENQUEUED flag, indicating the item is currently enqueued.
+2. A DEQUEUED flag, indicating the item was enqueued, but has since been dequeued.
 3. A MOVING flag, indicating that the underlying backing store is being migrated.
 4. A MOVED flag, indicating that the cell in question has been migrated successfully.
 
-As with our other algorithms, the MOVED flag is primarily an optimization to avoid unnecessary work when migrating the backing store. The considerations with migrating the backing store are essentially the same as with our core queue abstraction. It is worth noting that the migration needs to preserve epoch values across the backing store, due to the fact that they're returned to the user (other algorithms can often re-start epochs on a per-backing store basis).
+Note that, if an epoch is written into a cell, but neither ENQUEUED nor DEQUEUED is set, then it represents an INVALID cell.  Top operations will attempt to invalidate cells if they know some enqueuer has been given an epoch, but when they read, they see no evidence of the enqueuer successfully completing their enqueue operation.  If the invalidation is successful, the enqueuer will have to restart its operation.
 
-Note that we do start the value of the epoch field at 1<<32, and increase the epoch by 1<<32 with each migration. This ensures that epochs are not reused, that epochs are always directly mapped to the underlying cell's index, and that 0 is not a valid epoch.
+As with our other algorithms, the MOVED flag is primarily an optimization to avoid unnecessary work when migrating the backing store. The considerations with migrating the backing store are mostly the same as with our core queue abstraction; see source code comments for more detail. It is worth noting that the migration needs to preserve epoch values across the backing store, due to the fact that they're returned to the user (other algorithms can often re-start epochs on a per-backing store basis).
+
+Note that we do start the value of the epoch field at 1<<32, and increase the epoch by 1<<32 with each migration. This ensures that epochs are not reused.
 
 ## The `top()` operation
 
@@ -72,39 +74,35 @@ This operation conceptually returns three different pieces of information:
 
 In our implementation, we return a structure consisting of two 64-bit values. The first is the user-defined item, and the second is the epoch value. If (and only if) the queue is empty, the returned epoch will be 0. However, our implementation also takes an optional boolean reference parameter to indicate whether the queue was empty, to try to make it easier to use the API correctly.
 
-First, the `top()` operation reads the value of the dequeue index, followed by the value of the enqueue index.  If the dequeue index isn't smaller than the enqueue index, then we know the queue is empty, and return appropriately.
+First, the `top()` operation reads the value of the dequeue epoch, followed by the value of the enqueue epoch.  If the dequeue epoch isn't smaller than the enqueue index, then we know the queue was empty at the time of the read of the enqueue epoch, and return appropriately.  Similarly, if we go through all of the items up to the enqueue pointer we read, and there is nothing enqueued (due to skipping or us invalidating), then we know the queue was empty at some point after we started.
 
-At this point, we load the value of the cell.  We then check to see if the epoch written into that cell is as expected, and if it is, what the state of the cell is.
+To test individual cells, We first load the value of the cell.  We then check to see if the epoch written into that cell is as expected, and if it is, what the state of the cell is.
 
-If the epoch in the loaded cell is higher than our epoch, then our thread was very slow and needs to retry (as the cell we thought was the top has been dequeued and potentially reenqueued).
+If the epoch in the loaded cell is higher than our epoch, then our thread was very slow and needs to retry from the beginning (as the cell we thought was the top has been dequeued and potentially reenqueued).
 
-If, we find that the cell doesn't represent a queued value with the correct epoch, there are multiple reasons this might be:
+If we otherwise find that the cell doesn't represent a queued value, there are multiple reasons this might be:
 
 1. A `cap()` may have succeeded, but the dequeue index has not caught up.
 2. If there was contention on a list with few items, the cell in question may have been skipped outright.
 3. The enqueuing thread may be in progress, but too slow.
 
-We don't need to be able to distinguish between these cases, we can attempt to write in the 'too slow' marker; if we succeed in doing so, we retry the operation. Otherwise, we attempt to fix the dequeue index, by updating it via CAS, attempting to install an epoch value one higher than the epoch we read.
+In the first case, the dequeue flag will be set, and we should return this value, because it was a valid top() at some point after we started our operation. While this might seem unintuitive, since we know that calls to cap() relying on such a value will always fail, it greatly simplifies our quest for wait freedom.
 
-Whether or not this CAS succeeds, we simply retry the operation.
+We don't need to be able to distinguish between the last two cases. We simply attempt to invalidate the cell, by writing in the dequeue epoch we read, with no flags set.  If we succeed in invalidating the cell, we again try to bump the dequeue epoch, then retry the operation.
+
+If we fail to invalidate the cell, then we re-start the operation from the point where we initially loaded the contents of the cell, as it may now be properly enqueued.
 
 ### Progress guarantees for `top()`
 
-Any time where the `top()` operation has to retry, it is because the view of the dequeue index was wrong. Again, this could be because we were contending with either successful dequeues, because some enqueue turned out to be too slow, or because other dequeues invalidated enqueues, causing those enqueues to skip cells.  If the cell is invalid, there was no contention, and our progress is not impacted. Similarly, if we retry because we invalidated a cell, that impacts the enqueue operation's progress, but not our own.
+The top() operation has a few contention points:
 
-Our progress is only truly impeded when dequeue operations that have successfully read the top dequeue. However, we note that, if we assume the caller doesn't try to guess epochs, then we know that any successful dequeue required a successful call to `top()`.  That means some thread is always able to guarantee progress, meaning this operation is at least lock free.
+1. It can contend with slow enqueuers.  This mostly impacts the enqueuer (we invalidate cells, like we do with other algorithms), but we do end up re-trying our top operation, but we STOP if we find no item was ever successfully enqueued from the original dequeue point to the original enqueue point.
 
-However, every time we re-start we might find a faster thread has successfully dequeued something.  If the queue never empties due to enqueuing, one thread can, in concept, spin forever, making the algorithm as described lock-free, not wait-free.
+2. It can contend with other top operations moving to invalidate a slow writer. That's fine; any time we fail on invalidating a cell, we retry that cell once. If we see a successful enqueue, then great. If we see a successful invalidation, we move on to the next cell.  If we were so slow that the epoch is wrong, we bump a counter as part of ensuring wait freedom for this specific case (see below).
 
-We need to do better if we want to use our CAPQ for implementing other wait-free operations-- our core operations need to be wait-free themselves.  That means, we have to be able to show some finite bound in which we produce a linearizable result.
+3. Our read can contend with other threads reading and writing so quickly, that the cell we originally were assigned to read from has since been re-written by a future write.
 
-To that end, we can make a simple adjustment.  Dequeues can leave behind the item, and just set a new state flag that indicates when a successful dequeue occurs.  Then, if a `top()` call fails some finite number of times due to dequeue contention, it can return the most recent dequeued value as the 'top'.
-
-Essentially, this linearizes the `top()` operation before the `cap()` that beat it. It means the thread asking for the `top()` will get a value we expect to be stale-- but values going stale after `top()` is ALWAYS a possibility. We are only ensuring that any subsequent `cap()` from that thread is destined to fail.
-
-So we might cause a bit of unnecessary work to occur, but can guarantee wait freedom.
-
-Currently, we've not yet implemented this enhancement to the `top()` operation.
+To deal with this situation, when we see that the data we read from a cell is stale in this way, we bump up a counter. If that counter hits a fixed threshold, it forces a doubling of the size of the array and a reset of the counter. Eventually, if the problem keeps happening, the underlying store will be so big that we couldn't possibly have such contention, thus ensuring wait freedom.
 
 ## The `cap()` dequeue operation
 
