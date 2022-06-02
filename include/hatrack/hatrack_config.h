@@ -678,6 +678,45 @@
  */
 #undef HATSTACK_TEST_LLSTACK
 
+/* CAPQ_DEFAULT_SIZE
+ *
+ * Specifies the initial number of entries in a CAPQ store, if no size
+ * is provided.
+ */
+#define CAPQ_DEFAULT_SIZE 1024
+
+/* CAPQ_MINIMUM_SIZE
+ *
+ * Given the use of this for building wait-free algorithms, this is
+ * perhaps a bit higher than you might expect.  In early vector
+ * testing, this is the point where the performance impact is
+ * noticable; this value was originally set to 512, and maybe should
+ * go back there?
+ */
+
+#define CAPQ_MINIMUM_SIZE 256
+
+/* CAPQ_TOP_SUSPEND_THRESHOLD
+ *
+ * If calls to capq_top() find that the underlying backing store is
+ * small enough that we are often looping around before dequeuers have
+ * a chance to see what was in a cell (generally due to dequeuers
+ * getting suspended), then we force a resize of the backing store.
+ *
+ * This variable controls how many times a thread deals with this
+ * condition in a single call to capq_top() before kicking off a
+ * resize.
+ *
+ * This is also necessary for wait freedom.
+ *
+ * I recommend keeping this value greater than 1 (suspended threads
+ * happen), but not much higher, because if a thread hits the same
+ * situation multiple times in succession, there's probably going to
+ * be a lot of contention all around, and it's worth growing the
+ * backing store.
+ */
+
+#define CAPQ_TOP_SUSPEND_THRESHOLD 2
 
 #ifndef FLEXARRAY_DEFAULT_GROW_SIZE_LOG
 #define FLEXARRAY_DEFAULT_GROW_SIZE_LOG 8
