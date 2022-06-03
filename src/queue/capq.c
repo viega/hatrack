@@ -362,6 +362,13 @@ capq_top(capq_t *self, bool *found)
 		if (found) {
 		    *found = true;
 		}
+
+		/* If we chose to return a dequeued item, we should
+		 * still attempt to swing forward the dequeue index.
+		 */
+		if (capq_is_dequeued(item.state)) {
+		    CAS(&store->dequeue_index, &cur_ix, cur_ix + 1);
+		}
 		
 		mmm_end_op();
 		
