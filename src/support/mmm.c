@@ -26,8 +26,8 @@
 // clang-format off
 __thread mmm_header_t  *mmm_retire_list  = NULL;
 __thread pthread_once_t mmm_inited       = PTHREAD_ONCE_INIT;
-_Atomic  uint64_t       mmm_epoch        = ATOMIC_VAR_INIT(HATRACK_EPOCH_FIRST);
-_Atomic  uint64_t       mmm_nexttid      = ATOMIC_VAR_INIT(0);
+_Atomic  uint64_t       mmm_epoch        = HATRACK_EPOCH_FIRST;
+_Atomic  uint64_t       mmm_nexttid      = 0;
 __thread int64_t        mmm_mytid        = -1; 
 __thread uint64_t       mmm_retire_ctr   = 0;
 

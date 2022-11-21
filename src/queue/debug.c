@@ -28,7 +28,7 @@
 
 hatrack_debug_record_t __hatrack_debug[HATRACK_DEBUG_RING_SIZE] = {};
 
-_Atomic uint64_t __hatrack_debug_sequence         = ATOMIC_VAR_INIT(0);
+_Atomic uint64_t __hatrack_debug_sequence         = 0;
 const char       __hatrack_hex_conversion_table[] = "0123456789abcdef";
 
 /* debug_dump()

@@ -58,7 +58,7 @@ static uint32_t key_mod_mask;
  * readiness, and then wait for a signal from the controller thread
  * that all threads are ready, and that they should start!
  */
-static basic_gate_t starting_gate = ATOMIC_VAR_INIT(0);
+static basic_gate_t starting_gate = 0;
 
 /*
  * The table for the current test.

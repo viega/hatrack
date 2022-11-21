@@ -209,7 +209,7 @@ queue_enqueue(queue_t *self, void *item)
     }
 
     new_segment                = queue_new_segment(new_size);
-    new_segment->enqueue_index = ATOMIC_VAR_INIT(1);
+    new_segment->enqueue_index = 1;
     expected_segment           = NULL;
     
     atomic_store(&new_segment->cells[0], candidate);

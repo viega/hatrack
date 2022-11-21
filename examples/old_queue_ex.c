@@ -21,7 +21,7 @@ time_diff(struct timespec *end, struct timespec *start)
 }
 
 static struct timespec stop_times[HATRACK_THREADS_MAX];
-static basic_gate_t    starting_gate = ATOMIC_VAR_INIT(0);
+static basic_gate_t    starting_gate = 0;
 static queue_t        *mt_queue;
 
 static void

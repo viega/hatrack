@@ -109,8 +109,8 @@ newshat_init_size(newshat_t *self, char size)
 
     len                 = 1 << size;
     store               = newshat_store_new(len);
-    self->item_count    = ATOMIC_VAR_INIT(0);
-    self->next_epoch    = ATOMIC_VAR_INIT(1); // 0 is for empty buckets.
+    self->item_count    = 0;
+    self->next_epoch    = 1; // 0 is for empty buckets.
     self->store_current = store;
 
     pthread_mutex_init(&self->migrate_mutex, NULL);

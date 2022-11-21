@@ -64,7 +64,7 @@ AC_CACHE_CHECK([to see if atomic_fetch_add(ptr, 1) adds sizeof(ptr)],
 	       [AC_RUN_IFELSE([
 	       AC_LANG_PROGRAM([[#include <stdatomic.h>
 	                        typedef struct s { int a; int b; int c; } foo_t;
-	                       _Atomic(foo_t *) x = ATOMIC_VAR_INIT(NULL);]],
+	                       _Atomic(foo_t *) x = NULL;]],
 	       [[atomic_fetch_add(&x, 1);
 	        if ((intptr_t)(atomic_load(&x)) == sizeof(foo_t)) { return 0; }
 		return 1;]] )],

@@ -115,7 +115,7 @@ ballcap_init_size(ballcap_t *self, char size)
 
     len                 = 1 << size;
     store               = ballcap_store_new(len);
-    self->item_count    = ATOMIC_VAR_INIT(0);
+    self->item_count    = 0;
     self->store_current = store;
 
     pthread_mutex_init(&self->migrate_mutex, NULL);

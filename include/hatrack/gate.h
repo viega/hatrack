@@ -65,7 +65,7 @@ gate_init(gate_t *gate, uint64_t max_threads)
     bzero(gate->end_times, sizeof(struct timespec) * max_threads);
 
     gate->max_threads  = max_threads;
-    gate->count        = ATOMIC_VAR_INIT(0);
+    gate->count        = 0;
     gate->elapsed_time = 0;
 
     return;
