@@ -53,7 +53,7 @@
 #ifndef __COUNTERS_H__
 #define __COUNTERS_H__
 
-#include <hatrack_config.h>
+#include <hatrack/hatrack_config.h>
 
 #include <stdint.h>
 #include <stdalign.h>

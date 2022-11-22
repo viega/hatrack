@@ -37,7 +37,7 @@
 #ifndef __GATE_H__
 #define __GATE_H__
 
-#include <mmm.h>
+#include <hatrack/mmm.h>
 #include <strings.h>
 
 typedef struct {
