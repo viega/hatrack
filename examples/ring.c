@@ -135,12 +135,12 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
 {
     uint64_t       i;
     uint64_t       ops_per_thread;
-    uint64_t       total_ops;
+    // uint64_t       total_ops;
     thread_info_t *info;
     double         max;
 
     fprintf(stdout,
-	    "#e= %2llu, #d= %2llu, sz= %05llu -> ",
+	    "#e= %2lu, #d= %2lu, sz= %05lu -> ",
 	    enqueuers,
 	    dequeuers,
 	    ring_size);
@@ -150,7 +150,7 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
 
     ring           = hatring_new(ring_size);
     ops_per_thread = num_ops / enqueuers;
-    total_ops      = num_ops * enqueuers;
+    // total_ops      = num_ops * enqueuers;
 
 #ifdef CONSISTENCY_CHECK
     hatring_set_drop_handler(ring, handle_eject);
@@ -187,9 +187,9 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
     max = gate_close(gate);
     hatring_delete(ring);
 
-    fprintf(stdout, "Qs=%llu; ", num_ops);
-    fprintf(stdout, "DQs=%llu; ", successful_dequeues);
-    fprintf(stdout, "(⊥=%llu in ", failed_dequeues);
+    fprintf(stdout, "Qs=%lu; ", num_ops);
+    fprintf(stdout, "DQs=%lu; ", successful_dequeues);
+    fprintf(stdout, "(⊥=%lu in ", failed_dequeues);
     fprintf(stdout, "%.3f sec ", max);
     fprintf(stdout, "(%.3f MOp/s, ",
 	    (((double)(num_ops + successful_dequeues))/1000000.) / max);
@@ -200,8 +200,8 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
     
 #ifdef CONSISTENCY_CHECK
     fprintf(stdout,
-	    "pushed value: %llu; dq + eject: %llu; "
-	    "diff: %lld\n",
+	    "pushed value: %lu; dq + eject: %lu; "
+	    "diff: %ld\n",
 	    enqueue_result,
 	    dequeue_result + eject_result,
 	    enqueue_result - (dequeue_result + eject_result)

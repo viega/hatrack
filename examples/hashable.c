@@ -202,8 +202,8 @@ dict_example(int argc, ex_str_t *argv[])
 
         if (!hatrack_dict_add(dict, s, (void *)i)) {
             fprintf(stderr,
-                    "Detected duplicate argument at argv[%lld]: %s\n",
-                    (long long)i,
+                    "Detected duplicate argument at argv[%ld]: %s\n",
+                    i,
                     argv[i]->bytes);
         }
         else {
@@ -218,7 +218,7 @@ dict_example(int argc, ex_str_t *argv[])
 
     for (i = 0; i < num; i++) {
         s = (ex_str_t *)items[i].key;
-        printf("%s (@ arg #%lld)\n", s->bytes, (long long)items[i].value);
+        printf("%s (@ arg #%ld)\n", s->bytes, (long)items[i].value);
 
         printf("decref %s from view since we're done w/ it (@%p)\n",
                s->bytes,
@@ -263,9 +263,9 @@ set_example(int argc, ex_str_t *argv[])
         s = argv[i];
 
         if (s->hv) {
-            printf("Found cached hash value: %016llx%016llx\n",
-                   (long long)(s->hv & 0xffffffffffffffff),
-                   (long long)(s->hv >> 64));
+            printf("Found cached hash value: %016lx%016lx\n",
+                   (long)(s->hv & 0xffffffffffffffff),
+                   (long)(s->hv >> 64));
         }
         else {
             printf("Uh-oh, didn't find a cached hash value :-(\n");
@@ -273,8 +273,8 @@ set_example(int argc, ex_str_t *argv[])
 
         if (!hatrack_set_add(set, s)) {
             fprintf(stderr,
-                    "Detected duplicate argument at argv[%lld]: %s\n",
-                    (long long)i,
+                    "Detected duplicate argument at argv[%ld]: %s\n",
+                    (long)i,
                     argv[i]->bytes);
         }
         else {
