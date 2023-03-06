@@ -21,7 +21,7 @@ time_diff(struct timespec *end, struct timespec *start)
 }
 
 static struct timespec stop_times[HATRACK_THREADS_MAX];
-static basic_gate_t    starting_gate = ATOMIC_VAR_INIT(0);
+static basic_gate_t    starting_gate = 0;
 static queue_t        *mt_queue;
 
 static void
@@ -148,10 +148,10 @@ multi_threaded_v1(int num_threads)
     }
 
     fprintf(stderr,
-            "mt1(%d threads): %.4f sec; Ops/sec: %llu\n",
+            "mt1(%d threads): %.4f sec; Ops/sec: %lu\n",
             num_threads,
             max,
-            (unsigned long long)((2 * (double)TOTAL_ENQUEUES) / max));
+            (unsigned long)((2 * (double)TOTAL_ENQUEUES) / max));
 
     return;
 }
@@ -183,9 +183,9 @@ single_threaded_v1(void)
 
     diff = time_diff(&stop_time, &start_time);
 
-    printf("Test 1: %.4f sec; Ops/sec: %llu\n",
+    printf("Test 1: %.4f sec; Ops/sec: %lu\n",
            diff,
-           (unsigned long long)(((double)(TOTAL_ENQUEUES * 2)) / diff));
+           (unsigned long)(((double)(TOTAL_ENQUEUES * 2)) / diff));
 
     queue_delete(queue);
 
@@ -216,9 +216,9 @@ single_threaded_v2(void)
 
     diff = time_diff(&stop_time, &start_time);
 
-    printf("Test 2: %.4f sec; Ops/sec: %llu\n",
+    printf("Test 2: %.4f sec; Ops/sec: %lu\n",
            diff,
-           (unsigned long long)(((double)(TOTAL_ENQUEUES * 2)) / diff));
+           (unsigned long)(((double)(TOTAL_ENQUEUES * 2)) / diff));
 
     queue_delete(queue);
 

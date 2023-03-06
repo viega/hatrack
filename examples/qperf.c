@@ -199,7 +199,7 @@ test_queue(test_info_t *test_info)
     err = false;
 
     fprintf(stdout,
-            "%8s, prealloc = %c, # threads = %2llu, bundle size = %2llu -> ",
+            "%8s, prealloc = %c, # threads = %2lu, bundle size = %2lu -> ",
             test_info->implementation->name,
             test_info->prealloc ? 'Y' : 'N',
             test_info->num_threads,
@@ -265,8 +265,8 @@ format_results(test_info_t *tests, int num_tests, int row_size)
         }
         printf("%-13s", tests[i].implementation->name);
         printf("%-12s", tests[i].prealloc ? "yes" : "no");
-        printf("%-12llu", tests[i].num_threads);
-        printf("%-12llu", tests[i].enqueues_per_bundle);
+        printf("%-12lu", tests[i].num_threads);
+        printf("%-12lu", tests[i].enqueues_per_bundle);
         printf("%-.4f\n", (tests[i].num_ops / tests[i].elapsed) / 1000000);
     }
 }

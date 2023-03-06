@@ -265,7 +265,7 @@ test_queue(test_info_t *test_info)
     err = false;
 
     fprintf(stdout,
-            "%8s, prealloc = %c, # enqueuers = %2llu, # dequeuers = %2llu -> ",
+            "%8s, prealloc = %c, # enqueuers = %2lu, # dequeuers = %2lu -> ",
             test_info->implementation->name,
             test_info->prealloc ? 'Y' : 'N',
             test_info->producers,
@@ -316,8 +316,8 @@ test_queue(test_info_t *test_info)
     
     if (write_total != read_total) {
         fprintf(stdout,
-                "\n  Error: enqueue total (%llu) != dequeue total (%llu); "
-		"diff = %llu\n",
+                "\n  Error: enqueue total (%lu) != dequeue total (%lu); "
+		"diff = %lu\n",
                 write_total,
                 read_total,
 		write_total > read_total ?
@@ -329,13 +329,13 @@ test_queue(test_info_t *test_info)
 
     if (num_ops != successful_dequeues) {
         fprintf(stdout,
-                "\n  Error: # enqueues (%llu) != # dequeues (%llu)\n",
+                "\n  Error: # enqueues (%lu) != # dequeues (%lu)\n",
                 num_ops,
                 successful_dequeues);
         err = true;
     }
 
-    fprintf(stdout, "nil dequeue()s: %-9llu ", failed_dequeues);
+    fprintf(stdout, "nil dequeue()s: %-9lu ", failed_dequeues);
 
     test_info->elapsed = max;
     test_info->num_ops = (num_ops * 2);
@@ -366,8 +366,8 @@ format_results(test_info_t *tests, int num_tests, int row_size)
         }
         printf("%-13s", tests[i].implementation->name);
         printf("%-12s", tests[i].prealloc ? "yes" : "no");
-        printf("%-12llu", tests[i].producers);
-        printf("%-12llu", tests[i].consumers);
+        printf("%-12lu", tests[i].producers);
+        printf("%-12lu", tests[i].consumers);
         printf("%-.4f\n", (tests[i].num_ops / tests[i].elapsed) / 1000000);
     }
 }

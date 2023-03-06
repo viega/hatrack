@@ -49,8 +49,9 @@ get_fill_value(uint64_t i)
 }
 
 void *
-fill_array(void *unused)
+fill_array(void * unused)
 {
+    (void)unused;
     uint64_t i;
 
     for (i = 0; i < NUM_ITERS; i++) {
@@ -96,8 +97,8 @@ main(void)
         sum2 += (item & MASK);
     }
 
-    printf("Expected sum: %lld\n", sum1);
-    printf("Computed sum: %lld\n", sum2);
+    printf("Expected sum: %ld\n", sum1);
+    printf("Computed sum: %ld\n", sum2);
 
     return 0;
 }

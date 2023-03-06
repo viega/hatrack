@@ -496,7 +496,7 @@ hatstack_new_store(uint64_t num_cells)
     alloc_len       = sizeof(stack_store_t) + num_cells * sizeof(stack_cell_t);
     ret             = (stack_store_t *)mmm_alloc_committed(alloc_len);
     ret->num_cells  = num_cells;
-    ret->head_state = ATOMIC_VAR_INIT(head_candidate_new_epoch(0, 0));
+    ret->head_state = head_candidate_new_epoch(0, 0);
 
     return ret;
 }

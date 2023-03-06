@@ -149,10 +149,10 @@ hq_init_size(hq_t *self, uint64_t size)
     }
     
     self->store         = hq_new_store(size);
-    self->len           = ATOMIC_VAR_INIT(0);
+    self->len           = 0;
     
-    self->store->dequeue_index = ATOMIC_VAR_INIT(size);
-    self->store->enqueue_index = ATOMIC_VAR_INIT(size);    
+    self->store->dequeue_index = size;
+    self->store->enqueue_index = size;
 
     return;
 }

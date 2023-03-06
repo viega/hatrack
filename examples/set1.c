@@ -97,7 +97,7 @@ dec_output_int64_t(int64_t n, FILE *f)
 
 #else
 
-#define dec_outf(n, f) fprintf(f, "%lld", (long long)n);
+#define dec_outf(n, f) fprintf(f, "%ld", (long long)n);
 
 #endif
 
