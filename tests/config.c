@@ -49,8 +49,7 @@
 #define HATRACK_DEFAULT_OPS      100000
 #define HATRACK_DEFAULT_NUM_KEYS 1000
 
-enum
-{
+enum {
     OPT_DEFAULT,
     OPT_YES,
     OPT_NO
@@ -315,6 +314,7 @@ try_parse_seed_arg(char *p, char *flag_name, bool *b, __int128_t *seedp)
     }
 
     if (*p++ != '=') {
+	printf("Bad seed; no arg to flag");
         usage();
     }
 
@@ -323,6 +323,7 @@ try_parse_seed_arg(char *p, char *flag_name, bool *b, __int128_t *seedp)
     do {
         switch (*p) {
         case 0:
+	    printf("Bad seed value, must be hex.\n");
             usage(); // Only runs for the first iteration.
         case '0':
         case '1':
@@ -421,8 +422,7 @@ try_parse_int_arg(char *p, char *flag_name, bool *b, unsigned int *var)
         }
 
         ensure_unspecd(b, flag_name);
-
-        *var = parse_int(p);
+        *var = parse_int(s);
 
         return true;
     }
@@ -515,6 +515,7 @@ parse_args(int argc, char *argv[])
                 usage();
             }
             if (cur_len < 3 || cur[1] != '-') {
+		fprintf(stderr, "Long flags require a double dash.");
                 usage();
             }
             p          = &cur[2];
