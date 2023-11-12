@@ -178,6 +178,18 @@ hatrack_dict_set_sorted_views(hatrack_dict_t *self, bool value)
     return;
 }
 
+bool
+hatrack_dict_get_consistent_views(hatrack_dict_t *self)
+{
+    return self->slow_views;
+}
+
+bool
+hatrack_dict_get_sorted_views(hatrack_dict_t *self)
+{
+    return self->sorted_views;
+}
+
 void *
 hatrack_dict_get(hatrack_dict_t *self, void *key, bool *found)
 {
@@ -546,7 +558,6 @@ hatrack_dict_items_nosort(hatrack_dict_t *self, uint64_t *num)
     return hatrack_dict_items_base(self, num, false);
 }
 
-
 static hatrack_hash_t
 hatrack_dict_get_hash_value(hatrack_dict_t *self, void *key)
 {
@@ -598,7 +609,7 @@ hatrack_dict_get_hash_value(hatrack_dict_t *self, void *key)
         hv = hash_double(*(double *)loc_to_hash);
         break;
     case HATRACK_DICT_KEY_TYPE_OBJ_CSTR:
-        hv = hash_cstr((char *)loc_to_hash);
+        hv = hash_cstr(*(char **)loc_to_hash);
         break;
     case HATRACK_DICT_KEY_TYPE_OBJ_PTR:
         hv = hash_pointer(loc_to_hash);

@@ -58,7 +58,6 @@ typedef struct hatrack_dict_st hatrack_dict_t;
 typedef void *hatrack_dict_key_t;
 typedef void *hatrack_dict_value_t;
 
-
 typedef union {
     hatrack_offset_info_t offsets;
     hatrack_hash_func_t   custom_hash;
@@ -89,6 +88,8 @@ void hatrack_dict_set_key_return_hook (hatrack_dict_t *, hatrack_mem_hook_t);
 void hatrack_dict_set_val_return_hook (hatrack_dict_t *, hatrack_mem_hook_t);
 void hatrack_dict_set_consistent_views(hatrack_dict_t *, bool);
 void hatrack_dict_set_sorted_views    (hatrack_dict_t *, bool);
+bool hatrack_dict_get_consistent_views(hatrack_dict_t *);
+bool hatrack_dict_get_sorted_views    (hatrack_dict_t *);
 
 void *hatrack_dict_get    (hatrack_dict_t *, void *, bool *);
 void  hatrack_dict_put    (hatrack_dict_t *, void *, void *);

@@ -525,12 +525,12 @@ refhat_view(refhat_t *self, uint64_t *num, bool sort)
 
 /* refhat_migrate()
  *
- * This function migrates the buckets, to new memory. It is called
- * when 75% of the buckets would be used on an insert. The new size of
- * the table is determined based on how full the current buckets would
- * be, if there were no deleted items. If the table would be more than
- * 50% full, we double the size of the table. If the table would be
- * less than 25% full, then we halve the size of the table.
+ * This function migrates the buckets to new memory. It is called when
+ * 75% of the buckets would be used on an insert. The new size of the
+ * table is determined based on how full the current buckets would be,
+ * if there were no deleted items. If the table would be more than 50%
+ * full, we double the size of the table. If the table would be less
+ * than 25% full, then we halve the size of the table.
  *
  * Otherwise, we leave the table the same size.
  *

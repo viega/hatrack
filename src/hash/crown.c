@@ -398,6 +398,7 @@ crown_view_fast(crown_t *self, uint64_t *num, bool sort)
     return view;
 }
 
+
 /* This is modified to copy the store first, ensuring a consistent view.
  * But it's much slower, since we're doing a LOT of extra work.
  *
@@ -418,7 +419,7 @@ crown_view_slow(crown_t *self, uint64_t *num, bool sort)
     uint64_t        alloc_len;
     crown_store_t  *store;
     bool            expected;
-    
+
     while (true) {
 	store    = atomic_read(&self->store_current);
 	expected = false;
@@ -445,8 +446,8 @@ crown_view_slow(crown_t *self, uint64_t *num, bool sort)
 	    cur++;
 	    continue;
 	}
-	
-        p->item       = record.item;
+
+        p->item = record.item;
 	
         p++;
         cur++;
@@ -466,7 +467,7 @@ crown_view_slow(crown_t *self, uint64_t *num, bool sort)
     if (sort) {
 	qsort(view, num_items, sizeof(hatrack_view_t), hatrack_quicksort_cmp);
     }
-    
+
     mmm_retire(store);
 
     return view;
