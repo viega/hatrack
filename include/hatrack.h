@@ -47,6 +47,7 @@
 
 #include <hatrack/hash.h>
 #include <hatrack/queue.h>
+#include <hatrack/q64.h>
 #include <hatrack/hq.h>
 #include <hatrack/capq.h>
 #include <hatrack/helpmanager.h>
