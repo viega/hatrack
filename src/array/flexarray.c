@@ -80,8 +80,8 @@ void
 flexarray_cleanup(flexarray_t *self)
 {
     flex_store_t *store;
-    uint64_t    i;
-    flex_item_t item;
+    uint64_t      i;
+    flex_item_t   item;
 
     store = atomic_load(&self->store);
     
@@ -108,6 +108,8 @@ flexarray_delete(flexarray_t *self)
     return;
 }
 
+#include <stdio.h>
+
 void *
 flexarray_get(flexarray_t *self, uint64_t index, int *status)
 {
@@ -118,6 +120,7 @@ flexarray_get(flexarray_t *self, uint64_t index, int *status)
 
     store = atomic_read(&self->store);
 
+	   atomic_read(&store->array_size));
     if (index >= atomic_read(&store->array_size)) {
 	if (status) {
 	    *status = FLEX_OOB;
@@ -134,8 +137,7 @@ flexarray_get(flexarray_t *self, uint64_t index, int *status)
 	mmm_end_op();	
 	return NULL;
     }
-    
-	
+
     current = atomic_read(&store->cells[index]);
     
     if (!(current.state & FLEX_ARRAY_USED)) {
@@ -222,7 +224,6 @@ flexarray_set(flexarray_t *self, uint64_t index, void *item)
     mmm_end_op();
     return true;
 }
-
 
 void
 flexarray_grow(flexarray_t *self, uint64_t index)
@@ -376,6 +377,74 @@ flexarray_view_delete(flex_view_t *view)
     free(view);
 
     return;
+}
+
+void *
+flexarray_view_get(flex_view_t *view, uint64_t ix, int *err)
+{
+    flex_item_t item;
+
+    if (ix >= view->contents->array_size) {
+	if (err) {
+	    *err = FLEX_OOB;
+	}
+	return NULL;
+    }
+
+    item = atomic_read(&view->contents->cells[ix]);
+
+    if (!(item.state & FLEX_ARRAY_USED)) {
+	if (err) {
+	    *err = FLEX_UNINITIALIZED;
+	}
+	return NULL;
+    }
+    if (err) {
+	*err = FLEX_OK;
+    }
+    return item.item;
+}
+
+/* This assumes the view is non-mutable. We still use atomic_read(), but
+ * this generally no-ops out anyway.
+ */
+uint64_t
+flexarray_view_len(flex_view_t *view)
+{    
+    return view->contents->array_size;
+}
+
+flexarray_t *
+flexarray_add(flexarray_t *arr1, flexarray_t *arr2)
+{
+    flexarray_t  *res    = (flexarray_t *)malloc(sizeof(flexarray_t));
+    flex_view_t  *v1     = flexarray_view(arr1);
+    flex_view_t  *v2     = flexarray_view(arr2);
+    flex_store_t *s1     = v1->contents;
+    flex_store_t *s2     = v2->contents;
+    uint64_t      v1_sz  = atomic_read(&s1->array_size);
+    uint64_t      v2_sz  = atomic_read(&s2->array_size);
+
+    res->ret_callback   = arr1->ret_callback;
+    res->eject_callback = arr1->eject_callback;
+
+    atomic_store(&res->store, s1);
+    free(v1);
+
+    if (v1_sz + v2_sz > s1->store_size) {
+	flexarray_grow(res, v1_sz + v2_sz);
+	s1 = atomic_load(&res->store);
+    }
+
+    for (int i = 0; i < v2_sz; i++) {
+	atomic_store(&s1->cells[v1_sz++], s2->cells[i]);
+    }
+
+    atomic_store(&(s1->array_size), v1_sz);
+    mmm_retire_unused(s2);
+    free(v2);
+
+    return res;
 }
 
 static flex_store_t *

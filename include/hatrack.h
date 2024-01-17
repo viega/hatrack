@@ -29,6 +29,7 @@
 
 // Currently pulls in Woolhat.
 #include <hatrack/set.h>
+#include <hatrack/flexarray.h>
 
 #ifdef HATRACK_COMPILE_ALL_ALGORITHMS
 #include <hatrack/tophat.h>
@@ -51,7 +52,6 @@
 #include <hatrack/hq.h>
 #include <hatrack/capq.h>
 #include <hatrack/helpmanager.h>
-#include <hatrack/flexarray.h>
 #include <hatrack/llstack.h>
 #include <hatrack/stack.h>
 #include <hatrack/hatring.h>

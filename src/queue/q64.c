@@ -134,7 +134,7 @@ q64_delete(q64_t *self)
  * ever increase in steps of 1).
  */
 void
-q64_enqueue_ptr(q64_t *self, void *item)
+q64_enqueue(q64_t *self, void *item)
 {
     q64_seg_ptrs_t  segments;
     q64_seg_ptrs_t  candidate_segments;
@@ -252,7 +252,7 @@ q64_enqueue_ptr(q64_t *self, void *item)
 }
 
 void *
-q64_dequeue_ptr(q64_t *self, bool *found)
+q64_dequeue(q64_t *self, bool *found)
 {
     q64_seg_ptrs_t segments;
     q64_seg_ptrs_t candidate_segments;
