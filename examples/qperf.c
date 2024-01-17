@@ -60,6 +60,27 @@ queue_new_proxy(uint64_t len) {
     return queue_new();
 }
 
+q64_t *
+q64_new_proxy(uint64_t len) {
+    if (len) {
+	return q64_new_size(22);
+    }
+    return q64_new();
+}
+
+void
+q64_int_enqueue(q64_t *self, uint64_t u32)
+{
+    q64_enqueue(self, (void *)(u32 << 32));
+}
+
+uint64_t
+q64_int_dequeue(q64_t *self, bool *found)
+{
+    uint64_t res = (uint64_t)q64_dequeue(self, found);
+    return res >> 32;
+}
+
 // clang-format off
 static queue_impl_t algorithms[] = {
 #ifdef HATRACK_TEST_LLSTACK    
@@ -89,27 +110,19 @@ static queue_impl_t algorithms[] = {
 	.can_prealloc = true
     },
     {
+	.name         = "q64",
+	.new          = (new_func)q64_new_proxy,
+	.enqueue      = (enqueue_func)q64_int_enqueue,
+	.dequeue      = (dequeue_func)q64_int_dequeue,
+	.del          = (del_func)q64_delete,
+	.can_prealloc = true
+    },
+    {
 	.name         = "hq",
 	.new          = (new_func)hq_new_size,
 	.enqueue      = (enqueue_func)hq_enqueue,
 	.dequeue      = (dequeue_func)hq_dequeue,
 	.del          = (del_func)hq_delete,
-	.can_prealloc = true
-    },
-    {
-	.name         = "capq",
-	.new          = (new_func)capq_new_size,
-	.enqueue      = (enqueue_func)capq_enqueue,
-	.dequeue      = (dequeue_func)capq_dequeue,
-	.del          = (del_func)capq_delete,
-	.can_prealloc = true
-    },
-    {
-	.name         = "vector",
-	.new          = (new_func)vector_new,
-	.enqueue      = (enqueue_func)vector_push,
-	.dequeue      = (dequeue_func)vector_pop,
-	.del          = (del_func)vector_delete,
 	.can_prealloc = true
     },
     {
