@@ -67,6 +67,7 @@ If you cloned the repo, then you'll first need to create the configure
 script and `Makefile.in`, using autotools:
 
 ```
+autoreconf -i
 aclocal
 autoheader
 autoconf
