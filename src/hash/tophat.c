@@ -959,7 +959,7 @@ tophat_init_base(tophat_t *self, char size)
     uint64_t            alloc_len;
     tophat_st_ctx_t    *table;
 
-    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+    if (size > (sizeof(intptr_t) * 8)) {
 	abort();
     }
 

@@ -126,7 +126,7 @@ woolhat_init_size(woolhat_t *self, char size)
     woolhat_store_t *store;
     uint64_t         len;
 
-    if (size > ((ssize_t)sizeof(intptr_t) * 8)) {
+    if (size > (sizeof(intptr_t) * 8)) {
         abort();
     }
 

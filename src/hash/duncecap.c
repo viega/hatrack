@@ -142,7 +142,7 @@ duncecap_init_size(duncecap_t *self, char size)
     duncecap_store_t *store;
     uint64_t          len;
 
-    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+    if (size > (sizeof(intptr_t) * 8)) {
         abort();
     }
 

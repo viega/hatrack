@@ -67,7 +67,7 @@ refhat_init_size(refhat_t *self, char size)
 {
     uint64_t len;
 
-    if (size > (ssize_t)(sizeof(intptr_t) * 8)) {
+    if (size > (sizeof(intptr_t) * 8)) {
         abort();
     }
 
