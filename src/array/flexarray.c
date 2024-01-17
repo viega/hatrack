@@ -1,5 +1,5 @@
 /*
- * Copyright © 2022 John Viega
+ * copyright © 2022 John Viega
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ flexarray_init(flexarray_t *arr, uint64_t initial_size)
     if (store_size < (1 << FLEXARRAY_MIN_STORE_SZ_LOG)) {
 	store_size = 1 << FLEXARRAY_MIN_STORE_SZ_LOG;
     }
-    
+
     atomic_store(&arr->store, flexarray_new_store(initial_size, store_size));
 
     return;
@@ -108,7 +108,13 @@ flexarray_delete(flexarray_t *self)
     return;
 }
 
-#include <stdio.h>
+uint64_t
+flexarray_len(flexarray_t *self)
+{
+    flex_store_t *store = atomic_read(&self->store);
+
+    return atomic_read(&store->array_size);
+}
 
 void *
 flexarray_get(flexarray_t *self, uint64_t index, int *status)
@@ -120,7 +126,6 @@ flexarray_get(flexarray_t *self, uint64_t index, int *status)
 
     store = atomic_read(&self->store);
 
-	   atomic_read(&store->array_size));
     if (index >= atomic_read(&store->array_size)) {
 	if (status) {
 	    *status = FLEX_OOB;
@@ -431,7 +436,7 @@ flexarray_add(flexarray_t *arr1, flexarray_t *arr2)
     atomic_store(&res->store, s1);
     free(v1);
 
-    if (v1_sz + v2_sz > s1->store_size) {
+    if (v1_sz + v2_sz > s1->array_size) {
 	flexarray_grow(res, v1_sz + v2_sz);
 	s1 = atomic_load(&res->store);
     }
@@ -502,7 +507,7 @@ flexarray_migrate(flex_store_t *store, flexarray_t *top)
     expected_next = 0;
     new_array_len = store->array_size;
     new_store_len = hatrack_round_up_to_power_of_2(new_array_len) << 1;
-    next_store    = flexarray_new_store(new_store_len, new_store_len);
+    next_store    = flexarray_new_store(new_array_len, new_store_len);
     
     if (!CAS(&store->next, &expected_next, next_store)) {
 	mmm_retire_unused(next_store);
