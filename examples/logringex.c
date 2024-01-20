@@ -37,13 +37,13 @@ output_logs(void)
     view = logring_view(ring, false);
 
     while (logring_dequeue(ring, &log, &len)) {
-        printf("tid=%lu; mid=%lu; msg=%s\n", log.tid, log.mid, log.msg);
+        printf("tid=%llu; mid=%llu; msg=%s\n", log.tid, log.mid, log.msg);
     }
 
     printf("----------------------------\n");
 
     while ((msg = (log_msg_t *)logring_view_next(view, &len))) {
-        printf("tid=%lu; mid=%lu; msg=%s\n", msg->tid, msg->mid, msg->msg);
+        printf("tid=%llu; mid=%llu; msg=%s\n", msg->tid, msg->mid, msg->msg);
         free(msg);
     }
 

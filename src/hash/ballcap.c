@@ -105,7 +105,7 @@ ballcap_init_size(ballcap_t *self, char size)
     ballcap_store_t *store;
     uint64_t         len;
 
-    if (size > (sizeof(intptr_t) * 8)) {
+    if (((size_t)size) > (sizeof(intptr_t) * 8)) {
         abort();
     }
 

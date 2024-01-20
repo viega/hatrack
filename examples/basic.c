@@ -39,6 +39,16 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#ifdef __MACH__
+// When -std=c11 is passed, these disappear from string.h but are still
+// available at link time.
+extern char *strdup(const char *);
+extern char *strndup(const char *, size_t);
+_Bool clock_service_inited = false;
+clock_serv_t clock_service;
+
+#endif
+
 static void
 print_argv(hatrack_dict_t *argv, bool ordered)
 {

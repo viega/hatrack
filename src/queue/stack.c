@@ -397,33 +397,28 @@ hatstack_peek(hatstack_t *self, bool *found)
 {
     stack_store_t *store;
     stack_item_t   expected;
-    stack_item_t   candidate;
     uint64_t       head_state;
     uint64_t       ix;
-    uint32_t       epoch;
 
     mmm_start_basic_op();
 
 
     store      = atomic_read(&self->store);
     head_state = atomic_read(&store->head_state);
-    candidate  = proto_item_pop;	
     ix         = head_get_index(head_state);
-    epoch      = head_get_epoch(head_state);
-    
-	expected              = proto_item_empty;
-	candidate.valid_after = epoch;
 
-	/* Go down the stack until we see any pushed cell, or we reach the
-	 * bottom of the stack.
-	 */
-	while (ix--) {
-	    if (state_is_pushed(expected.state)) {
-		return hatrack_found_w_mmm(found, expected.item);
-	    }
+    /* Go down the stack until we see any pushed cell, or we reach the
+     * bottom of the stack.
+     */
+    while (ix--) {
+	expected = atomic_read(&store->cells[ix]);
+	
+	if (state_is_pushed(expected.state)) {
+	    return hatrack_found_w_mmm(found, expected.item);
 	}
+    }
 
-	return hatrack_not_found_w_mmm(found);
+    return hatrack_not_found_w_mmm(found);
 }
 
 stack_view_t *

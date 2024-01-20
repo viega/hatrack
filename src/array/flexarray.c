@@ -441,7 +441,7 @@ flexarray_add(flexarray_t *arr1, flexarray_t *arr2)
 	s1 = atomic_load(&res->store);
     }
 
-    for (int i = 0; i < v2_sz; i++) {
+    for (uint64_t i = 0; i < v2_sz; i++) {
 	atomic_store(&s1->cells[v1_sz++], s2->cells[i]);
     }
 
@@ -486,6 +486,7 @@ flexarray_migrate(flex_store_t *store, flexarray_t *top)
     next_store = atomic_read(&store->next);
     
     if (next_store) {
+	new_array_len = store->array_size;	
 	goto help_move;
     }
 

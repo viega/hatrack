@@ -1,9 +1,9 @@
 check_PROGRAMS = tests/test
-noinst_PROGRAMS = examples/basic examples/set1 examples/hashable examples/oldqx examples/qtest examples/qperf examples/ring examples/logringex examples/array
+noinst_PROGRAMS = examples/basic examples/set1 examples/hashable examples/qtest examples/qperf examples/ring examples/logringex examples/array
 
 # 64-bit systems will complain up the wazoo about the 128-bit CAS operations.
 # Yes, they won't be lock free, but they will be sufficiently fast, thanks.
-libhatrack_a_CFLAGS  = -std=c11 -D_POSIX_SOURCE -D_GNU_SOURCE -Wall -Wextra -Wno-atomic-alignment -Wno-unused-parameter  -I./include/
+libhatrack_a_CFLAGS  = -std=c2x -D_POSIX_SOURCE -D_GNU_SOURCE -Wall -Wextra -Wno-atomic-alignment -Wno-unused-parameter  -I./include/
 libhatrack_a_SOURCES = src/support/mmm.c src/support/counters.c src/support/hatrack_common.c src/support/helpmanager.c src/hash/refhat.c src/hash/duncecap.c src/hash/swimcap.c src/hash/newshat.c src/hash/ballcap.c src/hash/hihat.c src/hash/hihat-a.c src/hash/oldhat.c src/hash/lohat.c src/hash/lohat-a.c src/hash/witchhat.c src/hash/woolhat.c src/hash/tophat.c src/hash/crown.c src/hash/tiara.c src/hash/dict.c src/hash/set.c src/hash/xxhash.c src/queue/queue.c src/queue/q64.c src/queue/hq.c src/queue/capq.c src/queue/llstack.c src/queue/stack.c src/queue/hatring.c src/queue/logring.c src/queue/debug.c src/array/flexarray.c src/array/vector.c
 
 libquark_a_SOURCES = quark/quark.c quark/quark-asm.s
@@ -30,11 +30,6 @@ examples_hashable_SOURCES = examples/hashable.c
 examples_hashable_CFLAGS = -std=c11 -D_POSIX_SOURCE -D_GNU_SOURCE -Wall -Wextra -Wno-unused-parameter -I./include
 examples_hashable_LDADD = ./libhatrack.a $(LIBQUARK)
 examples_hashable_DEPENDENCIES = ./libhatrack.a $(LIBQUARK)
-
-examples_oldqx_SOURCES = examples/old_queue_ex.c
-examples_oldqx_CFLAGS = -std=c11 -D_POSIX_SOURCE -D_GNU_SOURCE -Wall -Wextra -I./include
-examples_oldqx_LDADD = ./libhatrack.a $(LIBQUARK)
-examples_oldqx_DEPENDENCIES = ./libhatrack.a $(LIBQUARK)
 
 examples_qtest_SOURCES = examples/qtest.c
 examples_qtest_CFLAGS = -std=c11 -D_POSIX_SOURCE -D_GNU_SOURCE -Wall -Wextra -I./include

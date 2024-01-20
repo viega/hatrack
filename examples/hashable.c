@@ -202,7 +202,7 @@ dict_example(int argc, ex_str_t *argv[])
 
         if (!hatrack_dict_add(dict, s, (void *)i)) {
             fprintf(stderr,
-                    "Detected duplicate argument at argv[%ld]: %s\n",
+                    "Detected duplicate argument at argv[%lld]: %s\n",
                     i,
                     argv[i]->bytes);
         }

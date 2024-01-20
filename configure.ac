@@ -80,8 +80,8 @@ if test $ac_cv_afa_ptr = yes; then
 fi
 
 AS_CASE([$host],
-  [aarch64-*-*], [ln -sf aarch64.s quark/quark-asm.s],
-  [x86_64-*-*],  [ln -sf x86_64.s quark/quark-asm.s],
+  [aarch64-*-linux*], [ln -sf aarch64.s quark/quark-asm.s],
+  [x86_64-*-linux*],  [ln -sf x86_64.s quark/quark-asm.s],
   [])
 
 # Checks for library functions.

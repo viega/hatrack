@@ -9,6 +9,10 @@
  *  Author:         John Viega, john@zork.org
  */
 
+#ifdef __MACH__
+#define _DARWIN_C_SOURCE
+#endif
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>

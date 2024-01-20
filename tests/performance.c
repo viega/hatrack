@@ -10,6 +10,10 @@
  *  Author:         John Viega, john@zork.org
  */
 
+#ifdef __MACH__
+#define _DARWIN_C_SOURCE
+#endif
+
 #include <testhat.h>
 #include <hatrack/gate.h>
 #include <stdlib.h>
@@ -18,6 +22,11 @@
 #include <sys/ioctl.h>
 #include <stdio.h>
 #include <string.h>
+
+#ifdef __MACH__
+_Bool clock_service_inited = false;
+clock_serv_t clock_service;
+#endif
 
 #define WIN_COL_IOCTL TIOCGWINSZ
 typedef struct winsize wininfo_t;
@@ -74,7 +83,7 @@ static testhat_t *table;
  * That way, we can look at not only the total time taken, but the
  * fastest and average threads.
  */
-static struct timespec stop_times[HATRACK_THREADS_MAX];
+static duration_t stop_times[HATRACK_THREADS_MAX];
 
 #define calculate_num_test_keys(n) hatrack_round_up_to_power_of_2(n)
 
@@ -315,7 +324,7 @@ shuffle_thread_run(void *v)
         next_key = (next_key + thread_step) & key_mod_mask;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    get_timestamp(&stop_times[mmm_mytid]);
     mmm_clean_up_before_exit();
 
     return NULL;
@@ -398,7 +407,7 @@ shuffle_thread_run64(void *v)
         next_key = (next_key + thread_step) & key_mod_mask;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    get_timestamp(&stop_times[mmm_mytid]);
     mmm_clean_up_before_exit();
 
     return NULL;
@@ -448,7 +457,7 @@ rand_thread_run(void *v)
         n = test_rand() % 100;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    get_timestamp(&stop_times[mmm_mytid]);
     mmm_clean_up_before_exit();
 
     return NULL;
@@ -495,7 +504,7 @@ rand_thread_run64(void *v)
         n = test_rand() % 100;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &stop_times[mmm_mytid]);
+    get_timestamp(&stop_times[mmm_mytid]);
     mmm_clean_up_before_exit();
 
     return NULL;
@@ -555,14 +564,14 @@ clear_timestamps(void)
 }
 
 static double
-time_diff(struct timespec *end, struct timespec *start)
+time_diff(duration_t *end, duration_t *start)
 {
     return ((double)(end->tv_sec - start->tv_sec))
          + ((end->tv_nsec - start->tv_nsec) / 1000000000.0);
 }
 
 static void
-performance_report(char *hat, benchmark_t *config, struct timespec *start)
+performance_report(char *hat, benchmark_t *config, duration_t *start)
 {
     double cur, min, max;
 
@@ -603,7 +612,7 @@ run_performance_test(benchmark_t *config)
     uint64_t        ops_per_thread;
     uint32_t        tstep;
     pthread_t       threads[config->num_threads];
-    struct timespec sspec;
+    duration_t      sspec;
     alg_info_t     *alg_info;
 
     key_mod_mask = calculate_num_test_keys(config->key_range) - 1;

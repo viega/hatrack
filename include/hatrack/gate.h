@@ -41,20 +41,37 @@
 #include <hatrack/mmm.h>
 #include <strings.h>
 
+#ifdef __MACH__
+#include <mach/clock.h>
+#include <mach/mach.h>
+extern _Bool clock_service_inited;
+extern clock_serv_t clock_service;
+
+typedef mach_timespec_t duration_t;
+#define get_timestamp(x) if(!clock_service_inited) {                           \
+    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &clock_service);  \
+  }                                                                            \
+    clock_get_time(clock_service, (x))
+#else
+typedef struct timespec duration_t;
+#define get_timestamp(x) clock_gettime(CLOCK_REALTIME, (x))
+#endif
+
+
 typedef struct {
     _Atomic int64_t count;
     uint64_t        max_threads;
     double          elapsed_time;
     double          fastest_time;
     double          avg_time;
-    struct timespec start_time;
-    struct timespec end_times[];
+    duration_t      start_time;
+    duration_t      end_times[];
 } gate_t;
 
 #define GATE_OPEN 0xffffffffffffffff
 
 static inline double
-gate_time_diff(struct timespec *end, struct timespec *start)
+gate_time_diff(duration_t *end, duration_t *start)
 {
     return ((double)(end->tv_sec - start->tv_sec))
          + ((end->tv_nsec - start->tv_nsec) / 1000000000.0);
@@ -63,7 +80,7 @@ gate_time_diff(struct timespec *end, struct timespec *start)
 static inline void
 gate_init(gate_t *gate, uint64_t max_threads)
 {
-    bzero(gate->end_times, sizeof(struct timespec) * max_threads);
+    bzero(gate->end_times, sizeof(duration_t) * max_threads);
 
     gate->max_threads  = max_threads;
     gate->count        = 0;
@@ -77,7 +94,7 @@ gate_new_size(uint64_t mt)
 {
     gate_t *ret;
 
-    ret = (gate_t *)malloc(sizeof(gate_t) + sizeof(struct timespec) * mt);
+    ret = (gate_t *)malloc(sizeof(gate_t) + sizeof(duration_t) * mt);
 
     gate_init(ret, mt);
 
@@ -112,7 +129,7 @@ gate_thread_ready(gate_t *gate)
 static inline void
 gate_thread_done(gate_t *gate)
 {
-    clock_gettime(CLOCK_MONOTONIC, &gate->end_times[mmm_mytid]);
+    get_timestamp(&gate->end_times[mmm_mytid]);
 
     return;
 }
@@ -124,7 +141,7 @@ gate_open(gate_t *gate, int64_t num_threads)
 	;
 
     atomic_signal_fence(memory_order_seq_cst);
-    clock_gettime(CLOCK_MONOTONIC, &gate->start_time);
+    get_timestamp(&gate->start_time);
     atomic_signal_fence(memory_order_seq_cst);
     
     atomic_store(&gate->count, GATE_OPEN);
@@ -191,16 +208,16 @@ basic_gate_init(basic_gate_t *gate)
 }
 
 static inline void
-basic_gate_open(basic_gate_t    *gate,
-                int64_t          num_threads,
-		struct timespec *ts)
+basic_gate_open(basic_gate_t  *gate,
+                int64_t        num_threads,
+		duration_t    *ts)
 {
     while (atomic_read(gate) != num_threads)
 	;
 
     atomic_signal_fence(memory_order_seq_cst);
     if (ts) {
-	clock_gettime(CLOCK_MONOTONIC, ts);
+	get_timestamp(ts);
     }
     atomic_signal_fence(memory_order_seq_cst);
     atomic_store(gate, -1);

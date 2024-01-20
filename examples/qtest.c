@@ -16,6 +16,12 @@ static   gate_t  *gate;
 pthread_t enqueue_threads[HATRACK_THREADS_MAX];
 pthread_t dequeue_threads[HATRACK_THREADS_MAX];
 
+#ifdef __MACH__
+// When -std=c11 is passed, these disappear from string.h but are still
+// available at link time.
+_Bool clock_service_inited = false;
+clock_serv_t clock_service;
+#endif
 
 #ifdef ENQUEUE_ONES
 #define enqueue_value(x) 1
@@ -143,7 +149,7 @@ typedef struct {
     void         *object;
     uint64_t      start;
     uint64_t      end; // Don't enqueue the last item... array rules.
-} thread_info_t;
+} h_threadinf_t;
 
 typedef uint64_t thread_params_t[2];
 
@@ -175,13 +181,13 @@ enqueue_thread(void *info)
     uint64_t       i;
     uint64_t       enqueue_value;
     uint64_t       end;
-    thread_info_t *enqueue_info;
+    h_threadinf_t *enqueue_info;
     enqueue_func   enqueue;
     void          *queue;
 
     mmm_register_thread();
 
-    enqueue_info = (thread_info_t *)info;
+    enqueue_info = (h_threadinf_t *)info;
     enqueue      = enqueue_info->impl->enqueue;
     my_total     = 0;
     end          = enqueue_info->end;
@@ -213,14 +219,14 @@ dequeue_thread(void *info)
     uint64_t       n;
     uint64_t       target_ops;
     uint64_t       max_fails;
-    thread_info_t *dequeue_info;
+    h_threadinf_t *dequeue_info;
     bool           status;
     dequeue_func   dequeue;
     void          *queue;
 
     mmm_register_thread();
 
-    dequeue_info         = (thread_info_t *)info;
+    dequeue_info         = (h_threadinf_t *)info;
     dequeue              = dequeue_info->impl->dequeue;
     consecutive_dequeues = 0;
     my_total             = 0;
@@ -271,14 +277,14 @@ test_queue(test_info_t *test_info)
     uint64_t        ops_per_thread;
     uint64_t        num_ops;
     double          max;
-    thread_info_t  *threadinfo;
+    h_threadinf_t  *threadinfo;
     bool            err;
     void           *queue;
 
     err = false;
 
     fprintf(stdout,
-            "%8s, prealloc = %c, # enqueuers = %2lu, # dequeuers = %2lu -> ",
+            "%8s, prealloc = %c, # enqueuers = %2llu, # dequeuers = %2llu -> ",
             test_info->implementation->name,
             test_info->prealloc ? 'Y' : 'N',
             test_info->producers,
@@ -294,7 +300,7 @@ test_queue(test_info_t *test_info)
 
     DEBUG("Starting run.");
     for (i = 0; i < test_info->producers; i++) {
-        threadinfo         = (thread_info_t *)malloc(sizeof(thread_info_t));
+        threadinfo         = (h_threadinf_t *)malloc(sizeof(h_threadinf_t));
         threadinfo->start  = (i * ops_per_thread) + 1;
         threadinfo->end    = ((i + 1) * ops_per_thread) + 1;
         threadinfo->object = queue;
@@ -307,7 +313,7 @@ test_queue(test_info_t *test_info)
     }
 
     for (i = 0; i < test_info->consumers; i++) {
-        threadinfo         = (thread_info_t *)malloc(sizeof(thread_info_t));
+        threadinfo         = (h_threadinf_t *)malloc(sizeof(h_threadinf_t));
         threadinfo->end    = num_ops;
         threadinfo->object = queue;
         threadinfo->impl   = test_info->implementation;
@@ -329,8 +335,8 @@ test_queue(test_info_t *test_info)
     
     if (write_total != read_total) {
         fprintf(stdout,
-                "\n  Error: enqueue total (%lu) != dequeue total (%lu); "
-		"diff = %lu\n",
+                "\n  Error: enqueue total (%llu) != dequeue total (%llu); "
+		"diff = %llu\n",
                 write_total,
                 read_total,
 		write_total > read_total ?
@@ -342,13 +348,13 @@ test_queue(test_info_t *test_info)
 
     if (num_ops != successful_dequeues) {
         fprintf(stdout,
-                "\n  Error: # enqueues (%lu) != # dequeues (%lu)\n",
+                "\n  Error: # enqueues (%llu) != # dequeues (%llu)\n",
                 num_ops,
                 successful_dequeues);
         err = true;
     }
 
-    fprintf(stdout, "nil dequeue()s: %-9lu ", failed_dequeues);
+    fprintf(stdout, "nil dequeue()s: %-9llu ", failed_dequeues);
 
     test_info->elapsed = max;
     test_info->num_ops = (num_ops * 2);
@@ -379,8 +385,8 @@ format_results(test_info_t *tests, int num_tests, int row_size)
         }
         printf("%-13s", tests[i].implementation->name);
         printf("%-12s", tests[i].prealloc ? "yes" : "no");
-        printf("%-12lu", tests[i].producers);
-        printf("%-12lu", tests[i].consumers);
+        printf("%-12llu", tests[i].producers);
+        printf("%-12llu", tests[i].consumers);
         printf("%-.4f\n", (tests[i].num_ops / tests[i].elapsed) / 1000000);
     }
 }

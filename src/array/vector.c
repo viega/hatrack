@@ -482,6 +482,7 @@ vector_migrate(vector_store_t *store, vector_t *top)
     next_store = atomic_load(&store->next);
     
     if (next_store) {
+	new_array_len = si.array_size;	
 	goto help_move;
     }
 

@@ -20,7 +20,7 @@ __int128_t __atomic_load_16(__int128_t *address)
     return value;
 }
 
-__int128_t __atomic_store_16(__int128_t *address, __int128_t new_value) {
+void __atomic_store_16(__int128_t *address, __int128_t new_value) {
     // This one, we're going to be conservative as well; unless the
     // target memory is 0'd, we'll end up doing at least 2 CAS
     // operations.

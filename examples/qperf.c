@@ -7,6 +7,13 @@
 const    uint64_t target_ops       = 1 << 26;
 static   gate_t  *gate;
 
+#ifdef __MACH__
+// When -std=c11 is passed, these disappear from string.h but are still
+// available at link time.
+_Bool clock_service_inited = false;
+clock_serv_t clock_service;
+#endif
+
 pthread_t threads[HATRACK_THREADS_MAX];
 
 #ifndef ENQUEUE_INDEX
@@ -135,7 +142,7 @@ typedef struct {
     void         *object;
     uint64_t      bundle_size;
     uint64_t      num_bundles;
-} thread_info_t;
+} h_threadinf_t;
 
 typedef uint64_t thread_params_t[2];
 
@@ -161,7 +168,7 @@ worker_thread(void *info)
     uint64_t       j;
     uint64_t       num_bundles;
     uint64_t       bundle_size;
-    thread_info_t *enqueue_info;
+    h_threadinf_t *enqueue_info;
     enqueue_func   enqueue;
     dequeue_func   dequeue;
     void          *queue;
@@ -169,7 +176,7 @@ worker_thread(void *info)
 
     mmm_register_thread();
 
-    enqueue_info = (thread_info_t *)info;
+    enqueue_info = (h_threadinf_t *)info;
     enqueue      = enqueue_info->impl->enqueue;
     dequeue      = enqueue_info->impl->dequeue;
     num_bundles  = enqueue_info->num_bundles;
@@ -205,14 +212,14 @@ test_queue(test_info_t *test_info)
     uint64_t        per_thread;
     uint64_t        actual_ops;
     double          max;
-    thread_info_t  *threadinfo;
+    h_threadinf_t  *threadinfo;
     bool            err;
     void           *queue;
 
     err = false;
 
     fprintf(stdout,
-            "%8s, prealloc = %c, # threads = %2lu, bundle size = %2lu -> ",
+            "%8s, prealloc = %c, # threads = %2llu, bundle size = %2llu -> ",
             test_info->implementation->name,
             test_info->prealloc ? 'Y' : 'N',
             test_info->num_threads,
@@ -230,7 +237,7 @@ test_queue(test_info_t *test_info)
 
     DEBUG("Starting run.");
     for (i = 0; i < test_info->num_threads; i++) {
-        threadinfo         = (thread_info_t *)malloc(sizeof(thread_info_t));
+        threadinfo         = (h_threadinf_t *)malloc(sizeof(h_threadinf_t));
 	
         threadinfo->object      = queue;
         threadinfo->impl        = test_info->implementation;
@@ -278,8 +285,8 @@ format_results(test_info_t *tests, int num_tests, int row_size)
         }
         printf("%-13s", tests[i].implementation->name);
         printf("%-12s", tests[i].prealloc ? "yes" : "no");
-        printf("%-12lu", tests[i].num_threads);
-        printf("%-12lu", tests[i].enqueues_per_bundle);
+        printf("%-12llu", tests[i].num_threads);
+        printf("%-12llu", tests[i].enqueues_per_bundle);
         printf("%-.4f\n", (tests[i].num_ops / tests[i].elapsed) / 1000000);
     }
 }

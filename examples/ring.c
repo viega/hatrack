@@ -8,7 +8,14 @@ typedef uint64_t thread_params_t[2];
 typedef struct {
     uint64_t start;
     uint64_t end;
-} thread_info_t;
+} h_threadinf_t;
+
+#ifdef __MACH__
+// When -std=c11 is passed, these disappear from string.h but are still
+// available at link time.
+_Bool clock_service_inited = false;
+clock_serv_t clock_service;
+#endif
 
 static gate_t        *gate;
 static hatring_t     *ring;
@@ -58,14 +65,14 @@ handle_eject(void *value)
 void *
 enqueue_thread(void *info)
 {
-    thread_info_t *enqueue_info;
+    h_threadinf_t *enqueue_info;
     uint64_t       end;
     uint64_t       i;
     uint64_t       sum = 0;
     
     mmm_register_thread();
     
-    enqueue_info = (thread_info_t *)info;
+    enqueue_info = (h_threadinf_t *)info;
     end          = enqueue_info->end;
 
     gate_thread_ready(gate);
@@ -136,11 +143,11 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
     uint64_t       i;
     uint64_t       ops_per_thread;
     // uint64_t       total_ops;
-    thread_info_t *info;
+    h_threadinf_t *info;
     double         max;
 
     fprintf(stdout,
-	    "#e= %2lu, #d= %2lu, sz= %05lu -> ",
+	    "#e= %2llu, #d= %2llu, sz= %05llu -> ",
 	    enqueuers,
 	    dequeuers,
 	    ring_size);
@@ -157,7 +164,7 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
 #endif    
     
     for (i = 0; i < enqueuers; i++) {
-	info           = (thread_info_t *)malloc(sizeof(thread_info_t));
+	info           = (h_threadinf_t *)malloc(sizeof(h_threadinf_t));
 	info->start    = (i * ops_per_thread) + 1;
 	info->end      = ((i + 1) * ops_per_thread) + 1;
 	    
@@ -187,9 +194,9 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
     max = gate_close(gate);
     hatring_delete(ring);
 
-    fprintf(stdout, "Qs=%lu; ", num_ops);
-    fprintf(stdout, "DQs=%lu; ", successful_dequeues);
-    fprintf(stdout, "(⊥=%lu in ", failed_dequeues);
+    fprintf(stdout, "Qs=%llu; ", num_ops);
+    fprintf(stdout, "DQs=%llu; ", successful_dequeues);
+    fprintf(stdout, "(⊥=%llu in ", failed_dequeues);
     fprintf(stdout, "%.3f sec ", max);
     fprintf(stdout, "(%.3f MOp/s, ",
 	    (((double)(num_ops + successful_dequeues))/1000000.) / max);
@@ -200,7 +207,7 @@ run_one_ring_test(uint64_t enqueuers, uint64_t dequeuers, uint64_t ring_size)
     
 #ifdef CONSISTENCY_CHECK
     fprintf(stdout,
-	    "pushed value: %lu; dq + eject: %lu; "
+	    "pushed value: %llu; dq + eject: %llu; "
 	    "diff: %ld\n",
 	    enqueue_result,
 	    dequeue_result + eject_result,

@@ -84,7 +84,7 @@ hihat_init_size(hihat_t *self, char size)
     hihat_store_t *store;
     uint64_t       len;
 
-    if (size > (sizeof(intptr_t) * 8)) {
+    if (((size_t)size) > (sizeof(intptr_t) * 8)) {
 	abort();
     }
 

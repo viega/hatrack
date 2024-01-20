@@ -126,7 +126,7 @@ woolhat_init_size(woolhat_t *self, char size)
     woolhat_store_t *store;
     uint64_t         len;
 
-    if (size > (sizeof(intptr_t) * 8)) {
+    if (((size_t)size) > (sizeof(intptr_t) * 8)) {
         abort();
     }
 
@@ -1175,8 +1175,6 @@ migrate_and_retry:
 	    return hatrack_not_found(found);
 	}
 	
-	mmm_retire_unused(newhead);
-
 	/* If the CAS failed and the state is the same,
 	 * except for the migration bit being set, then
 	 * our help request has not been serviced yet.
@@ -1188,6 +1186,8 @@ migrate_and_retry:
 	    (state.state.flags & WOOLHAT_F_MOVING)) {
 	    goto migrate_and_retry;
 	}
+
+	mmm_retire_unused(newhead);
 
 	return hatrack_found(found, NULL);
     }

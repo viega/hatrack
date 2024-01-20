@@ -22,4 +22,4 @@ __atomic_compare_exchange_16:
 2:
         movq    %r8, %rbx       # restore rbx
         ret
-.size __atomic_compare_exchange_16, . - __atomic_compare_exchange_16
+        ;; .size __atomic_compare_exchange_16, . - __atomic_compare_exchange_16

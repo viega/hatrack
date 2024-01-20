@@ -5,7 +5,8 @@
 //                              __int128_t  new_value)
 .text
 .global __atomic_compare_exchange_16
-.type __atomic_compare_exchange_16, @function
+        ;;  .type __atomic_compare_exchange_16, @function
+
 __atomic_compare_exchange_16:
         ldp     x4, x5, [x1]            // [expected]
         ldp     x6, x7, [x1]            // [expected]
@@ -21,4 +22,4 @@ __atomic_compare_exchange_16:
         mov     x0, #0                  // return false
 2:
         ret
-.size __atomic_compare_exchange_16, . - __atomic_compare_exchange_16
+        ;; .size __atomic_compare_exchange_16, . - __atomic_compare_exchange_16
