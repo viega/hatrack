@@ -1,6 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
+LDFLAGS="${LDFLAGS} -L${PWD}"
 AC_PREREQ([2.69])
 AC_INIT([hatrack],[0.9],[john@zork.org])
 AC_CONFIG_AUX_DIR([autotools])
@@ -45,7 +46,7 @@ AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h pthread.h stdalign.h])
 
 
 AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
-AC_CHECK_LIB([atomic], [__atomic_load_16], [LDFLAGS="${LDFLAGS} -latomic"])
+AC_SEARCH_LIBS([__atomic_load_16], [atomic, quark], [], [LDFLAGS="${LDFLAGS} -lquark -L${PWD} ${PWD}/libquark.a"])
 
 # Checks for C11's typed enums
 # AC_MSG_CHECKING([C11 typed enums])
@@ -83,4 +84,3 @@ AC_PATH_PROG([PATH_TO_ENV], [env], [])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
-

@@ -37,6 +37,7 @@
 #ifndef __GATE_H__
 #define __GATE_H__
 
+#include <time.h>
 #include <hatrack/mmm.h>
 #include <strings.h>
 
