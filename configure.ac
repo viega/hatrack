@@ -10,11 +10,13 @@ AM_SILENT_RULES([yes])
 AC_CONFIG_COMMANDS([default],[],[])
 AC_COPYRIGHT([Copyright 2021-2022, John Viega])
 
+AC_CANONICAL_HOST
 
 AC_LANG([C])
 AC_PROG_CC(clang cc gcc)
 
 AC_PROG_RANLIB
+AM_PROG_AS
 
 AC_CONFIG_SRCDIR([src/hash])
 AC_CONFIG_HEADERS([include/hatrack/config.h])
@@ -46,7 +48,8 @@ AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h pthread.h stdalign.h])
 
 
 AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
-AC_SEARCH_LIBS([__atomic_load_16], [atomic, quark], [], [LDFLAGS="${LDFLAGS} -lquark -L${PWD} ${PWD}/libquark.a"])
+AC_SEARCH_LIBS([__atomic_load_16], [atomic, quark], [], [LIBQUARK="./libquark.a"])
+AC_SUBST([LIBQUARK])
 
 # Checks for C11's typed enums
 # AC_MSG_CHECKING([C11 typed enums])
@@ -76,6 +79,10 @@ if test $ac_cv_afa_ptr = yes; then
   AC_DEFINE([SANE_FETCH_ADD_PTR_SEMANTICS], [1], [Defined when atomic_fetch_add(ptr, 1) adds sizeof(ptr)])
 fi
 
+AS_CASE([$host],
+  [aarch64-*-*], [ln -sf aarch64.s quark/quark-asm.s],
+  [x86_64-*-*],  [ln -sf x86_64.s quark/quark-asm.s],
+  [])
 
 # Checks for library functions.
 AC_CHECK_FUNCS([clock_gettime memset strstr])

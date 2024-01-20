@@ -31,4 +31,5 @@ examples/logringex
 examples/array
 examples/qperf
 docs/~*
+quark/quark-asm.s
 #*

@@ -1,12 +1,12 @@
 // Author: Matt Messier (matt@crashoverride.com)
 // bool
-// atomic_compare_exchange_16(__int128_t *value,
-//                            __int128_t *expected,
-//                            __int128_t  new_value)
+// __atomic_compare_exchange_16(__int128_t *value,
+//                              __int128_t *expected,
+//                              __int128_t  new_value)
 .text
-.global atomic_compare_exchange_16
-.type atomic_compare_exchange_16, @function
-atomic_compare_exchange_16:
+.global __atomic_compare_exchange_16
+.type __atomic_compare_exchange_16, @function
+__atomic_compare_exchange_16:
         ldp     x4, x5, [x1]            // [expected]
         ldp     x6, x7, [x1]            // [expected]
         caspal  x4, x5, x2, x3, [x0]    // [expected], new_value (x2, x3), [value]
@@ -21,4 +21,4 @@ atomic_compare_exchange_16:
         mov     x0, #0                  // return false
 2:
         ret
-.size atomic_compare_exchange_16, . - atomic_compare_exchange_16
+.size __atomic_compare_exchange_16, . - __atomic_compare_exchange_16
