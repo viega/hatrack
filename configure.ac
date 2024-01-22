@@ -49,7 +49,7 @@ AC_CHECK_HEADERS([fcntl.h stdint.h unistd.h stdatomic.h pthread.h stdalign.h])
 
 AC_CHECK_LIB([pthread], [pthread_create], [LDFLAGS="${LDFLAGS} -pthread"])
 AC_SEARCH_LIBS([__atomic_load_16], [atomic, quark], [], [LIBQUARK="./libquark.a"])
-AC_SUBST([LIBQUARK])
+AC_SUBST([LIBQUARK], [])
 
 # Checks for C11's typed enums
 # AC_MSG_CHECKING([C11 typed enums])
@@ -75,14 +75,42 @@ AC_CACHE_CHECK([to see if atomic_fetch_add(ptr, 1) adds sizeof(ptr)],
 		[ac_cv_afa_ptr=yes],
 		[ac_cv_afa_ptr=no])])
 
+AC_CACHE_CHECK([to see if we seem to be linking against MUSL and need to build quark],
+               [ac_cv_skip_quark],
+	       [AC_RUN_IFELSE([
+	       AC_LANG_PROGRAM([[#include <stdatomic.h>]],
+	       [[
+              _Atomic __uint128_t foo;
+              atomic_store(&foo, 0);
+              return 0;
+               ]] )],
+		[ac_cv_skip_quark=yes],
+		[ac_cv_need_quark=no])])
+
 if test $ac_cv_afa_ptr = yes; then
   AC_DEFINE([SANE_FETCH_ADD_PTR_SEMANTICS], [1], [Defined when atomic_fetch_add(ptr, 1) adds sizeof(ptr)])
 fi
 
-AS_CASE([$host],
+AC_ARG_ENABLE(quark,
+  [ --enable-quark Use quark instead of stdatomic, which is usually needed w/ MUSL builds],
+  [case "${enableval}" in
+      yes | no ) [ac_quark_override=yes] ;;
+             *) AC_MSG_ERROR(bad value ${enableval} for --enable-quark) ;;
+    esac],
+  []
+)
+if test "$ac_cv_skip_quark" = no || test "$ac_quark_override"; then
+  AC_DEFINE([USING_MUSL], [1], [Defined when we are linking with MUSL])
+  AC_SUBST([LIBQUARK], [""])
+  AS_CASE([$host],
   [aarch64-*-linux*], [ln -sf aarch64.s quark/quark-asm.s],
   [x86_64-*-linux*],  [ln -sf x86_64.s quark/quark-asm.s],
   [])
+else
+ AC_SUBST([LIBATOMIC], ["-latomic"])
+ ln -sf empty.s quark/quark-asm.s
+fi
+
 
 # Checks for library functions.
 AC_CHECK_FUNCS([clock_gettime memset strstr])

@@ -494,13 +494,13 @@ parse_args(int argc, char *argv[])
     bool           total_op_provided    = false;
     bool           shuffle_provided     = false;
     bool           seed_provided        = false;
+    bool           got_one              = false;
     int            alloc_len;
     int            i, j;
     int            num_hats;
     char          *cur;
     char          *p;
     size_t         cur_len;
-    bool           got_one;
     config_info_t *ret;
 
     prog_name = argv[0];

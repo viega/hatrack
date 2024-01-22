@@ -1,5 +1,8 @@
 // Author: John Viega (just the wrapper)
 
+#include <hatrack/config.h>
+
+#ifdef USING_MUSL
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -44,3 +47,4 @@ __int128_t __atomic_fetch_or_16(__int128_t *address, __int128_t operand) {
 
     return retval;
 }
+#endif

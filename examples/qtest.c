@@ -131,14 +131,14 @@ static queue_impl_t algorithms[] = {
 	.del          = (del_func)q64_delete,
 	.can_prealloc = true
     },
-    {
+/*    {
 	.name         = "hq",
 	.new          = (new_func)hq_new_size,
 	.enqueue      = (enqueue_func)hq_enqueue,
 	.dequeue      = (dequeue_func)hq_dequeue,
 	.del          = (del_func)hq_delete,
 	.can_prealloc = true
-    },
+        },*/
     {
         0,
     },
